@@ -7,15 +7,7 @@
  */
 
 // ============================================
-// DATABASE
-// ============================================
-define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
-define('DB_NAME', getenv('DB_NAME') ?: 'riceguardai_db');
-define('DB_USER', getenv('DB_USER') ?: 'root');
-define('DB_PASS', getenv('DB_PASS') ?: '');
-
-// ============================================
-// SMS GATE API
+// SETTINGS.JSON (For Shared Hosting)
 // ============================================
 $settingsFile = __DIR__ . '/settings.json';
 $customSettings = [];
@@ -23,6 +15,17 @@ if (file_exists($settingsFile)) {
     $customSettings = json_decode(file_get_contents($settingsFile), true) ?? [];
 }
 
+// ============================================
+// DATABASE
+// ============================================
+define('DB_HOST', $customSettings['db_host'] ?? getenv('DB_HOST') ?: 'localhost');
+define('DB_NAME', $customSettings['db_name'] ?? getenv('DB_NAME') ?: 'riceguardai_db');
+define('DB_USER', $customSettings['db_user'] ?? getenv('DB_USER') ?: 'root');
+define('DB_PASS', $customSettings['db_pass'] ?? getenv('DB_PASS') ?: '');
+
+// ============================================
+// SMS GATE API
+// ============================================
 define('SMS_API_URL', 'https://api.sms-gate.app/3rdparty/v1/messages');
 define('SMS_USERNAME', $customSettings['sms_username'] ?? getenv('SMS_USERNAME') ?: '');
 define('SMS_PASSWORD', $customSettings['sms_password'] ?? getenv('SMS_PASSWORD') ?: '');
