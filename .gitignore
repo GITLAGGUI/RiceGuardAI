@@ -1,0 +1,26 @@
+# Secrets
+.env
+
+# Dependencies
+node_modules/
+vendor/
+
+# Build and IDE
+dist/
+build/
+.vscode/
+.idea/
+.DS_Store
+
+# Media / Design / Docs
+*.pdf
+*.mp4
+*.drawio
+*.txt
+
+# Ignore other SQL except api/database.sql
+*.sql
+!api/database.sql
+
+# API settings with secrets
+api/settings.json
