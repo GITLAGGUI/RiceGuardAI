@@ -24,3 +24,6 @@ build/
 
 # API settings with secrets
 api/settings.json
+
+# Cache
+api/cache/*.json
