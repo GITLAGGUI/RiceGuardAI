@@ -813,7 +813,7 @@ function HardwareSection() {
         </motion.div>
 
         {/* Capability cards */}
-        <div className="mt-16 md:mt-24 grid md:grid-cols-3 gap-4 md:gap-6 text-left">
+        <div className="mt-16 md:mt-24 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 text-left">
           {capabilities.map((c, i) => (
             <motion.div
               key={i}
@@ -943,7 +943,7 @@ function ProblemCard({
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-120px" }}
       transition={{ duration: 0.7, delay: index * 0.08 }}
-      className="grid md:grid-cols-[1fr_1.2fr] gap-8 md:gap-14 items-center bg-white rounded-3xl p-8 md:p-12 border border-stone-200 shadow-sm hover:shadow-md transition-shadow duration-300"
+      className="grid grid-cols-1 md:grid-cols-[1fr_1.2fr] gap-8 md:gap-14 items-center bg-white rounded-3xl p-8 md:p-12 border border-stone-200 shadow-sm hover:shadow-md transition-shadow duration-300"
     >
       <div>
         <div className="text-xs font-semibold text-stone-500 uppercase tracking-[0.15em]">
@@ -1056,7 +1056,7 @@ function DiseaseSection() {
           <h2 className="font-display text-3xl md:text-5xl font-bold mt-6 leading-tight tracking-tight text-stone-900 max-w-3xl">
             {t("title")}
           </h2>
-          <div className="mt-12 grid md:grid-cols-3 gap-6">
+          <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
             {DISEASES.map((d) => (
               <DiseaseCard key={d.key} disease={d} lang={lang} />
             ))}
@@ -1200,7 +1200,7 @@ function DiseaseCard({
   // and the IntersectionObserver stalled at initial values inside the
   // transformed parent → made the focused card permanently look faded.
   return (
-    <article className="rounded-[1.5rem] overflow-hidden bg-white border border-stone-200 shadow-2xl shadow-stone-900/20 grid md:grid-cols-[1.08fr_1fr] h-[520px] md:h-[390px] lg:h-[410px]">
+    <article className="rounded-[1.5rem] overflow-hidden bg-white border border-stone-200 shadow-2xl shadow-stone-900/20 grid grid-cols-1 md:grid-cols-[1.08fr_1fr] md:h-[390px] lg:h-[410px]">
       {/* Image */}
       <div className="relative bg-stone-200 overflow-hidden min-h-[200px]">
         <img
@@ -1315,7 +1315,7 @@ function WorkflowSection() {
           {t("body")}
         </p>
 
-        <div className="mt-16 grid md:grid-cols-5 gap-4 md:gap-5">
+        <div className="mt-16 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 md:gap-5">
           {STEPS.map((step, i) => (
             <WorkflowCard
               key={i}
@@ -1462,7 +1462,7 @@ function Footer() {
 
   return (
     <footer className="bg-stone-950 text-stone-200 py-16 px-6 md:px-12">
-      <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-10">
+      <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-10">
         <div>
           <div className="flex items-center gap-2 font-display text-xl font-bold text-white">
             <img src="/logo.png" alt="" aria-hidden className="w-7 h-7 rounded-md" />

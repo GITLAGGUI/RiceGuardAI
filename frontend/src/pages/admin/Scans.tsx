@@ -47,34 +47,36 @@ export function AdminScans() {
           </div>
         )}
         {scans.length > 0 && (
-          <table className="w-full text-sm">
-            <thead className="bg-stone-50 text-stone-500">
-              <tr>
-                <th className="text-left px-5 py-3 font-medium">Name</th>
-                <th className="text-left px-5 py-3 font-medium">Source</th>
-                <th className="text-left px-5 py-3 font-medium">Status</th>
-                <th className="text-left px-5 py-3 font-medium">Captured</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100">
-              {scans.map((s) => (
-                <tr key={s.id} className="hover:bg-stone-50">
-                  <td className="px-5 py-3 font-medium">{s.scan_name}</td>
-                  <td className="px-5 py-3 text-stone-500">{s.source_type ?? "—"}</td>
-                  <td className="px-5 py-3">
-                    <span className="px-2 py-0.5 rounded-full bg-stone-100 text-xs">
-                      {s.status}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 text-stone-500">
-                    {s.captured_at
-                      ? formatDistanceToNow(new Date(s.captured_at), { addSuffix: true })
-                      : "—"}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <thead className="bg-stone-50 text-stone-500">
+                <tr>
+                  <th className="text-left px-5 py-3 font-medium">Name</th>
+                  <th className="text-left px-5 py-3 font-medium">Source</th>
+                  <th className="text-left px-5 py-3 font-medium">Status</th>
+                  <th className="text-left px-5 py-3 font-medium whitespace-nowrap">Captured</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-stone-100">
+                {scans.map((s) => (
+                  <tr key={s.id} className="hover:bg-stone-50">
+                    <td className="px-5 py-3 font-medium">{s.scan_name}</td>
+                    <td className="px-5 py-3 text-stone-500">{s.source_type ?? "—"}</td>
+                    <td className="px-5 py-3">
+                      <span className="px-2 py-0.5 rounded-full bg-stone-100 text-xs">
+                        {s.status}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-stone-500 whitespace-nowrap">
+                      {s.captured_at
+                        ? formatDistanceToNow(new Date(s.captured_at), { addSuffix: true })
+                        : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

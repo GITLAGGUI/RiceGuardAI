@@ -64,14 +64,14 @@ export function FarmerAlerts() {
                   {formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
                 </div>
                 {a.advice_text && (
-                  <p className="text-stone-700 mt-3 leading-relaxed whitespace-pre-wrap text-sm">
+                  <p className="text-stone-700 mt-3 leading-relaxed whitespace-pre-wrap break-words text-sm">
                     {a.advice_text}
                   </p>
                 )}
                 {a.sms_text && (
                   <div className="mt-3 p-3 rounded-lg bg-stone-50 border border-stone-100 flex gap-2">
                     <MessageSquare size={16} className="text-stone-400 flex-shrink-0 mt-0.5" />
-                    <div className="text-sm text-stone-600">{a.sms_text}</div>
+                    <div className="text-sm text-stone-600 break-words min-w-0">{a.sms_text}</div>
                   </div>
                 )}
               </div>

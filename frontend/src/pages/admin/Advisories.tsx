@@ -44,7 +44,7 @@ export function AdminAdvisories() {
             <h2 className="font-display text-xl font-bold capitalize mb-3">
               {state} ({buckets[state].length})
             </h2>
-            <div className="grid md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {buckets[state].map((a) => (
                 <Link
                   key={a.id}

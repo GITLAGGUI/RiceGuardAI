@@ -31,11 +31,11 @@ export function AdminMap() {
           </div>
           <h1 className="font-display text-3xl md:text-4xl font-bold">All detections</h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           <select
             value={diseaseFilter}
             onChange={(e) => setDiseaseFilter(e.target.value as Disease | "all")}
-            className="px-3 py-2 rounded-lg border border-stone-300 text-sm focus:border-forest-600 outline-none"
+            className="flex-1 sm:flex-none px-3 py-2 rounded-lg border border-stone-300 text-sm focus:border-forest-600 outline-none"
           >
             <option value="all">All diseases</option>
             {(Object.keys(DISEASE_LABEL) as Disease[]).map((k) => (
@@ -47,7 +47,7 @@ export function AdminMap() {
           <select
             value={severityFilter}
             onChange={(e) => setSeverityFilter(e.target.value as Severity | "all")}
-            className="px-3 py-2 rounded-lg border border-stone-300 text-sm focus:border-forest-600 outline-none"
+            className="flex-1 sm:flex-none px-3 py-2 rounded-lg border border-stone-300 text-sm focus:border-forest-600 outline-none"
           >
             <option value="all">All severity</option>
             {(["low", "medium", "high"] as Severity[]).map((k) => (

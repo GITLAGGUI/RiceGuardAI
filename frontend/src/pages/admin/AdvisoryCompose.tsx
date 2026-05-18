@@ -131,7 +131,7 @@ export function AdvisoryCompose() {
         </span>
       </div>
 
-      <div className="grid lg:grid-cols-[1.3fr_1fr] gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-4">
         <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div className="font-semibold">Field advisory (Tagalog)</div>

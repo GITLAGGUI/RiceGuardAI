@@ -304,7 +304,7 @@ export function ScanUpload() {
         </label>
       </div>
 
-      <div className="grid lg:grid-cols-[1.2fr_1fr] gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-4">
         <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
           <div className="px-5 py-3 border-b border-stone-100 flex items-center gap-2 text-sm">
             <MapPin size={16} /> Click on the map to add a detection pin

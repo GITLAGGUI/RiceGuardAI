@@ -142,37 +142,40 @@ export function Register() {
     if (!phone || otp.length !== 6) return;
     setBusy(true);
     try {
-      // SDK occasionally hangs on verifyOtp response handling even though the
-      // server-side verify already succeeded. Race with 8s timeout, and on
-      // timeout fall back to getSession() — if session exists, verify worked.
-      type VerifyResult = Awaited<ReturnType<typeof supabase.auth.verifyOtp>>;
-      const verifyP: Promise<VerifyResult> = supabase.auth.verifyOtp({
-        phone,
-        token: otp,
-        type: "sms",
+      // Bypass supabase.auth.verifyOtp() — its response handling hangs in
+      // production. Hit the REST endpoint directly, then register the session
+      // with the SDK via setSession() so AuthContext picks it up.
+      const url = import.meta.env.VITE_SUPABASE_URL;
+      const apikey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const res = await fetch(`${url}/auth/v1/verify`, {
+        method: "POST",
+        headers: { apikey, "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "sms", phone, token: otp }),
       });
-      const timeoutP = new Promise<"timeout">((res) => setTimeout(() => res("timeout"), 4000));
-      const raced = await Promise.race([verifyP, timeoutP]);
+      const body = await res.json();
 
-      if (raced === "timeout") {
-        console.warn("[register] verifyOtp hung; checking persisted session");
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (sessionData.session) {
-          setStep("profile");
-          return;
-        }
-        toast.error("Walang sagot ang server. Pindutin ang Resend code para sa bagong OTP.");
+      if (!res.ok) {
+        const msg = (body.error_description || body.msg || body.error || "verify failed") as string;
+        console.warn("[register] verify rejected", body);
+        toast.error(
+          msg.toLowerCase().includes("expired") || msg.toLowerCase().includes("invalid")
+            ? "Expired o mali ang code. Pindutin ang Resend code para sa bagong OTP."
+            : `Mali ang code. (${msg})`,
+        );
         return;
       }
 
-      const { error } = raced;
-      if (error) {
-        console.warn("[register] verify failed", error);
-        toast.error(
-          error.message?.toLowerCase().includes("expired")
-            ? "Expired o luma na ang code. Pindutin ang Resend code para sa bagong OTP."
-            : `Mali ang code. (${error.message})`,
-        );
+      const setP = supabase.auth.setSession({
+        access_token: body.access_token,
+        refresh_token: body.refresh_token,
+      });
+      const timeoutP = new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 3000));
+      const raced = await Promise.race([setP, timeoutP]);
+
+      if (raced === "timeout") {
+        // SDK is slow — force a hard reload so the next page picks up the
+        // session from localStorage and routes us to the profile step.
+        window.location.href = "/register";
         return;
       }
       setStep("profile");

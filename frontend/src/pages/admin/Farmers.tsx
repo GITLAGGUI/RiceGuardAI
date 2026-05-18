@@ -129,7 +129,8 @@ export function AdminFarmers() {
           <div className="p-12 text-center text-stone-500">No users in this view.</div>
         )}
         {visible.length > 0 && (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[820px]">
             <thead className="bg-stone-50 text-stone-500">
               <tr>
                 <th className="text-left px-5 py-3 font-medium">Name</th>
@@ -220,6 +221,7 @@ export function AdminFarmers() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
