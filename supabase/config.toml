@@ -1,0 +1,62 @@
+project_id = "pekowozxnyyeskymjxyx"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["https://riceguard.vercel.app"]
+jwt_expiry = 3600
+enable_signup = true
+enable_anonymous_sign_ins = false
+
+[auth.sms]
+enable_signup = true
+enable_confirmations = false
+template = "RiceGuard: Iyong code ay {{ .Code }}. Wag ibahagi."
+max_frequency = "60s"
+
+[auth.sms.test_otp]
+# In local dev, any phone matches OTP `123456`.
+"+639000000000" = "123456"
+
+# Configure the custom SMS hook. For LOCAL: points at docker host edge function.
+# For REMOTE: managed via Supabase Management API (Auth → Hooks) in this same script.
+[auth.hook.send_sms]
+enabled = true
+uri = "http://host.docker.internal:54321/functions/v1/auth-sms-hook"
+secrets = "env(SEND_SMS_HOOK_SECRETS)"
+
+[functions.auth-sms-hook]
+verify_jwt = false
+
+[functions.send-sms]
+verify_jwt = true
+
+[functions.ai-advisor]
+verify_jwt = true
+
+[functions.weather]
+verify_jwt = true

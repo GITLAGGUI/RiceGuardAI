@@ -1,5 +1,10 @@
-# Secrets
+# Secrets — never commit
 .env
+.env.local
+.env.*.local
+*.pem
+*secret*
+*credential*
 
 # Dependencies
 node_modules/
@@ -11,19 +16,47 @@ build/
 .vscode/
 .idea/
 .DS_Store
+.claude/
+*.tsbuildinfo
+.vite/
 
-# Media / Design / Docs
+# Supabase local dev state
+supabase/.branches
+supabase/.temp
+supabase/.env
+
+# Vercel
+.vercel
+
+# Legacy PHP/JS code — kept locally for reference, NOT in repo
+# (contains hardcoded keys from the old deployment)
+_legacy/
+
+# Reference research materials (not source code)
 *.pdf
-*.mp4
 *.drawio
-*.txt
+*.mp4
+pdf_text.txt
+research.txt
+error.txt
 
-# Ignore other SQL except api/database.sql
-*.sql
-!api/database.sql
+# Reference imagery in repo root (only assets under frontend/public/ should be tracked)
+/blb.png
+/BLB.webp
+/rice_blast.png
+/Rice_Blast.webp
+/tungro.png
+/Tungro.webp
+/dji_mini_3.webp
+/Logo.png
+/changeThis.png
 
-# API settings with secrets
-api/settings.json
+# Screenshots for debugging (not source)
+not_visible.png
+parthere.png
+error.png
+newerrors.png
+chekthis.png
 
-# Cache
-api/cache/*.json
+# Netlify (legacy hosting, not used anymore)
+.netlify
