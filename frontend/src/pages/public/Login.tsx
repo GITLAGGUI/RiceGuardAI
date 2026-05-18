@@ -93,7 +93,33 @@ export function Login() {
     if (!phone || otp.length !== 6) return;
     setBusy(true);
     try {
-      const { data, error } = await supabase.auth.verifyOtp({ phone, token: otp, type: "sms" });
+      // Supabase JS SDK occasionally hangs on verifyOtp's response handling even
+      // when the server-side verify already succeeded and a session is persisted
+      // in localStorage. Race against an 8s timeout, and on timeout fall back to
+      // getSession() — if a session exists, the verify actually worked.
+      type VerifyResult = Awaited<ReturnType<typeof supabase.auth.verifyOtp>>;
+      const verifyP: Promise<VerifyResult> = supabase.auth.verifyOtp({
+        phone,
+        token: otp,
+        type: "sms",
+      });
+      const timeoutP = new Promise<"timeout">((res) => setTimeout(() => res("timeout"), 8000));
+
+      const raced = await Promise.race([verifyP, timeoutP]);
+
+      if (raced === "timeout") {
+        console.warn("[login] verifyOtp hung; checking persisted session");
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData.session) {
+          toast.success("Welcome!");
+          navigate("/farmer/home");
+          return;
+        }
+        toast.error("Walang sagot ang server sa 8s. Pindutin ang Resend code para sa bagong OTP.");
+        return;
+      }
+
+      const { data, error } = raced;
       if (error) {
         console.warn("[login] verify failed", error);
         toast.error(
@@ -109,7 +135,7 @@ export function Login() {
       navigate(data.user ? "/farmer/home" : "/");
     } catch (err) {
       console.error("[login] verify threw", err);
-      toast.error(`Hindi naverify. Check internet/Supabase connection. (${(err as Error)?.message ?? "unknown"})`);
+      toast.error(`Hindi naverify. (${(err as Error)?.message ?? "unknown"})`);
     } finally {
       setBusy(false);
     }
