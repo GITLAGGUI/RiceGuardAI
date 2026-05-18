@@ -151,7 +151,7 @@ export function Register() {
         token: otp,
         type: "sms",
       });
-      const timeoutP = new Promise<"timeout">((res) => setTimeout(() => res("timeout"), 8000));
+      const timeoutP = new Promise<"timeout">((res) => setTimeout(() => res("timeout"), 4000));
       const raced = await Promise.race([verifyP, timeoutP]);
 
       if (raced === "timeout") {
@@ -161,7 +161,7 @@ export function Register() {
           setStep("profile");
           return;
         }
-        toast.error("Walang sagot ang server sa 8s. Pindutin ang Resend code para sa bagong OTP.");
+        toast.error("Walang sagot ang server. Pindutin ang Resend code para sa bagong OTP.");
         return;
       }
 

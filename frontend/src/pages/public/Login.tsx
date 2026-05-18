@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Phone, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
 import { normalizePhPhone, formatPhDisplay, formatPhInput } from "@/utils/phone";
 import { authOtpErrorMessage } from "@/utils/authErrors";
 
@@ -20,6 +21,21 @@ export function Login() {
   const [otpSentAt, setOtpSentAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const navigate = useNavigate();
+  const { session, profile, loading } = useAuth();
+
+  // If the user is already signed in (session persisted in localStorage), don't
+  // make them log in again. Send them to their dashboard. Closing the tab or
+  // browser keeps the session — only an explicit Sign out clears it.
+  useEffect(() => {
+    if (loading) return;
+    if (!session?.user) return;
+    if (profile && profile.full_name) {
+      navigate(profile.role === "admin" ? "/admin/overview" : "/farmer/home", { replace: true });
+    } else {
+      // Signed in but profile incomplete — finish via /register's profile step.
+      navigate("/register", { replace: true });
+    }
+  }, [loading, session, profile, navigate]);
 
   useEffect(() => {
     if (step !== "otp" || !otpSentAt) return;
@@ -103,7 +119,7 @@ export function Login() {
         token: otp,
         type: "sms",
       });
-      const timeoutP = new Promise<"timeout">((res) => setTimeout(() => res("timeout"), 8000));
+      const timeoutP = new Promise<"timeout">((res) => setTimeout(() => res("timeout"), 4000));
 
       const raced = await Promise.race([verifyP, timeoutP]);
 
@@ -112,10 +128,12 @@ export function Login() {
         const { data: sessionData } = await supabase.auth.getSession();
         if (sessionData.session) {
           toast.success("Welcome!");
+          // ProtectedRoute will route admins to /admin/overview, farmers to /farmer/home,
+          // and bounce incomplete profiles to /register.
           navigate("/farmer/home");
           return;
         }
-        toast.error("Walang sagot ang server sa 8s. Pindutin ang Resend code para sa bagong OTP.");
+        toast.error("Walang sagot ang server. Pindutin ang Resend code para sa bagong OTP.");
         return;
       }
 
