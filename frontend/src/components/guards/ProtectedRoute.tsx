@@ -7,9 +7,10 @@ interface Props {
 }
 
 export function ProtectedRoute({ role }: Props) {
-  const { session, profile, loading } = useAuth();
+  const { session, profile, loading, profileLoading } = useAuth();
   const location = useLocation();
 
+  // Initial session restore.
   if (loading) {
     return (
       <div className="min-h-screen grid place-items-center text-stone-500">
@@ -20,6 +21,16 @@ export function ProtectedRoute({ role }: Props) {
 
   if (!session) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  // Session ready but profile fetch still in flight — wait, don't redirect
+  // prematurely to /register.
+  if (profileLoading && profile === null) {
+    return (
+      <div className="min-h-screen grid place-items-center text-stone-500">
+        <div className="animate-pulse">Inihahanda ang dashboard…</div>
+      </div>
+    );
   }
 
   // A profile row exists for every auth user (auto-created by handle_new_user

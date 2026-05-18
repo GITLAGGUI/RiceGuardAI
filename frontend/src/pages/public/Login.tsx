@@ -21,13 +21,13 @@ export function Login() {
   const [otpSentAt, setOtpSentAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const navigate = useNavigate();
-  const { session, profile, loading } = useAuth();
+  const { session, profile, loading, profileLoading } = useAuth();
 
   // If the user is already signed in (session persisted in localStorage), don't
   // make them log in again. Send them to their dashboard. Closing the tab or
   // browser keeps the session — only an explicit Sign out clears it.
   useEffect(() => {
-    if (loading) return;
+    if (loading || profileLoading) return;
     if (!session?.user) return;
     if (profile && profile.full_name) {
       navigate(profile.role === "admin" ? "/admin/overview" : "/farmer/home", { replace: true });
@@ -35,7 +35,7 @@ export function Login() {
       // Signed in but profile incomplete — finish via /register's profile step.
       navigate("/register", { replace: true });
     }
-  }, [loading, session, profile, navigate]);
+  }, [loading, profileLoading, session, profile, navigate]);
 
   useEffect(() => {
     if (step !== "otp" || !otpSentAt) return;

@@ -8,7 +8,10 @@ interface AuthContextValue {
   session: Session | null;
   profile: Profile | null;
   role: UserRole | null;
+  /** True while the initial session is being restored from localStorage. */
   loading: boolean;
+  /** True while the profile row is being fetched from /rest/v1/profiles. */
+  profileLoading: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -19,37 +22,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(false);
 
   const loadProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .single();
-    if (error) {
-      console.warn("[auth] no profile yet:", error.message);
-      setProfile(null);
-      return;
+    setProfileLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
+      if (error) {
+        console.warn("[auth] no profile yet:", error.message);
+        setProfile(null);
+        return;
+      }
+      setProfile(data as Profile);
+    } finally {
+      setProfileLoading(false);
     }
-    setProfile(data as Profile);
   };
 
   useEffect(() => {
     let active = true;
 
-    supabase.auth.getSession().then(async ({ data }) => {
+    // Don't await loadProfile before flipping `loading` off — profile fetch is
+    // a network hop that adds 200-1000ms on rural connections, and pages can
+    // already make routing decisions based on `session`. They use
+    // `profileLoading` for cases that need the full profile.
+    supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
       setSession(data.session);
-      if (data.session?.user) {
-        await loadProfile(data.session.user.id);
-      }
       setLoading(false);
+      if (data.session?.user) {
+        loadProfile(data.session.user.id);
+      }
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
       if (newSession?.user) {
-        await loadProfile(newSession.user.id);
+        loadProfile(newSession.user.id);
       } else {
         setProfile(null);
       }
@@ -67,6 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     profile,
     role: profile?.role ?? null,
     loading,
+    profileLoading,
     signOut: async () => {
       await supabase.auth.signOut();
     },

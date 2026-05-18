@@ -30,7 +30,7 @@ export function Register() {
   });
   const navigate = useNavigate();
   const location = useLocation();
-  const { session, profile, loading, refreshProfile } = useAuth();
+  const { session, profile, loading, profileLoading, refreshProfile } = useAuth();
 
   useEffect(() => {
     if (step !== "otp" || !otpSentAt) return;
@@ -66,7 +66,7 @@ export function Register() {
   // If they have a complete profile, send them to their home — no point in
   // showing the register form.
   useEffect(() => {
-    if (loading) return;
+    if (loading || profileLoading) return;
     if (!session?.user) return;
     // A complete profile (with full_name) means registration is already done —
     // bounce them to their home so they don't see this page at all.
@@ -93,7 +93,7 @@ export function Register() {
       }));
     }
     setStep("profile");
-  }, [loading, session, profile, navigate]);
+  }, [loading, profileLoading, session, profile, navigate]);
 
   const sendOtp = async (normalized: string, mode: "initial" | "resend") => {
     setBusy(true);
