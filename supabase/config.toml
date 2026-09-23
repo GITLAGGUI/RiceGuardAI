@@ -75,3 +75,6 @@ verify_jwt = false
 # function against the stored token hash and expiry.
 [functions.worker-callback]
 verify_jwt = false
+
+[functions.public-assistant]
+verify_jwt = false

@@ -7,6 +7,7 @@ import { supabase, supabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { normalizePhone } from "./domain";
 import { operation } from "./store";
+import { markSmsRegistered, useSmsRegistrationStatus } from "./registrationStatus";
 interface Location {
   code: string;
   name: string;
@@ -19,31 +20,65 @@ export function RegistrationPage({
   preferences?: boolean;
 }) {
   const { user } = useAuth();
+  const alreadyRegistered = useSmsRegistrationStatus();
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [cooldown, setCooldown] = useState(0);
-  const [locations, setLocations] = useState<Location[]>([]);
+  const [provinces, setProvinces] = useState<Location[]>([]);
+  const [cities, setCities] = useState<Location[]>([]);
+  const [barangays, setBarangays] = useState<Location[]>([]);
   const [locationError, setLocationError] = useState(false);
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
   const [barangay, setBarangay] = useState("");
   const [consent, setConsent] = useState(false);
+  const [saved, setSaved] = useState(false);
   useEffect(() => {
-    if (supabaseConfigured) {
-      void supabase
-        .from("rg_locations")
-        .select("code,name,level,parent_code,rg_location_releases!inner(active)")
-        .eq("rg_location_releases.active", true)
-        .order("name")
-        .limit(10000)
-        .then(({ data, error }) => {
-          setLocationError(Boolean(error));
-          setLocations((data || []) as Location[]);
-        });
-    }
+    if (!supabaseConfigured) return;
+    void supabase
+      .from("rg_locations")
+      .select("code,name,level,parent_code,rg_location_releases!inner(active)")
+      .eq("level", "province")
+      .eq("rg_location_releases.active", true)
+      .order("name")
+      .then(({ data, error }) => {
+        setLocationError(Boolean(error));
+        setProvinces((data || []) as Location[]);
+      });
   }, []);
+  useEffect(() => {
+    setCities([]);
+    setBarangays([]);
+    if (!province || !supabaseConfigured) return;
+    void supabase
+      .from("rg_locations")
+      .select("code,name,level,parent_code,rg_location_releases!inner(active)")
+      .eq("level", "municipality")
+      .eq("parent_code", province)
+      .eq("rg_location_releases.active", true)
+      .order("name")
+      .then(({ data, error }) => {
+        setLocationError(Boolean(error));
+        setCities((data || []) as Location[]);
+      });
+  }, [province]);
+  useEffect(() => {
+    setBarangays([]);
+    if (!city || !supabaseConfigured) return;
+    void supabase
+      .from("rg_locations")
+      .select("code,name,level,parent_code,rg_location_releases!inner(active)")
+      .eq("level", "barangay")
+      .eq("parent_code", city)
+      .eq("rg_location_releases.active", true)
+      .order("name")
+      .then(({ data, error }) => {
+        setLocationError(Boolean(error));
+        setBarangays((data || []) as Location[]);
+      });
+  }, [city]);
   useEffect(() => {
     if (cooldown <= 0) return;
     const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
@@ -97,6 +132,8 @@ export function RegistrationPage({
         barangay_code: barangay,
         consent,
       });
+      markSmsRegistered();
+      setSaved(true);
       toast.success(
         "Na-save ang registration. Ipa-register ang inyong farm pin sa operator para sa nearby alerts.",
       );
@@ -145,8 +182,15 @@ export function RegistrationPage({
           <span className="rg-eyebrow">
             {user ? "02 · CONTACT PREFERENCES" : "01 · I-VERIFY ANG NUMERO"}
           </span>
-          <h2>{preferences ? "SMS preferences" : "Magparehistro sa SMS"}</h2>
-          {!user ? (
+          <h2>{preferences ? "SMS preferences" : alreadyRegistered || saved ? "Registered na ang SMS alerts" : "Magparehistro sa SMS"}</h2>
+          {(alreadyRegistered || saved) && !preferences ? (
+            <div className="rg-registration-complete">
+              <ShieldCheck size={38} />
+              <strong>Handa na ang inyong registration.</strong>
+              <p>Hindi na kailangang mag-register muli sa browser na ito. Maaari ninyong baguhin o ihinto ang alerts sa preferences.</p>
+              <Link className="rg-button rg-primary" to="/preferences">Buksan ang SMS preferences</Link>
+            </div>
+          ) : !user ? (
             <>
               <label>
                 Mobile number
@@ -221,9 +265,7 @@ export function RegistrationPage({
                   required
                 >
                   <option value="">Pumili ng probinsya</option>
-                  {locations
-                    .filter((l) => l.level === "province")
-                    .map((l) => (
+                  {provinces.map((l) => (
                       <option key={l.code} value={l.code}>
                         {l.name}
                       </option>
@@ -242,9 +284,7 @@ export function RegistrationPage({
                   disabled={!province}
                 >
                   <option value="">Pumili ng bayan</option>
-                  {locations
-                    .filter((l) => l.parent_code === province)
-                    .map((l) => (
+                  {cities.map((l) => (
                       <option key={l.code} value={l.code}>
                         {l.name}
                       </option>
@@ -260,9 +300,7 @@ export function RegistrationPage({
                   disabled={!city}
                 >
                   <option value="">Pumili ng barangay</option>
-                  {locations
-                    .filter((l) => l.parent_code === city)
-                    .map((l) => (
+                  {barangays.map((l) => (
                       <option key={l.code} value={l.code}>
                         {l.name}
                       </option>

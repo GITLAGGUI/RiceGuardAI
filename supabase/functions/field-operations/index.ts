@@ -203,6 +203,18 @@ Deno.serve(async (req) => {
     const { action, payload: p = {} } = JSON.parse(raw);
     const user = auth.user;
 
+    if (action === "registration-status") {
+      const contact = check(await db
+        .from("rg_contacts")
+        .select("id,consent,verified,barangay_code")
+        .eq("account_id", user.id)
+        .maybeSingle());
+      return reply({
+        registered: Boolean(contact?.id && contact.verified && contact.barangay_code),
+        consent: Boolean(contact?.consent),
+      });
+    }
+
     if (action === "register-contact") {
       if (!user.phone_confirmed_at || !user.phone) return fail("Verified phone required", 403);
       const phone = user.phone.startsWith("+") ? user.phone : `+${user.phone}`;
@@ -213,7 +225,7 @@ Deno.serve(async (req) => {
         p_consent: p.consent === true,
         p_phone: phone,
       }));
-      return reply({ contact_id: contactId });
+      return reply({ contact_id: contactId, registered: true });
     }
     if (action === "opt-out") {
       const contact = check(await db.from("rg_contacts").select("id").eq("account_id", user.id).single());

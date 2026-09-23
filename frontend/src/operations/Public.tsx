@@ -44,6 +44,8 @@ import {
 import { supabase, supabaseConfigured } from "@/lib/supabase";
 import { FieldMap } from "./LazyMap";
 import type { Bulletin, Disease } from "./domain";
+import { AssistantWidget, BulletinWalkthrough, openRiceGuardAssistant } from "./Assistant";
+import { useSmsRegistrationStatus } from "./registrationStatus";
 import "./operations.css";
 
 export function Brand({ light = false }: { light?: boolean }) {
@@ -63,6 +65,8 @@ export function PublicFrame({
   bulletin?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const registered = useSmsRegistrationStatus();
+  const smsPath = registered ? "/preferences" : "/register";
   return (
     <div className={`rg-public rg-public-v2 ${bulletin ? "rg-public-bulletin-mode" : ""}`}>
       <a className="rg-skip" href="#main">
@@ -77,13 +81,13 @@ export function PublicFrame({
           <NavLink to="/map" onClick={() => setOpen(false)}>
             <PhMap size={18} /> <span>Monitoring map</span>
           </NavLink>
-          <NavLink to="/register" onClick={() => setOpen(false)}>
-            <PhChat size={18} /> <span>SMS alerts</span>
+          <NavLink to={smsPath} onClick={() => setOpen(false)}>
+            <PhChat size={18} /> <span>{registered ? "SMS preferences" : "SMS alerts"}</span>
           </NavLink>
         </nav>
         <div className="rg-header-actions">
-          <Link className="rg-button rg-primary" to="/register">
-            Get SMS alerts <MessageSquareText size={16} />
+          <Link className="rg-button rg-primary" to={smsPath}>
+            {registered ? "SMS preferences" : "Get SMS alerts"} <MessageSquareText size={16} />
           </Link>
           <button
             className="rg-mobile-menu rg-icon-button"
@@ -107,7 +111,7 @@ export function PublicFrame({
           <strong>Public information</strong>
           <Link to="/bulletin">Field advisories</Link>
           <Link to="/map">Monitoring map</Link>
-          <Link to="/register">SMS registration</Link>
+          <Link to={smsPath}>{registered ? "SMS preferences" : "SMS registration"}</Link>
         </div>
         <div>
           <strong>Account</strong>
@@ -127,10 +131,11 @@ export function PublicFrame({
         <NavLink to="/map">
           <MapPin size={19} /> Map
         </NavLink>
-        <NavLink to="/register">
-          <MessageSquareText size={19} /> SMS
+        <NavLink to={smsPath}>
+          <MessageSquareText size={19} /> {registered ? "Preferences" : "SMS"}
         </NavLink>
       </nav> : null}
+      <AssistantWidget compact={bulletin} launcher={bulletin} />
     </div>
   );
 }
@@ -282,10 +287,11 @@ function Hero() {
           </div>
         </div>
         <div className="rg-mascot-stage">
-          <div className="rg-hero-mascot rg-wave-mascot" role="img" aria-label="RiceGuardAI farmer companion waving hello">
+          <button className="rg-hero-mascot rg-wave-mascot" type="button" onClick={openRiceGuardAssistant} aria-label="Kausapin ang RiceGuardAI Assistant">
             <img src="/images/mascot/hero-wave-open-v2.png" alt="" aria-hidden="true" />
             <img src="/images/mascot/hero-wave-tilt-v2.png" alt="" aria-hidden="true" />
-          </div>
+            <span className="rg-hero-speech">Mabuhay, ka-farmer! Ako ang RiceGuardAI Assistant. Pindutin ako para magtanong.</span>
+          </button>
         </div>
       </div>
     </section>
@@ -615,29 +621,29 @@ export function CommunityShell({
   onToggleSaved?: () => void;
 }) {
   const savedLink = "/bulletin?saved=1";
+  const registered = useSmsRegistrationStatus();
+  const smsPath = registered ? "/preferences" : "/register";
   return (
     <PublicFrame bulletin>
       <div className="rg-social-bulletin-shell">
         <aside className="rg-bulletin-side-nav" aria-label="Public navigation">
           <Brand />
-          <small className="rg-side-tagline">Healthier rice fields.<br />Better information.</small>
           <nav>
             <Link to="/"><PhHouse size={23} /> <span>Home</span></Link>
             <Link to="/bulletin" className={active === "bulletin" && !savedSelected ? "active" : ""} aria-current={active === "bulletin" && !savedSelected ? "page" : undefined}><PhArticle size={23} /> <span>Field Bulletin</span></Link>
             <Link to="/map" className={active === "map" ? "active" : ""} aria-current={active === "map" ? "page" : undefined}><PhMap size={23} /> <span>Monitoring Map</span></Link>
-            <Link to="/register" className={active === "sms" ? "active" : ""} aria-current={active === "sms" ? "page" : undefined}><PhChat size={23} /> <span>SMS Alerts</span></Link>
+            <Link to={smsPath} className={active === "sms" ? "active" : ""} aria-current={active === "sms" ? "page" : undefined}><PhChat size={23} /> <span>{registered ? "SMS Preferences" : "SMS Alerts"}</span></Link>
             {onToggleSaved ? (
               <button className={savedSelected ? "active" : ""} onClick={onToggleSaved} aria-pressed={savedSelected}>
                 <PhBookmark size={23} weight={savedSelected ? "fill" : "regular"} /> <span>Saved</span>
               </button>
             ) : <Link to={savedLink}><PhBookmark size={23} /> <span>Saved</span></Link>}
           </nav>
-          <p className="rg-side-note">Supporting Philippine farmers with reviewed field information.</p>
         </aside>
 
         <div className="rg-bulletin-mobile-top">
           <Brand />
-          <Link to="/register"><PhBell size={19} /> SMS alerts</Link>
+          <Link to={smsPath}><PhBell size={19} /> {registered ? "Preferences" : "SMS alerts"}</Link>
         </div>
 
         <div className="rg-social-bulletin-main">{children}</div>
@@ -658,12 +664,12 @@ export function CommunityShell({
               <Link to="/bulletin">Read field bulletins <ArrowRight size={15} /></Link>
             </section>
           )}
-          {active !== "sms" ? (
+          {active !== "sms" && !registered ? (
             <section className="rg-bulletin-sms-card">
               <span><PhChat size={26} weight="fill" /></span>
               <h2>Field updates by SMS</h2>
               <p>Receive reviewed BLB and Brown Spot notices relevant to your registered farm.</p>
-              <Link to="/register">Get SMS alerts <MessageSquareText size={17} /></Link>
+              <Link to="/register">Register for SMS alerts <MessageSquareText size={17} /></Link>
               <small>Consent and verified location are required.</small>
             </section>
           ) : null}
@@ -677,7 +683,7 @@ export function CommunityShell({
           <Link to="/"><PhHouse size={22} /><span>Home</span></Link>
           <Link to="/bulletin" className={active === "bulletin" && !savedSelected ? "active" : ""}><PhArticle size={22} /><span>Bulletin</span></Link>
           <Link to="/map" className={active === "map" ? "active" : ""}><PhMap size={22} /><span>Map</span></Link>
-          <Link to="/register" className={active === "sms" ? "active" : ""}><PhChat size={22} /><span>SMS</span></Link>
+          <Link to={smsPath} className={active === "sms" ? "active" : ""}><PhChat size={22} /><span>{registered ? "Preferences" : "SMS"}</span></Link>
           {onToggleSaved ? <button onClick={onToggleSaved} className={savedSelected ? "active" : ""} aria-pressed={savedSelected}><PhBookmark size={22} weight={savedSelected ? "fill" : "regular"} /><span>Saved</span></button> : <Link to={savedLink}><PhBookmark size={22} /><span>Saved</span></Link>}
         </nav>
       </div>
@@ -719,10 +725,9 @@ export function BulletinPage() {
 
   return (
     <CommunityShell active="bulletin" points={mapPoints} savedSelected={bookmarkedOnly} onToggleSaved={() => setBookmarkedOnly(!bookmarkedOnly)}>
+          <BulletinWalkthrough />
           <header className="rg-social-bulletin-heading">
-            <p>OFFICIAL FIELD BULLETIN</p>
-            <h1>Reviewed updates from monitored rice fields.</h1>
-            <span>Practical field updates for rice-growing communities. Exact farm locations stay private.</span>
+            <h1>Field Bulletin</h1>
             <img src="/images/mascot/bulletin-reader-v2.png" alt="RiceGuardAI field companion reading a field bulletin" />
           </header>
 
@@ -811,7 +816,7 @@ export function PublicMapPage() {
   return (
     <CommunityShell active="map" points={points}>
       <section className="rg-map-masthead rg-community-heading">
-        <div><p className="rg-kicker dark"><span /> APPROVED PUBLIC LOCATIONS</p><h1>Monitoring areas across Region II.</h1><p>Only approved approximate survey points appear here. Exact farm locations stay private.</p></div>
+        <div><h1>Monitoring Map</h1></div>
         <img className="rg-map-page-mascot" src="/images/mascot/map-focused-v2.png" alt="RiceGuardAI field companion checking a map" />
       </section>
       <section className="rg-public-map-page">

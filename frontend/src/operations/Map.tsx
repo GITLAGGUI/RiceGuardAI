@@ -3,12 +3,14 @@ import {
   MapContainer,
   TileLayer,
   CircleMarker,
+  GeoJSON,
   Popup,
   useMap,
   useMapEvents,
 } from "react-leaflet";
 import { Expand, Layers, MapPin } from "lucide-react";
 import type { LatLngBoundsExpression } from "leaflet";
+import type { GeoJsonObject } from "geojson";
 import "leaflet/dist/leaflet.css";
 import type { Severity } from "./domain";
 export interface MapPoint {
@@ -93,8 +95,20 @@ export function FieldMap({
 }) {
   const [layer, setLayer] = useState("standard");
   const [extent, setExtent] = useState<"mainland" | "all">("mainland");
+  const [regionBoundary, setRegionBoundary] = useState<GeoJsonObject | null>(null);
   const mapKey = import.meta.env.VITE_MAPTILER_KEY;
   const visibleSeverities = [...new Set(points.map((point) => point.severity))];
+  useEffect(() => {
+    let active = true;
+    fetch("/data/region-ii-boundary.geojson")
+      .then((response) => {
+        if (!response.ok) throw new Error("Region boundary unavailable");
+        return response.json() as Promise<GeoJsonObject>;
+      })
+      .then((boundary) => { if (active) setRegionBoundary(boundary); })
+      .catch(() => { if (active) setRegionBoundary(null); });
+    return () => { active = false; };
+  }, []);
   return (
     <section
       className={`rg-map ${large ? "rg-map-large" : ""} ${points.length ? "" : "rg-map-no-points"}`}
@@ -158,6 +172,20 @@ export function FieldMap({
           }
         />
         <MapActions extent={extent} onPick={onPick} />
+        {regionBoundary ? (
+          <GeoJSON
+            data={regionBoundary}
+            interactive={false}
+            style={{
+              color: "#146b43",
+              weight: 3,
+              opacity: 0.9,
+              fillColor: "#65a85c",
+              fillOpacity: 0.08,
+              dashArray: "8 6",
+            }}
+          />
+        ) : null}
         {points.map((p) => (
           <CircleMarker
             key={p.id}
