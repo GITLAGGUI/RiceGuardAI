@@ -59,11 +59,11 @@ function MapActions({
   const map = useMap();
   useEffect(() => {
     map.invalidateSize();
-    // A narrow, tall screen otherwise fits the mainland by width and exposes
-    // much of Central Luzon below the region. Prioritize regional detail there.
-    const compactPortrait = map.getSize().x < 500 && map.getSize().y > 500;
-    if (extent === "mainland" && compactPortrait) {
-      map.setView([17.3, 121.7], 8, { animate: false });
+    // Keep the operational mainland view closer by default. Compact preview
+    // cards stay one level wider so the regional context is still legible.
+    if (extent === "mainland") {
+      const detailZoom = map.getSize().y < 320 ? 7 : 8;
+      map.setView([17.4, 121.72], detailZoom, { animate: false });
     } else {
       map.fitBounds(extent === "all" ? ALL_REGION_II : MAINLAND_REGION_II, {
         padding: [16, 16],
@@ -182,7 +182,6 @@ export function FieldMap({
               opacity: 0.9,
               fillColor: "#65a85c",
               fillOpacity: 0.08,
-              dashArray: "8 6",
             }}
           />
         ) : null}

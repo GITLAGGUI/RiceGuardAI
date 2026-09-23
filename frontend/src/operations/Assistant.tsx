@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { ArrowRight, Bot, MessageCircle, Send, Sparkles, X } from "lucide-react";
+import { ArrowRight, MessageCircle, Send, Sparkles, X } from "lucide-react";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
 
 type AssistantSection = { heading?: string; body?: string; bullets?: string[] };
@@ -87,14 +87,14 @@ export function AssistantWidget({ compact = false, launcher = true }: { compact?
     <div className={`rg-assistant ${compact ? "compact" : ""} ${open ? "open" : ""}`}>
       {!open && launcher ? (
         <button className="rg-assistant-launcher" onClick={() => setOpen(true)} aria-label="Buksan ang RiceGuardAI Assistant">
-          <img src="/images/mascot/field-companion.png" alt="" />
+          <img src="/images/mascot/assistant-glasses-v1.png" alt="" />
           <span key={promptIndex}>{prompts[promptIndex]}</span>
         </button>
       ) : open ? (
         <section className="rg-assistant-panel" role="dialog" aria-label="RiceGuardAI Assistant">
           <header>
-            <span><Bot size={21} /><i aria-hidden="true" /></span>
-            <div><strong>RiceGuardAI Assistant</strong><small>Gabay para sa field information</small></div>
+            <span className="rg-assistant-avatar"><img src="/images/mascot/assistant-glasses-v1.png" alt="" /><i aria-hidden="true" /></span>
+            <div><strong>RiceGuardAI Assistant</strong></div>
             <button onClick={() => setOpen(false)} aria-label="Isara ang assistant"><X size={20} /></button>
           </header>
           <div className="rg-assistant-messages" aria-live="polite">

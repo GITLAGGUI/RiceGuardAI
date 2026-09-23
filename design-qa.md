@@ -101,4 +101,16 @@ Fixes applied:
 - `npm test -- --run`: 12 tests passed.
 - `npm run build`: passed.
 
+## September 23 interaction polish follow-up
+
+- Replaced the two-frame stepped hero animation with a `requestAnimationFrame`-driven blend. The mascot remains stationary while the hand pose cycles smoothly, rests between waves, and respects reduced-motion preferences.
+- Removed the large mascot drop shadow and full-character focus rectangle. Keyboard focus is now shown around the speech bubble instead of framing the entire hero artwork.
+- Verified the hero speech rotates through five short farmer-friendly messages rather than remaining fixed.
+- Added a transparent RiceGuardAI assistant avatar with round green glasses. The assistant header now shows only the profile and `RiceGuardAI Assistant`; the secondary header line was removed.
+- Changed the Region II GeoJSON boundary from dashed to solid and moved the default mainland view one zoom level closer while retaining a wider compact-card view.
+- Browser QA covered desktop hero, open assistant, desktop map, and 390 x 844 mobile hero/assistant states. No actionable overflow or contrast issue was observed.
+- `npm run lint`: passed.
+- `npm test -- --run`: 12 tests passed.
+- `npm run build`: passed.
+
 final result: passed
