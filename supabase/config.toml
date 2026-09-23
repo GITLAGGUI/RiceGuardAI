@@ -63,3 +63,15 @@ verify_jwt = true
 
 [functions.weather]
 verify_jwt = true
+
+# Cron callers authenticate with a dedicated CRON_SECRET instead of a user JWT.
+[functions.job-dispatcher]
+verify_jwt = false
+
+[functions.job-reconciler]
+verify_jwt = false
+
+# Kaggle workers use short-lived, per-job bearer tokens validated by the
+# function against the stored token hash and expiry.
+[functions.worker-callback]
+verify_jwt = false

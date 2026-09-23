@@ -8,9 +8,6 @@ import tempfile
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
-from kaggle.api.kaggle_api_extended import KaggleApi
-
-
 def response_dict(value):
     if isinstance(value, dict):
         return value
@@ -45,6 +42,25 @@ class handler(BaseHTTPRequestHandler):
         try:
             request = json.loads(raw)
             action = request.get("action")
+            username = os.environ.get("KAGGLE_USERNAME", "")
+            credential = os.environ.get("KAGGLE_KEY") or os.environ.get("KAGGLE_API_TOKEN")
+            if not username or not credential:
+                return self.send_json(503, {
+                    "error": "Kaggle dispatcher credentials are not configured",
+                    "code": "CONFIGURATION_REQUIRED",
+                })
+
+            # The Kaggle package authenticates while its top-level package is
+            # imported. Keep the import behind our request authentication and
+            # configuration checks so a missing provider credential cannot
+            # crash the whole Vercel function before it can return JSON.
+            try:
+                from kaggle.api.kaggle_api_extended import KaggleApi
+            except Exception as exc:
+                return self.send_json(503, {
+                    "error": f"Kaggle client initialization failed: {str(exc)[:300]}",
+                    "code": "PROVIDER_UNAVAILABLE",
+                })
             api = KaggleApi()
             api.authenticate()
             if action == "status":
@@ -64,7 +80,7 @@ class handler(BaseHTTPRequestHandler):
                 raise ValueError("Invalid run identifier")
             if len(worker_token) < 32 or not callback_url.startswith("https://"):
                 raise ValueError("Invalid worker credentials")
-            owner = os.environ.get("KAGGLE_USERNAME", "").lower()
+            owner = username.lower()
             slug = os.environ.get("KAGGLE_KERNEL_SLUG", "riceguard-private-inference")
             if not re.fullmatch(r"[a-z0-9_-]+", owner) or not re.fullmatch(r"[a-z0-9-]+", slug):
                 raise ValueError("Kaggle owner or kernel slug is not configured")
