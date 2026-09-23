@@ -103,7 +103,7 @@ Fixes applied:
 
 ## September 23 interaction polish follow-up
 
-- Replaced the two-frame stepped hero animation with a `requestAnimationFrame`-driven blend. The mascot remains stationary while the hand pose cycles smoothly, rests between waves, and respects reduced-motion preferences.
+- Replaced the two-frame full-character blend with separate stable-body and waving-arm layers. `requestAnimationFrame` changes only the arm rotation; the body remains at full opacity and stationary, eliminating the blink while retaining a smooth wave and reduced-motion support.
 - Removed the large mascot drop shadow and full-character focus rectangle. Keyboard focus is now shown around the speech bubble instead of framing the entire hero artwork.
 - Verified the hero speech rotates through five short farmer-friendly messages rather than remaining fixed.
 - Added a transparent RiceGuardAI assistant avatar with round green glasses. The assistant header now shows only the profile and `RiceGuardAI Assistant`; the secondary header line was removed.

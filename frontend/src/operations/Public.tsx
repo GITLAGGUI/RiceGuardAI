@@ -274,10 +274,10 @@ function Hero() {
     const start = performance.now();
     const animateWave = (now: number) => {
       const elapsed = (now - start) % 5200;
-      const progress = elapsed < 1800
-        ? 0.5 - 0.5 * Math.cos((elapsed / 600) * Math.PI * 2)
+      const angle = elapsed < 1800
+        ? Math.sin((elapsed / 600) * Math.PI * 2) * 7
         : 0;
-      mascot.style.setProperty("--rg-wave-progress", progress.toFixed(3));
+      mascot.style.setProperty("--rg-wave-angle", `${angle.toFixed(2)}deg`);
       animationFrame = window.requestAnimationFrame(animateWave);
     };
     animationFrame = window.requestAnimationFrame(animateWave);
@@ -323,8 +323,8 @@ function Hero() {
         </div>
         <div className="rg-mascot-stage">
           <button ref={waveRef} className="rg-hero-mascot rg-wave-mascot" type="button" onClick={openRiceGuardAssistant} aria-label="Kausapin ang RiceGuardAI Assistant">
-            <img className="rg-wave-open" src="/images/mascot/hero-wave-open-v2.png" alt="" aria-hidden="true" />
-            <img className="rg-wave-tilt" src="/images/mascot/hero-wave-tilt-v2.png" alt="" aria-hidden="true" />
+            <img className="rg-wave-body" src="/images/mascot/hero-body-no-wave-v1.png" alt="" aria-hidden="true" />
+            <img className="rg-wave-arm" src="/images/mascot/hero-wave-arm-v1.png" alt="" aria-hidden="true" />
             <span key={messageIndex} className="rg-hero-speech">{heroMessages[messageIndex]}</span>
           </button>
         </div>
