@@ -3,6 +3,9 @@
   "outputDirectory": "frontend/dist",
   "framework": null,
   "installCommand": "echo skipped",
+  "functions": {
+    "api/kaggle.py": { "maxDuration": 60 }
+  },
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]

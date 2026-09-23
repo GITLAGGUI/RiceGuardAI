@@ -11,7 +11,7 @@ export type Json =
   | Json[];
 
 export type UserRole = "farmer" | "admin";
-export type Disease = "rice_blast" | "bacterial_leaf_blight" | "tungro";
+export type Disease = "rice_blast" | "bacterial_leaf_blight";
 export type Severity = "low" | "medium" | "high";
 export type ScanStatus = "pending" | "processing" | "completed";
 export type Delivery = "queued" | "sent" | "failed";

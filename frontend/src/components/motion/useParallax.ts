@@ -12,11 +12,12 @@ import { useScroll, useTransform } from "framer-motion";
  */
 export function useParallax(speed: number = 0.3) {
   const ref = useRef<HTMLElement | null>(null);
-  const [reduced, setReduced] = useState(false);
+  const [reduced, setReduced] = useState(() =>
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
 
   useEffect(() => {
     const m = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(m.matches);
     const onChange = (e: MediaQueryListEvent) => setReduced(e.matches);
     m.addEventListener("change", onChange);
     return () => m.removeEventListener("change", onChange);

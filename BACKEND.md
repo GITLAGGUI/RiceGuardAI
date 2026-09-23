@@ -1,223 +1,118 @@
-# RiceGuard Backend Reference
+# RiceGuardAI backend reference
 
-Everything in `supabase/` — Postgres schema, RLS, Edge Functions, helpers.
+RiceGuardAI uses Supabase for identity, workflow records, queues, review data and public posts; Google Drive for private original media and large result files; Kaggle for asynchronous GPU inference; and the Android SMS Gate for approved alerts.
 
-```
-supabase/
-  config.toml                            Local CLI config (project ref = pekowozxnyyeskymjxyx)
-  seed.sql                               Local-only sample data (NOT pushed to prod)
-  migrations/
-    0001_init.sql                        Tables + enums + triggers + RPC create_scan_with_detections
-    0002_rls.sql                         Row-Level Security on every table + storage policies
-    0003_advisory_helpers.sql            find_nearby_farmers / get_advisory_context / assign_farmer_to_detection
-    0004_audit.sql                       audit_events table + triggers
-    0005_seed.sql                        Default notification prefs (production-safe)
-    0006_nearby_detections.sql           find_nearby_detections for weekly digest
-  functions/
-    _shared/
-      cors.ts                            CORS preflight + jsonResponse helpers
-      ratelimit.ts                       Hourly-bucket rate limiter using rate_limits table
-      knowledge.ts                       Structured PhilRice/DA RII KB per disease + severity
-    auth-sms-hook/                       Supabase Auth → SMS Gate OTP relay
-    send-sms/                            SMS sender (advisory_id-aware, prefs-aware)
-    ai-advisor/                          Ollama Cloud (gemma4:31b-cloud), field + sms modes
-    generate-advisory/                   One-shot: detection_id + farmer_id → drafted advisory
-    weather/                             OpenWeather + Tagalog agronomy insights, 10min cache
-    weekly-digest/                       pg_cron-driven weekly SMS summary
-    infer-scan/                          STUB for future YOLO inference (returns 501)
+## Production workflow
+
+```text
+private Drive upload
+  -> verified immutable manifest
+  -> rg_processing_jobs queue
+  -> job-dispatcher
+  -> Vercel Python Kaggle dispatcher
+  -> private Kaggle notebook
+  -> worker-callback + artifact validation
+  -> exact result revision review
+  -> advisory draft
+  -> one approval transaction
+  -> sanitized public post + SMS outbox
 ```
 
-## Database tables
+The browser never receives Google refresh tokens, Kaggle credentials, the Supabase service-role key or SMS gateway credentials.
 
-| Table | Purpose | RLS |
-|---|---|---|
-| `profiles` | farmer + admin metadata; `id → auth.users(id)`; has `lat`/`lng` for geo search | self read/update; admin all |
-| `drone_scans` | uploaded scans | admin only |
-| `disease_detections` | one row per pin marker (disease, severity, lat, lng, bbox) | admin all; farmer own |
-| `advisories` | single source of truth — collapses old `alert_history` | admin all; farmer own |
-| `notification_preferences` | per-farmer opt-ins | self only |
-| `audit_events` | log of admin actions (scan.create, advisory.state_change, sms.sent, etc.) | admin read |
-| `login_audit` | optional security trail | admin read |
-| `weather_cache` | 10-min OpenWeather cache | service role only |
-| `rate_limits` | hourly buckets for edge fn rate limiting | service role only |
+## Current operational tables
 
-## Enums
-
-```sql
-user_role:      'farmer' | 'admin'
-disease:        'rice_blast' | 'bacterial_leaf_blight' | 'tungro'
-severity:       'low' | 'medium' | 'high'
-scan_status:    'pending' | 'processing' | 'completed'
-delivery:       'queued' | 'sent' | 'failed'
-advisory_state: 'draft' | 'approved' | 'sent'
-```
-
-## Helper functions
-
-All are `security definer` and explicitly granted to `authenticated`.
-
-| Function | Purpose |
+| Table | Purpose |
 |---|---|
-| `is_admin()` | Returns true if `auth.uid()` has role admin. Used by every RLS policy. |
-| `create_scan_with_detections(p_scan, p_detections)` | Atomic insert: 1 scan + N detections. Returns `{ scan_id, detection_ids }`. |
-| `find_nearby_farmers(lat, lng, radius_km)` | Active farmers within radius, sorted by distance. Uses `earthdistance` + GIST index. |
-| `find_nearby_detections(lat, lng, radius_km, since)` | Recent detections near a point. Used by weekly digest. |
-| `get_advisory_context(advisory_id)` | One-shot read-model: advisory + detection + farmer + prefs as jsonb. |
-| `assign_farmer_to_detection(detection_id)` | Auto-assign nearest farmer to a detection. |
-| `count_pending_advisories()` | Badge counter for admin nav. |
-| `set_updated_at()` | Trigger fn on advisories + notification_preferences. |
-| `audit_scan_create()` | Trigger fn that logs every scan insert. |
-| `audit_advisory_state()` | Trigger fn that logs every advisory state transition. |
-| `handle_new_user()` | Trigger on `auth.users` insert — bootstraps a `profiles` row. |
+| `rg_surveys` | Survey metadata, private capture location and active revisions |
+| `rg_assets` | Original asset metadata, hashes, Drive IDs and upload state |
+| `rg_processing_jobs` | Leased, idempotent Kaggle work queue |
+| `rg_job_callbacks` | Replay-safe worker progress/completion events |
+| `rg_model_registry` | Replaceable BLB and Brown Spot specialist checkpoints and preprocessing |
+| `rg_result_revisions` | Immutable validated result manifests for review |
+| `rg_bulletins` | Draft/review/publication state and approved advice |
+| `rg_public_posts` | Sanitized public projection with approximate location only |
+| `rg_contacts` | Subscriber consent, verified phone, farm location and preferences |
+| `rg_campaigns` / `rg_sms_recipients` | Campaign and per-recipient delivery state |
+| `rg_advisory_sources` | Agriculture-specialist-approved guidance used for drafts |
+| `rg_severity_calibrations` | Versioned disease-specific calibration; inactive until validated |
+| `rg_audit` | Security and operational audit trail |
 
-## Edge Function reference
+`Uncertain` is an internal ignored-pixel meaning and is never a public disease. A successful empty result is **No target disease detected**, not proof that plants are healthy. Historical Rice Blast names remain only in immutable audit/history records and are not silently renamed.
 
-All require Supabase JWT in `Authorization: Bearer <token>` except `auth-sms-hook` (called by Supabase Auth itself) and `weekly-digest` (uses service role or `x-cron-secret`).
+## Edge functions
 
-### `auth-sms-hook`
-Triggered by Supabase Auth's *Send SMS hook*. Relays OTP through SMS Gate.
-- **Env:** `SMS_GATE_USER`, `SMS_GATE_PASS`
-- **Format:** `RiceGuard: Iyong code ay 123456. Wag ibahagi. (5 min)`
+| Function | Responsibility |
+|---|---|
+| `field-operations` | AAL2 admin snapshot, upload session, completion verification, review, drafting, recipient preview and exact-revision publication |
+| `job-dispatcher` | Claims one queued job and asks the Vercel dispatcher to submit it to Kaggle |
+| `job-reconciler` | Reconciles uncertain/running notebook state and bounded failures |
+| `worker-callback` | Authenticated run-scoped progress and replay-safe result completion |
+| `generate-advisory` | Structured draft from validated findings and approved guidance only |
+| `send-sms` | Consent recheck, quiet hours, idempotent outbox send and bounded retry |
+| `sms-webhook` | HMAC-authenticated delivery receipts and inbound STOP handling |
+| `auth-sms-hook` | Authentication OTP relay only; separate from alert subscription consent |
 
-### `send-sms`
-Sends an SMS. Two calling shapes:
-- `{ advisory_id }` — fetches phone + body + prefs from the advisory row. Updates `sms_status`, `sms_sent_at`, `state='sent'` on success. **Respects `notification_preferences.sms_enabled` and `critical_alerts`** (returns `skipped: true` if opted out).
-- `{ phone, body }` — free-form, admin-only.
-- **Rate limits:** 5/hour/phone, 200/day global.
+`ai-advisor` and `infer-scan` are retired compatibility endpoints and return `410`. Browser-click inference and browser-resident model processing are not part of the production workflow.
 
-### `ai-advisor`
-Generates Tagalog text from Ollama Cloud (`gemma4:31b-cloud`).
-- **Modes:** `field` (4–5 numbered steps, ≤520 tokens) or `sms` (≤280 chars).
-- **KB injection:** structured knowledge from `_shared/knowledge.ts` is added to every prompt — model never invents dose or chemical names.
-- **Fallback:** if Ollama times out (15s), returns canonical KB action list. No hard failures.
-- **Rate limit:** 30/hour/user.
+## Kaggle runner and Vercel dispatcher
 
-### `generate-advisory`
-One-shot: takes `detection_id + farmer_id` →
-1. Loads detection + farmer
-2. Optionally fetches weather snapshot at detection coords
-3. Calls `ai-advisor` in parallel for `field` + `sms` text
-4. INSERTs `advisories` row with `state='draft'`, `ai_generated=true`
-5. Audits the action
-6. Returns `{ advisory_id, model, advice_preview }`
+- `api/kaggle.py` is a short HMAC-authenticated Python function using the official Kaggle client. It submits and checks private notebook runs; it does not load a model or decode video.
+- `workers/kaggle/runner.py` downloads authorized originals and pinned checkpoints, verifies hashes, runs independent BLB/Brown Spot specialist adapters, reconstructs overlapping tiles in native coordinates, preserves video timing, uploads private results to Drive and reports a validated manifest.
+- Kaggle quota exhaustion produces `waiting_for_quota`; there is no automatic paid AWS fallback.
+- Only one batch is active initially. Leases, unique run IDs and reconciliation protect against duplicate submissions.
 
-The admin scan-upload flow calls this once per medium/high detection.
+## Measurements and severity
 
-### `weather`
-Wraps OpenWeather current + 5-day forecast.
-- **Cache:** 10-minute disk in `weather_cache`, keyed by `lat:lng` rounded to 3 decimals.
-- **Tagalog agronomy insights** generated deterministically (no AI):
-  - Humidity >85% + temp 22–28°C → "Mataas ang panganib ng Rice Blast"
-  - Wind <5 m/s + PoP <30% → "Magandang oras mag-spray"
-  - PoP >60% → "Huwag mag-spray — malamang umulan"
-  - Wind >8 m/s → "Malakas ang hangin — masamang oras para sa spraying"
+BLB reports predicted diseased-region coverage. Brown Spot reports predicted affected-leaf coverage because the current Brown Spot masks include green tissue on the affected leaf. These values are not interchangeable.
 
-### `weekly-digest`
-Cron-triggered weekly summary. Loops over farmers with `weekly_summary=true`, finds detections within 10 km in the last 7 days, sends one SMS per farmer summarizing count + max severity.
+Automatic Low/Moderate/High values stay disabled until a disease-specific calibration has been approved using independent, agriculture-specialist-scored surveys and a reviewed visible-rice-leaf denominator. Until then the API returns `Severity not yet calibrated` with available measurements. It never divides by the whole frame or reports coverage of one image as whole-field severity.
 
-Wire to `pg_cron` (Sundays 06:00 Asia/Manila = Saturday 22:00 UTC):
-```sql
-select cron.schedule(
-  'rg-weekly-digest',
-  '0 22 * * 6',
-  $$ select net.http_post(
-       url := 'https://pekowozxnyyeskymjxyx.functions.supabase.co/weekly-digest',
-       headers := jsonb_build_object(
-         'authorization', 'Bearer ' || current_setting('app.service_role_key'),
-         'content-type','application/json'
-       ),
-       body := '{}'::jsonb
-     ) $$
-);
-```
+## Required secrets
 
-### `infer-scan`
-**Stub.** Returns 501 with a clear next-steps message. When you have a trained YOLOv8 model, replace this with either:
-- **Hosted inference** (Roboflow / Replicate / HF Inference) — easiest
-- **Self-hosted ONNX** (onnxruntime-web in Deno) — fully serverless
+### Supabase Edge Function secrets
 
-The admin ScanUpload page already has a place for a "Run AI inference" button (currently absent, easy to add later).
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, `GOOGLE_DRIVE_APP_FOLDER_ID`
+- `KAGGLE_DISPATCH_URL`, `KAGGLE_DISPATCH_SECRET`
+- `WORKER_CALLBACK_SECRET`
+- `OLLAMA_API_KEY`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`
+- `SMS_GATE_URL`, `SMS_GATE_USER`, `SMS_GATE_PASS`, `SMS_WEBHOOK_SECRET`
+- `RG_PUBLIC_BASE_URL`
 
-## Secrets — what goes where
+### Vercel server secrets
 
-| Secret | Where | Why |
-|---|---|---|
-| `OLLAMA_API_KEY` | Supabase Edge Fn secret | Calls Ollama Cloud server-to-server. Never reaches browser. |
-| `OLLAMA_BASE_URL` | Edge Fn secret | Defaults to `https://ollama.com/api`. |
-| `OLLAMA_MODEL` | Edge Fn secret | `gemma4:31b-cloud`. |
-| `SMS_GATE_USER` + `SMS_GATE_PASS` | Edge Fn secret | Basic Auth to SMS Gate. |
-| `OPENWEATHER_API_KEY` | Edge Fn secret | Server-side weather fetch. |
-| `CRON_SECRET` | Edge Fn secret (optional) | Alternative auth for weekly-digest if not using service role. |
-| `VITE_SUPABASE_URL` | Vercel env + `frontend/.env.local` | Public — embedded in client bundle. |
-| `VITE_SUPABASE_ANON_KEY` | Vercel env + `frontend/.env.local` | Public — RLS protects data. |
-| `SUPABASE_SERVICE_ROLE_KEY` | **Supabase only** — NEVER in Vercel or git | Edge functions auto-receive this via `Deno.env`. |
+- `KAGGLE_USERNAME`, `KAGGLE_KEY`
+- `KAGGLE_DISPATCH_SECRET`
+- `KAGGLE_KERNEL_SLUG`
 
-## Deploy to your project (`pekowozxnyyeskymjxyx`)
+### Browser variables
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+No privileged key belongs in a `VITE_*` variable or notebook source.
+
+## Deployment order
 
 ```powershell
-# 1. Install Supabase CLI (one-time)
-scoop install supabase          # or: iwr -useb https://github.com/supabase/cli/releases/latest/download/supabase_windows_amd64.exe -outfile $env:USERPROFILE\bin\supabase.exe
+# Link once to the intended Supabase project, then inspect before applying.
+npx supabase db push --dry-run
+npx supabase db push
 
-# 2. Login + link
-supabase login                  # opens browser
-cd C:\1XAMPP\htdocs\RiceGuard
-supabase link --project-ref pekowozxnyyeskymjxyx
-# (skip `supabase init` — supabase/ already exists)
-
-# 3. Apply migrations
-supabase db push
-
-# 4. Set secrets (replace placeholders with your real values — never commit these)
-supabase secrets set `
-  OLLAMA_API_KEY=<YOUR_OLLAMA_KEY> `
-  OLLAMA_BASE_URL=https://ollama.com/api `
-  OLLAMA_MODEL=gemma4:31b-cloud `
-  SMS_GATE_USER=<YOUR_SMS_GATE_USER> `
-  SMS_GATE_PASS=<YOUR_SMS_GATE_PASS> `
-  OPENWEATHER_API_KEY=<YOUR_OPENWEATHER_KEY>
-
-# 5. Deploy Edge Functions
-supabase functions deploy auth-sms-hook --no-verify-jwt
-supabase functions deploy send-sms
-supabase functions deploy ai-advisor
-supabase functions deploy generate-advisory
-supabase functions deploy weather
-supabase functions deploy weekly-digest --no-verify-jwt
-supabase functions deploy infer-scan
+npx supabase functions deploy field-operations
+npx supabase functions deploy job-dispatcher --no-verify-jwt
+npx supabase functions deploy job-reconciler --no-verify-jwt
+npx supabase functions deploy worker-callback --no-verify-jwt
+npx supabase functions deploy generate-advisory
+npx supabase functions deploy send-sms --no-verify-jwt
+npx supabase functions deploy sms-webhook --no-verify-jwt
+npx supabase functions deploy auth-sms-hook --no-verify-jwt
 ```
 
-## Promote yourself to admin
+Apply real secrets through the Supabase/Vercel secret stores. Do not commit them. Admin accounts are invite-only and must hold an active server-side admin role plus AAL2/MFA.
 
-After registering with your real phone via `/register`:
+## Release gates
 
-```sql
-update public.profiles set role = 'admin' where phone = '+63XXXXXXXXXX';
-```
+Before public launch, verify one real photo and one short real video through upload, browser-closed Kaggle submission, result return, exact-revision review, publication, approximate public map entry and one approved test SMS. Also verify duplicate callback, quota wait, interrupted upload, missing GPS, gateway offline, opt-out, quiet hours and stale-review rejection.
 
-Run this in Studio → SQL editor.
-
-## Supabase Studio configuration
-
-After `supabase db push` succeeds:
-
-1. **Authentication → Providers → Phone**: enable. OTP length 6, expiry 600s.
-2. **Authentication → Hooks → Send SMS hook**: enable. URL = `https://pekowozxnyyeskymjxyx.functions.supabase.co/auth-sms-hook`.
-3. **Storage → Buckets**: confirm `scans` bucket exists and is private (created by 0002_rls.sql).
-4. **Database → Functions**: verify the helpers and triggers from 0003 + 0004 are registered.
-5. (Optional) **Database → Extensions**: ensure `pg_cron` + `pg_net` are enabled for `weekly-digest`.
-
-## End-to-end smoke test
-
-1. Register on `/register` with your phone → receive OTP via SMS Gate → land on `/farmer/home`.
-2. Promote to admin via SQL above → refresh → `ProtectedRoute` will route you to `/admin/overview`.
-3. Go to **Admin → Scans → New Scan** → name it, click 2–3 points on the Isabela map, set diseases + severity, save with "auto-generate advisories" checked.
-4. Toast says "Drafted N advisories." → click **Review advisories**.
-5. Click a draft → AdvisoryCompose loads with AI-drafted Tagalog text already populated.
-6. Edit if needed → **Approve & send SMS**. Within ~10s, the linked farmer's phone receives the SMS.
-7. Switch to farmer session → `/farmer/alerts` shows the new advisory; `/farmer/map` shows the pin with severity color.
-
-If anything fails, check `audit_events`:
-
-```sql
-select created_at, action, meta from public.audit_events order by created_at desc limit 20;
-```
+The repository can be build-complete without being commissioned. It becomes operational only after the migration, functions and secrets are deployed and the real end-to-end trial passes.

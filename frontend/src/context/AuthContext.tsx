@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseConfigured } from "@/lib/supabase";
 import type { Profile, UserRole } from "@/types/database";
 
 interface AuthContextValue {
@@ -8,12 +8,14 @@ interface AuthContextValue {
   session: Session | null;
   profile: Profile | null;
   role: UserRole | null;
+  aal: "aal1" | "aal2" | null;
   /** True while the initial session is being restored from localStorage. */
   loading: boolean;
   /** True while the profile row is being fetched from /rest/v1/profiles. */
   profileLoading: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  refreshAal: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -23,6 +25,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [aal, setAal] = useState<"aal1" | "aal2" | null>(null);
+
+  const refreshAal = async () => {
+    if (!supabaseConfigured) return;
+    const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    setAal((data?.currentLevel as "aal1" | "aal2" | null) || null);
+  };
 
   const loadProfile = async (userId: string) => {
     setProfileLoading(true);
@@ -44,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    if (!supabaseConfigured) { setLoading(false); return; }
     let active = true;
 
     // Don't await loadProfile before flipping `loading` off — profile fetch is
@@ -56,15 +66,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       if (data.session?.user) {
         loadProfile(data.session.user.id);
+        void refreshAal();
       }
     });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
       if (newSession?.user) {
-        loadProfile(newSession.user.id);
+        window.setTimeout(() => { if (active) void loadProfile(newSession.user.id); }, 0);
+        window.setTimeout(() => { if (active) void refreshAal(); }, 0);
       } else {
         setProfile(null);
+        setAal(null);
       }
     });
 
@@ -79,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     profile,
     role: profile?.role ?? null,
+    aal,
     loading,
     profileLoading,
     signOut: async () => {
@@ -87,6 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshProfile: async () => {
       if (session?.user) await loadProfile(session.user.id);
     },
+    refreshAal,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

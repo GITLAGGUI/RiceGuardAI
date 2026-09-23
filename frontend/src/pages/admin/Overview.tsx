@@ -68,12 +68,10 @@ async function fetchKpis() {
 const DISEASE_LABEL: Record<string, string> = {
   rice_blast: "Rice Blast",
   bacterial_leaf_blight: "BLB",
-  tungro: "Tungro",
 };
 const DISEASE_COLOR: Record<string, string> = {
   rice_blast: "bg-rose-500",
   bacterial_leaf_blight: "bg-amber-500",
-  tungro: "bg-orange-500",
 };
 const SEVERITY_TONE: Record<string, string> = {
   high: "bg-rose-50 text-rose-700 ring-rose-200",
@@ -213,7 +211,7 @@ export function AdminOverview() {
               By disease
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {(["rice_blast", "bacterial_leaf_blight", "tungro"] as const).map((d) => {
+              {(["rice_blast", "bacterial_leaf_blight"] as const).map((d) => {
                 const count = data?.detectionsByDisease[d] ?? 0;
                 return (
                   <div key={d} className="rounded-xl bg-slate-50 px-3 py-3">

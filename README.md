@@ -1,140 +1,143 @@
-# RiceGuard AI
+# RiceGuardAI
 
-Drone-based rice disease detection + automated Tagalog advisory + SMS notification for smallholder rice farmers in Isabela and Cagayan (Region II, Philippines).
+RiceGuardAI is a reviewed field-information platform for rice monitoring in
+Region II. It preserves private drone originals, submits asynchronous private
+Kaggle inference jobs, reconstructs independent BLB and Brown Spot semantic
+masks, and requires an authorized staff review before any bulletin, map point,
+or SMS campaign is created.
 
-> **Stack:** Vite + React 19 + TypeScript + Tailwind v4 + Supabase + Vercel.
-> Detects three diseases: **rice blast**, **bacterial leaf blight**, **tungro**.
-> Farmer UI: Tagalog. Admin UI: English. Both mobile-friendly.
+Public website: [riceguardai.dev](https://riceguardai.dev)
 
-## What's inside
+## Operational workflow
 
+```text
+Photo / MP4 / telemetry upload to private Google Drive
+  -> size, type, dimensions, duration and checksum verification
+  -> immutable batch manifest and Supabase queue
+  -> private Kaggle notebook submission through the official Kaggle client
+  -> independent BLB and Brown Spot tiled semantic inference
+  -> native-coordinate result reconstruction and verified callback
+  -> staff review of the exact result, media and approximate location
+  -> approved specialist-grounded advisory draft
+  -> one final approval
+  -> public bulletin + approximate map + consent-checked SMS outbox
+  -> accepted / delivered / failed receipt tracking
 ```
-RiceGuard/
-  frontend/             Vite + React + TS SPA (Vercel target)
-  supabase/             Postgres migrations + Edge Functions (Deno)
-  _legacy/              Old PHP + JS-React code, kept for reference only
-```
 
-## Quick start (local dev)
+No live browser tab or always-on GPU is required after a verified upload and
+cloud submission. GPU quota exhaustion is reported as `Waiting for GPU` and is
+retried conservatively. There is no automatic paid AWS fallback.
 
-### 1. Install Supabase CLI + dependencies
+## Stack
+
+- React 19, Vite and TypeScript
+- Supabase Auth, Postgres, RLS, Storage, Cron and Edge Functions
+- Google Drive resumable uploads for private originals and large outputs
+- Kaggle private notebook runs for asynchronous GPU processing
+- Leaflet for private and approximate public maps
+- Ollama Cloud provider adapter for structured advisory drafts
+- SMS Gate Android device for outbound messages and delivery callbacks
+- Vercel for the frontend and lightweight Python Kaggle dispatcher
+
+## Local setup
 
 ```powershell
-# Supabase CLI: https://supabase.com/docs/guides/local-development/cli/getting-started
-scoop install supabase   # or: npm i -g supabase
-
-# Frontend deps
 cd frontend
 npm install
+copy .env.example .env.local
+npm run dev
 ```
 
-### 2. Start local Supabase
+The browser receives only `VITE_SUPABASE_URL` and the public anon key. Never put
+Kaggle, Google Drive, SMS Gate, Ollama, service-role, or worker credentials in a
+`VITE_` variable.
 
-```powershell
-cd ..
-supabase start   # boots local Postgres + Auth + Storage + Edge Functions emulator
-supabase db push # applies migrations from supabase/migrations/
-```
-
-The CLI prints `API URL`, `anon key`, `service_role key`, and `Studio URL`. Copy them.
-
-### 3. Configure frontend env
-
-```powershell
-copy frontend\.env.example frontend\.env.local
-# Edit frontend/.env.local:
-#   VITE_SUPABASE_URL=http://127.0.0.1:54321
-#   VITE_SUPABASE_ANON_KEY=<anon key from `supabase status`>
-```
-
-### 4. Configure Edge Function secrets
-
-```powershell
-supabase secrets set OLLAMA_API_KEY=<your-ollama-cloud-key>
-supabase secrets set OLLAMA_BASE_URL=https://ollama.com/api
-supabase secrets set OLLAMA_MODEL=gemma4:31b-cloud
-supabase secrets set SMS_GATE_USER=<sms-gate-user>
-supabase secrets set SMS_GATE_PASS=<sms-gate-password>
-supabase secrets set OPENWEATHER_API_KEY=<openweather-key>
-```
-
-> The Ollama API key, SMS Gate credentials, and OpenWeather key live **only** in Supabase Edge Function secrets. They never reach the browser bundle or git.
-
-### 5. Run the frontend
-
-```powershell
-cd frontend
-npm run dev   # http://localhost:5173
-```
-
-### 6. Local OTP login
-
-`supabase/config.toml` reserves `+639000000000` with fixed OTP `123456` for local testing — use that phone number on `/login` to skip real SMS during dev.
-
-To make yourself admin in the local DB, run in Studio SQL editor:
-
-```sql
-update public.profiles set role = 'admin' where phone = '+639000000000';
-```
-
-## Deploy
-
-### Supabase
+## Database and functions
 
 ```powershell
 supabase link --project-ref <project-ref>
-supabase db push                            # apply migrations to remote
-supabase functions deploy auth-sms-hook
-supabase functions deploy send-sms
-supabase functions deploy ai-advisor
-supabase functions deploy weather
-supabase secrets set OLLAMA_API_KEY=... SMS_GATE_USER=... SMS_GATE_PASS=... OPENWEATHER_API_KEY=... OLLAMA_BASE_URL=... OLLAMA_MODEL=...
+supabase db push
+
+supabase functions deploy field-operations
+supabase functions deploy job-dispatcher --no-verify-jwt
+supabase functions deploy job-reconciler --no-verify-jwt
+supabase functions deploy worker-callback --no-verify-jwt
+supabase functions deploy generate-advisory
+supabase functions deploy send-sms --no-verify-jwt
+supabase functions deploy sms-webhook --no-verify-jwt
 ```
 
-In Supabase Studio:
+Required Supabase function secrets:
 
-- **Auth → Providers → Phone**: enable, OTP length 6, expiry 600s.
-- **Auth → Hooks → Send SMS hook**: URL = `https://<project-ref>.functions.supabase.co/auth-sms-hook`.
-- **Storage**: confirm bucket `scans` exists (created by migration).
-
-### Vercel
-
-1. Connect the GitHub repo at https://vercel.com/new.
-2. Framework preset: **Vite**.
-3. Build command: `cd frontend && npm install && npm run build` (already set in `vercel.json`).
-4. Output directory: `frontend/dist`.
-5. Environment variables (Settings → Environment Variables):
-   - `VITE_SUPABASE_URL` = your Supabase project URL
-   - `VITE_SUPABASE_ANON_KEY` = your Supabase anon key
-6. Click Deploy.
-
-## Architecture
-
-See `C:\Users\jenal\.claude\plans\based-on-my-project-lazy-piglet.md` for the full plan, architecture diagram (Mermaid), schema, RLS rules, and phased delivery.
-
-**TL;DR pipeline:**
-
-```
-Admin uploads drone image
-  → marks affected spots on Leaflet map (disease + severity)
-  → INSERT drone_scans + N disease_detections
-  → for severity ≥ medium, call ai-advisor (mode=field) → INSERT advisories (state=draft)
-  → admin opens AdvisoryCompose, generates SMS draft, edits
-  → click "Approve & send" → call send-sms → SMS Gate → farmer's phone
-  → state=sent, sms_status=sent
-  → farmer sees alert in /farmer/alerts + /farmer/map
+```text
+APP_ORIGIN=https://riceguardai.dev
+CRON_SECRET=<random-long-secret>
+GOOGLE_DRIVE_CLIENT_ID=<server OAuth client>
+GOOGLE_DRIVE_CLIENT_SECRET=<server OAuth secret>
+GOOGLE_DRIVE_REFRESH_TOKEN=<restricted application account refresh token>
+GOOGLE_DRIVE_APP_FOLDER_ID=<private application folder>
+KAGGLE_DISPATCH_URL=https://riceguardai.dev/api/kaggle
+KAGGLE_DISPATCH_SECRET=<random-long-secret>
+OLLAMA_API_KEY=<optional until specialist sources are approved>
+OLLAMA_BASE_URL=https://ollama.com/api
+OLLAMA_MODEL=<configured model>
+SMS_GATE_URL=<gateway endpoint>
+SMS_GATE_TOKEN=<gateway credential, or use user/password secrets>
+SMS_GATE_WEBHOOK_SECRET=<webhook signing secret>
 ```
 
-## Project status
+Add `riceguard_project_url` and `riceguard_cron_secret` to Supabase Vault. The
+migration schedules dispatch, reconciliation and SMS outbox processing; missing
+Vault secrets cause those jobs to fail closed without external calls.
 
-Currently in **Phase 1 (Bootstrap)** of a 5-phase rebuild.
+## Vercel dispatcher
 
-- ✅ Phase 1 · Bootstrap: repo, migrations, edge functions, all pages + layouts scaffolded
-- ⏳ Phase 2 · Auth wiring: deploy to real Supabase project, test phone OTP flow end-to-end
-- ⏳ Phase 3 · Core data: storage bucket policies, scan upload + marker UI smoke test
-- ⏳ Phase 4 · Advisory pipeline: AI compose + SMS send end-to-end
-- ⏳ Phase 5 · Landing + UX polish + Lighthouse QA
+The `/api/kaggle` Python function uses the official Kaggle client only to push
+and check a private kernel. Configure these Vercel server variables:
 
-## License
+```text
+KAGGLE_USERNAME=<account owner>
+KAGGLE_KEY=<API credential>
+KAGGLE_KERNEL_SLUG=riceguard-private-inference
+KAGGLE_DISPATCH_SECRET=<same value configured in Supabase>
+```
 
-Educational / research use only.
+The dispatcher does not load checkpoints or process images. The generated
+private Kaggle run obtains a short-lived, run-scoped worker token and receives
+only its authorized manifest.
+
+## Model registry and scientific limits
+
+Two active model registry entries are required: `BLB` and `Brown Spot`. Each
+entry pins its architecture, encoder, preprocessing, input size, overlap,
+threshold, component filter, Drive artifact ID and SHA-256 checksum.
+
+- BLB reports predicted disease-region coverage only after a visible-rice-leaf
+  denominator is reviewed.
+- Brown Spot reports affected-leaf coverage. Whole-leaf masks are not lesion
+  severity.
+- `Uncertain` remains an internal ignored label and is never public output.
+- A completed empty result is `No target disease detected`, not proof that the
+  crop is healthy.
+- Low/Moderate/High stays disabled until a versioned disease-specific
+  calibration is approved against independent, specialist-scored surveys.
+- Video frame masks are timestamp aligned; repeated views are not summed into
+  a field-area estimate.
+
+## Release verification
+
+```powershell
+cd frontend
+npm run lint
+npm run test
+npm run build
+```
+
+The release is not commissioned until one real image batch and one short video
+complete upload -> Kaggle -> callback -> review -> publication -> approved test
+SMS, with private/public access boundaries verified.
+
+## Licensing
+
+Educational and research use. Third-party asset notices are in
+`THIRD_PARTY_NOTICES.md`.

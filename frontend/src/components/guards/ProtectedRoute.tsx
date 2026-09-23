@@ -7,7 +7,7 @@ interface Props {
 }
 
 export function ProtectedRoute({ role }: Props) {
-  const { session, profile, loading, profileLoading } = useAuth();
+  const { session, profile, loading, profileLoading, aal } = useAuth();
   const location = useLocation();
 
   // Initial session restore.
@@ -36,13 +36,21 @@ export function ProtectedRoute({ role }: Props) {
   // A profile row exists for every auth user (auto-created by handle_new_user
   // trigger) but it starts blank. We treat profiles missing required fields
   // as "needs completion" and bounce to /register.
-  if (!profile || !profile.full_name) {
+  if (!profile || (role !== "admin" && !profile.full_name)) {
     return <Navigate to="/register" replace />;
   }
 
   if (role && profile.role !== role) {
     const home = profile.role === "admin" ? "/admin/overview" : "/farmer/home";
     return <Navigate to={home} replace />;
+  }
+
+  if (role === "admin" && !profile.is_active) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (role === "admin" && aal !== "aal2") {
+    return <Navigate to="/login" replace state={{ from: location.pathname, requireMfa: true }} />;
   }
 
   return <Outlet />;

@@ -1,79 +1,82 @@
-import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
+import {
+  createBrowserRouter,
+  RouterProvider,
+  Navigate,
+} from "react-router-dom";
+import { lazy, Suspense, type ReactNode } from "react";
 import { ProtectedRoute } from "@/components/guards/ProtectedRoute";
-import { PublicLayout } from "@/components/layout/PublicLayout";
-import { FarmerLayout } from "@/components/layout/FarmerLayout";
-import { AdminLayout } from "@/components/layout/AdminLayout";
-
-import { Landing } from "@/pages/public/Landing";
-import { Login } from "@/pages/public/Login";
-import { Register } from "@/pages/public/Register";
-
-import { FarmerHome } from "@/pages/farmer/Home";
-import { FarmerMap } from "@/pages/farmer/Map";
-import { FarmerAlerts } from "@/pages/farmer/Alerts";
-import { FarmerNotifications } from "@/pages/farmer/Notifications";
-import { FarmerProfile } from "@/pages/farmer/Profile";
-
-import { AdminOverview } from "@/pages/admin/Overview";
-import { AdminScans } from "@/pages/admin/Scans";
-import { ScanUpload } from "@/pages/admin/ScanUpload";
-import { AdminAdvisories } from "@/pages/admin/Advisories";
-import { AdvisoryCompose } from "@/pages/admin/AdvisoryCompose";
-import { AdminFarmers } from "@/pages/admin/Farmers";
-import { AdminMap } from "@/pages/admin/Map";
-import { ModelStatus } from "@/pages/admin/ModelStatus";
-import { AdminSettings } from "@/pages/admin/Settings";
-
+import {
+  HomePage,
+  BulletinPage,
+  AdvisoryPage,
+  PublicMapPage,
+} from "@/operations/Public";
+import { RegistrationPage } from "@/operations/Registration";
+const Login = lazy(() =>
+  import("@/pages/public/Login").then((m) => ({ default: m.Login })),
+);
+const OperationsRoot = lazy(() =>
+  import("@/operations/Admin").then((m) => ({ default: m.OperationsRoot })),
+);
+const OperationsPage = lazy(() =>
+  import("@/operations/Admin").then((m) => ({ default: m.OperationsPage })),
+);
+const deferred = (children: ReactNode) => (
+  <Suspense
+    fallback={
+      <div role="status" style={{ padding: 30 }}>
+        Loading RiceGuardAI…
+      </div>
+    }
+  >
+    {children}
+  </Suspense>
+);
+const operations = [
+  "overview",
+  "surveys",
+  "surveys/new",
+  "review",
+  "map",
+  "advisories",
+  "farmers",
+  "sms",
+  "model",
+  "settings",
+].map((path) => ({ path, element: <OperationsPage /> }));
 const router = createBrowserRouter([
-  {
-    element: <PublicLayout />,
-    children: [
-      { path: "/", element: <Landing /> },
-      { path: "/login", element: <Login /> },
-      { path: "/register", element: <Register /> },
-    ],
-  },
-  {
-    element: <ProtectedRoute role="farmer" />,
-    children: [
-      {
-        path: "/farmer",
-        element: <FarmerLayout />,
-        children: [
-          { index: true, element: <Navigate to="/farmer/home" replace /> },
-          { path: "home", element: <FarmerHome /> },
-          { path: "map", element: <FarmerMap /> },
-          { path: "alerts", element: <FarmerAlerts /> },
-          { path: "notifications", element: <FarmerNotifications /> },
-          { path: "profile", element: <FarmerProfile /> },
-        ],
-      },
-    ],
-  },
+  { path: "/", element: <HomePage /> },
+  { path: "/bulletin", element: <BulletinPage /> },
+  { path: "/advisories/:slug", element: <AdvisoryPage /> },
+  { path: "/map", element: <PublicMapPage /> },
+  { path: "/register", element: <RegistrationPage /> },
+  { path: "/preferences", element: <RegistrationPage preferences /> },
+  { path: "/login", element: deferred(<Login />) },
+  { path: "/system", element: <Navigate to="/" replace /> },
+  { path: "/farmer/map", element: <Navigate to="/map" replace /> },
+  { path: "/farmer/profile", element: <Navigate to="/preferences" replace /> },
+  { path: "/farmer/*", element: <Navigate to="/bulletin" replace /> },
+  { path: "/demo/*", element: <Navigate to="/login" replace /> },
   {
     element: <ProtectedRoute role="admin" />,
     children: [
       {
         path: "/admin",
-        element: <AdminLayout />,
+        element: deferred(<OperationsRoot key="live" />),
         children: [
-          { index: true, element: <Navigate to="/admin/overview" replace /> },
-          { path: "overview", element: <AdminOverview /> },
-          { path: "scans", element: <AdminScans /> },
-          { path: "scans/new", element: <ScanUpload /> },
-          { path: "advisories", element: <AdminAdvisories /> },
-          { path: "advisories/:id", element: <AdvisoryCompose /> },
-          { path: "farmers", element: <AdminFarmers /> },
-          { path: "map", element: <AdminMap /> },
-          { path: "model", element: <ModelStatus /> },
-          { path: "settings", element: <AdminSettings /> },
+          { index: true, element: <Navigate to="overview" replace /> },
+          ...operations,
+          { path: "scans", element: <Navigate to="/admin/surveys" replace /> },
+          {
+            path: "scans/new",
+            element: <Navigate to="/admin/surveys/new" replace />,
+          },
         ],
       },
     ],
   },
   { path: "*", element: <Navigate to="/" replace /> },
 ]);
-
 export function AppRouter() {
   return <RouterProvider router={router} />;
 }

@@ -83,26 +83,6 @@ const DISEASES = [
       "Kresek phase — sudden wilting",
     ],
   },
-  {
-    key: "tungro",
-    name: "Tungro Virus",
-    tl: "Tungro",
-    image: "/images/tungro.webp",
-    severity: "Kritikal",
-    severityEn: "Critical",
-    subtitleEn: "Tungro virus",
-    accent: "#f97316",
-    symptomsTl: [
-      "Yellow-orange dahon, hindi pantay ang taas",
-      "Bansot, stunted growth, kulang sa panicle",
-      "Kinakalat ng green leafhopper",
-    ],
-    symptomsEn: [
-      "Yellow-orange leaves, uneven plant height",
-      "Stunted growth, missing or sparse panicles",
-      "Spread by green leafhoppers",
-    ],
-  },
 ];
 
 const STEPS = [
@@ -117,8 +97,8 @@ const STEPS = [
     icon: Bot,
     titleTl: "AI detection",
     titleEn: "AI detection",
-    descTl: "Auto-classify ng 3 sakit + severity sa Taglish.",
-    descEn: "Automatically classifies the 3 diseases and their severity.",
+    descTl: "Native-scale polygon detection para sa BLB at Rice Blast.",
+    descEn: "Native-scale polygon detection for BLB and Rice Blast.",
   },
   {
     icon: Cloud,
@@ -242,6 +222,12 @@ function GlassNav() {
             >
               {t("workflow")}
             </a>
+            <Link
+              to="/system"
+              className="hover:text-white transition-colors duration-200 cursor-pointer"
+            >
+              {t("evidence")}
+            </Link>
           </div>
           <div className="flex items-center gap-2">
             <Link
@@ -270,6 +256,7 @@ const NAV_DICT = {
     problems: "Problema",
     diseases: "Sakit",
     workflow: "Paano",
+    evidence: "System at ebidensya",
     login: "Mag-login",
     start: "Magsimula",
   },
@@ -279,6 +266,7 @@ const NAV_DICT = {
     problems: "Problems",
     diseases: "Diseases",
     workflow: "How it works",
+    evidence: "System & evidence",
     login: "Log in",
     start: "Get started",
   },
@@ -450,9 +438,8 @@ function ParallaxHero() {
           style={{ textWrap: "pretty" as const }}
         >
           {t("bodyStart")}{" "}
-          <span className="text-rice-200 font-medium">rice blast</span>,{" "}
-          <span className="text-rice-200 font-medium">bacterial leaf blight</span>, {t("and")}{" "}
-          <span className="text-rice-200 font-medium">tungro</span>
+          <span className="text-rice-200 font-medium">rice blast</span> {t("and")}{" "}
+          <span className="text-rice-200 font-medium">bacterial leaf blight</span>
           {t("bodyEnd")}
         </motion.p>
 
@@ -471,7 +458,7 @@ function ParallaxHero() {
             <ArrowRight size={18} className="relative group-hover:translate-x-1 transition-transform duration-200" aria-hidden />
           </Link>
           <Link
-            to="/login"
+            to="/system"
             className="inline-flex items-center justify-center gap-2 px-7 py-4 rounded-full bg-white/10 hover:bg-white/15 backdrop-blur text-white font-semibold border border-white/20 transition-all duration-200 tap cursor-pointer"
           >
             {t("secondaryCta")}
@@ -484,7 +471,7 @@ function ParallaxHero() {
           transition={{ delay: 1.5, duration: 0.8 }}
           className="mt-20 grid grid-cols-3 gap-6 md:gap-10 max-w-xl"
         >
-          <CountStat value={3} label={t("stat1Label")} sub={t("stat1Sub")} />
+          <CountStat value={2} label={t("stat1Label")} sub={t("stat1Sub")} />
           <CountStat value={2} label={t("stat2Label")} sub={t("stat2Sub")} />
           <Stat label={t("stat3Label")} sub={t("stat3Sub")} valueRaw="SMS" />
         </motion.div>
@@ -518,7 +505,7 @@ const HERO_DICT = {
     and: "at",
     bodyEnd: " - kasama ang AI-generated na payo sa Taglish, hatid sa SMS.",
     primaryCta: "Magsimula nang libre",
-    secondaryCta: "May account na ako",
+    secondaryCta: "Tingnan ang system",
     stat1Label: "rice diseases",
     stat1Sub: "binabantayan",
     stat2Label: "lalawigan",
@@ -535,7 +522,7 @@ const HERO_DICT = {
     and: "and",
     bodyEnd: ", paired with AI-generated guidance and SMS alerts.",
     primaryCta: "Start for free",
-    secondaryCta: "I already have an account",
+    secondaryCta: "View system evidence",
     stat1Label: "rice diseases",
     stat1Sub: "monitored",
     stat2Label: "provinces",
@@ -868,10 +855,10 @@ function ProblemsSection() {
       icon: Layers,
     },
     {
-      stat: "3 sakit",
-      statEn: "3 diseases",
-      captionTl: "rice blast, BLB, at tungro - magkakaibang lunas",
-      captionEn: "rice blast, BLB, and tungro need different treatment",
+      stat: "2 sakit",
+      statEn: "2 diseases",
+      captionTl: "Rice Blast at BLB - parehong kailangan ng precise lesion masks",
+      captionEn: "Rice Blast and BLB both require precise lesion masks",
       problemTl: "Generic na payo",
       problemEn: "Generic recommendations",
       solutionTl: "Location-specific advisory, severity-aware, weather-aware.",
@@ -1056,7 +1043,7 @@ function DiseaseSection() {
           <h2 className="font-display text-3xl md:text-5xl font-bold mt-6 leading-tight tracking-tight text-stone-900 max-w-3xl">
             {t("title")}
           </h2>
-          <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-6">
             {DISEASES.map((d) => (
               <DiseaseCard key={d.key} disease={d} lang={lang} />
             ))}
@@ -1070,7 +1057,7 @@ function DiseaseSection() {
     <section
       id="diseases"
       ref={sectionRef}
-      className="relative h-[400vh] bg-stone-100"
+      className="relative h-[300vh] bg-stone-100"
     >
       <div className="sticky top-0 h-screen overflow-hidden">
         {/* Heading — absolute so the card stage gets the full viewport height */}
@@ -1118,16 +1105,15 @@ function FocusedDisease({
   scrollYProgress: MotionValue<number>;
   lang: "tl" | "en";
 }) {
-  // EXPLICIT per-card timeline (total=3). Each card has 3 distinct phases:
+  // Explicit two-card timeline. Each card has 3 distinct phases:
   //   [0]   invisible before enter
   //   [1]   ENTER — slides + zooms from right
   //   [2,3] PEAK — held centered, fully opaque, scale 1.06
   //   [4]   EXIT — slides + shrinks to left (or holds for last card)
   //   [5]   invisible after exit
   //
-  // Card 0 (Rice Blast):  peak 0.00 → 0.25, exit 0.25 → 0.40
-  // Card 1 (BLB):         enter 0.25 → 0.40, peak 0.40 → 0.60, exit 0.60 → 0.75
-  // Card 2 (Tungro):      enter 0.60 → 0.75, peak 0.75 → 1.00
+  // Card 0 (Rice Blast): peak 0.00 → 0.35, exit 0.35 → 0.55
+  // Card 1 (BLB): enters 0.35 → 0.55 and holds through the end.
   //
   // Card N's exit overlaps with card N+1's enter so they cross-fade naturally.
   type Timeline = { keys: number[]; xVals: string[]; scaleVals: number[]; opacityVals: number[] };
@@ -1136,22 +1122,15 @@ function FocusedDisease({
 
   const timelines: Record<number, Timeline> = {
     0: {
-      // Rice Blast — at peak immediately, exits at 0.25–0.40
-      keys: [0, 0.0001, 0.25, 0.40, 0.4001, 1],
+      // Rice Blast — at peak immediately, exits at 0.35–0.55
+      keys: [0, 0.0001, 0.35, 0.55, 0.5501, 1],
       xVals: ["0%", "0%", "0%", "-85%", "-85%", "-85%"],
       scaleVals: [peakScale, peakScale, peakScale, offScale, offScale, offScale],
       opacityVals: [1, 1, 1, 0, 0, 0],
     },
     1: {
-      // BLB — enters 0.25–0.40, peak 0.40–0.60, exits 0.60–0.75
-      keys: [0, 0.25, 0.40, 0.60, 0.75, 1],
-      xVals: ["85%", "85%", "0%", "0%", "-85%", "-85%"],
-      scaleVals: [offScale, offScale, peakScale, peakScale, offScale, offScale],
-      opacityVals: [0, 0, 1, 1, 0, 0],
-    },
-    2: {
-      // Tungro — enters 0.60–0.75, peak 0.75 → 1, holds at peak through end
-      keys: [0, 0.60, 0.75, 0.9999, 0.99995, 1],
+      // BLB — enters 0.35–0.55, then remains visible
+      keys: [0, 0.35, 0.55, 0.9999, 0.99995, 1],
       xVals: ["85%", "85%", "0%", "0%", "0%", "0%"],
       scaleVals: [offScale, offScale, peakScale, peakScale, peakScale, peakScale],
       opacityVals: [0, 0, 1, 1, 1, 1],
@@ -1284,12 +1263,12 @@ function ProgressDots({
 
 const DISEASE_DICT = {
   tl: {
-    kicker: "Tatlong sakit na binabantayan",
+    kicker: "Dalawang sakit na binabantayan",
     title: "Bawat sakit, may sariling lunas at warning.",
     hint: "Mag-scroll para sa bawat sakit →",
   },
   en: {
-    kicker: "Three diseases we monitor",
+    kicker: "Two diseases we monitor",
     title: "Each disease has its own treatment and warning.",
     hint: "Scroll for each disease →",
   },

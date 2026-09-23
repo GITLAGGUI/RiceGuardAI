@@ -1,297 +1,189 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, Phone, KeyRound } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { ArrowLeft, KeyRound, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
-import { normalizePhPhone, formatPhDisplay, formatPhInput } from "@/utils/phone";
-import { authOtpErrorMessage } from "@/utils/authErrors";
 
-type Step = "phone" | "otp";
-
-const OTP_EXPIRES_SECONDS = 5 * 60;
-const RESEND_COOLDOWN_SECONDS = 30;
+type Step = "password" | "recovery" | "setup" | "mfa" | "enroll";
 
 export function Login() {
-  const [step, setStep] = useState<Step>("phone");
-  const [phoneInput, setPhoneInput] = useState("");
-  const [phone, setPhone] = useState<string | null>(null);
-  const [otp, setOtp] = useState("");
+  const [step, setStep] = useState<Step>("password");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [factorId, setFactorId] = useState("");
+  const [challengeId, setChallengeId] = useState("");
+  const [qr, setQr] = useState("");
   const [busy, setBusy] = useState(false);
-  const [otpSentAt, setOtpSentAt] = useState<number | null>(null);
-  const [now, setNow] = useState(() => Date.now());
+  const [recoverySent, setRecoverySent] = useState(false);
   const navigate = useNavigate();
-  const { session, profile, loading, profileLoading } = useAuth();
-
-  // If the user is already signed in (session persisted in localStorage), don't
-  // make them log in again. Send them to their dashboard. Closing the tab or
-  // browser keeps the session — only an explicit Sign out clears it.
-  useEffect(() => {
-    if (loading || profileLoading) return;
-    if (!session?.user) return;
-    if (profile && profile.full_name) {
-      navigate(profile.role === "admin" ? "/admin/overview" : "/farmer/home", { replace: true });
-    } else {
-      // Signed in but profile incomplete — finish via /register's profile step.
-      navigate("/register", { replace: true });
-    }
-  }, [loading, profileLoading, session, profile, navigate]);
+  const location = useLocation();
+  const { session, profile, loading, profileLoading, aal, refreshAal } = useAuth();
+  const authError = new URLSearchParams(location.hash.slice(1)).get("error_code");
 
   useEffect(() => {
-    if (step !== "otp" || !otpSentAt) return;
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, [step, otpSentAt]);
+    if (loading || profileLoading || !session || !profile) return;
+    if (profile.role === "admin" && profile.is_active && aal === "aal2") {
+      const destination = (location.state as { from?: string } | null)?.from || "/admin/overview";
+      navigate(destination, { replace: true });
+    } else if (profile.role === "admin" && profile.is_active && step === "password") {
+      // An invitation or recovery link signs in without providing a password.
+      // Let the administrator set one before enrolling an authenticator.
+      setStep("setup");
+    }
+  }, [loading, profileLoading, session, profile, aal, step, location.state, navigate]);
 
-  const secondsSinceOtp = otpSentAt ? Math.floor((now - otpSentAt) / 1000) : 0;
-  const secondsLeft = otpSentAt ? Math.max(0, OTP_EXPIRES_SECONDS - secondsSinceOtp) : 0;
-  const resendSecondsLeft = otpSentAt
-    ? Math.max(0, RESEND_COOLDOWN_SECONDS - secondsSinceOtp)
-    : 0;
-  const canResend = step === "otp" && !!phone && !busy && resendSecondsLeft === 0;
-
-  const sendOtp = async (normalized: string, mode: "initial" | "resend") => {
-    setBusy(true);
-    const { error } = await supabase.auth.signInWithOtp({
-      phone: normalized,
-      options: { shouldCreateUser: false },
-    });
-    setBusy(false);
-    if (error) {
-      console.warn("[login] OTP send failed", {
-        normalizedPhone: normalized,
-        message: error.message,
-      });
-      // Truly-new-user case: no auth row → bounce to /register with the phone
-      // pre-filled so they don't have to retype it.
-      const msg = error.message.toLowerCase();
-      if (
-        msg.includes("signups not allowed") ||
-        msg.includes("user not found") ||
-        msg.includes("not_found")
-      ) {
-        toast.info("Wala pang account sa numerong ito. Idi-redirect ka na sa pagrehistro.");
-        navigate("/register", { state: { prefillPhone: normalized } });
-        return;
-      }
-      toast.error(authOtpErrorMessage(error.message, formatPhDisplay(normalized)));
+  const prepareMfa = async () => {
+    const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aalData?.currentLevel === "aal2") {
+      await refreshAal();
+      navigate("/admin/overview", { replace: true });
       return;
     }
-    setPhone(normalized);
-    setOtp("");
-    setOtpSentAt(Date.now());
-    setNow(Date.now());
-    setStep("otp");
-    toast.success(
-      mode === "resend"
-        ? `Bagong code na-send sa ${formatPhDisplay(normalized)}`
-        : `Code na-send sa ${formatPhDisplay(normalized)}`,
-    );
-  };
-
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const normalized = normalizePhPhone(phoneInput);
-    if (!normalized) {
-      toast.error("Mukhang mali ang number. Dapat 10 digits na nagsisimula sa 9 (hal. 912 345 6789).");
+    const factors = await supabase.auth.mfa.listFactors();
+    const verified = factors.data?.totp.find((factor) => factor.status === "verified");
+    if (verified) {
+      const challenge = await supabase.auth.mfa.challenge({ factorId: verified.id });
+      if (challenge.error) throw challenge.error;
+      setFactorId(verified.id);
+      setChallengeId(challenge.data.id);
+      setStep("mfa");
       return;
     }
-    await sendOtp(normalized, "initial");
+    const enrollment = await supabase.auth.mfa.enroll({ factorType: "totp", friendlyName: "RiceGuardAI Admin" });
+    if (enrollment.error) throw enrollment.error;
+    setFactorId(enrollment.data.id);
+    setQr(enrollment.data.totp.qr_code);
+    setStep("enroll");
   };
 
-  const handleResendOtp = async () => {
-    if (!phone || !canResend) return;
-    await sendOtp(phone, "resend");
-  };
-
-  const handleVerify = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!phone || otp.length !== 6) return;
+  const signIn = async (event: FormEvent) => {
+    event.preventDefault();
     setBusy(true);
     try {
-      // Bypass supabase.auth.verifyOtp() — its response handling hangs in
-      // production. Hit the REST endpoint directly, then register the new
-      // session with the SDK via setSession() so AuthContext picks it up.
-      const url = import.meta.env.VITE_SUPABASE_URL;
-      const apikey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      const res = await fetch(`${url}/auth/v1/verify`, {
-        method: "POST",
-        headers: { apikey, "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "sms", phone, token: otp }),
-      });
-      const body = await res.json();
-
-      if (!res.ok) {
-        const msg = (body.error_description || body.msg || body.error || "verify failed") as string;
-        console.warn("[login] verify rejected", body);
-        toast.error(
-          msg.toLowerCase().includes("expired") || msg.toLowerCase().includes("invalid")
-            ? "Expired o mali ang code. Pindutin ang Resend code para sa bagong OTP."
-            : `Mali ang code. (${msg})`,
-        );
-        return;
+      const result = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (result.error) throw result.error;
+      const role = await supabase.from("profiles").select("role,is_active").eq("id", result.data.user.id).single();
+      if (role.data?.role !== "admin" || !role.data?.is_active) {
+        await supabase.auth.signOut();
+        throw new Error("This account is not an active invited administrator.");
       }
+      setPassword("");
+      await prepareMfa();
+    } catch (error) {
+      toast.error((error as Error).message || "Sign-in failed");
+    } finally {
+      setBusy(false);
+    }
+  };
 
-      // setSession() should be fast; race with a 3s timeout just in case.
-      const setP = supabase.auth.setSession({
-        access_token: body.access_token,
-        refresh_token: body.refresh_token,
+  const finishInvitation = async (event: FormEvent) => {
+    event.preventDefault();
+    if (password.length < 12 || password !== confirmPassword) return;
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      setPassword("");
+      setConfirmPassword("");
+      toast.success("Password saved. Set up your authenticator next.");
+      await prepareMfa();
+    } catch (error) {
+      toast.error((error as Error).message || "Account setup failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const requestRecovery = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/login`,
       });
-      const timeoutP = new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 3000));
-      const raced = await Promise.race([setP, timeoutP]);
+      if (error) throw error;
+      // Do not disclose whether an address belongs to an administrator.
+      setRecoverySent(true);
+    } catch (error) {
+      toast.error((error as Error).message || "Could not send the account setup link");
+    } finally {
+      setBusy(false);
+    }
+  };
 
-      toast.success("Welcome!");
-      if (raced === "timeout") {
-        // SDK is being slow — force a hard navigation so the next page load
-        // re-initialises the client from localStorage (which setSession already
-        // wrote synchronously before its observer chain).
-        window.location.href = "/farmer/home";
-        return;
+  const verify = async (event: FormEvent) => {
+    event.preventDefault();
+    if (code.length !== 6) return;
+    setBusy(true);
+    try {
+      if (step === "enroll") {
+        const challenge = await supabase.auth.mfa.challenge({ factorId });
+        if (challenge.error) throw challenge.error;
+        const verification = await supabase.auth.mfa.verify({ factorId, challengeId: challenge.data.id, code });
+        if (verification.error) throw verification.error;
+      } else {
+        const verification = await supabase.auth.mfa.verify({ factorId, challengeId, code });
+        if (verification.error) throw verification.error;
       }
-      // ProtectedRoute will route admins to /admin/overview and bounce
-      // incomplete profiles to /register.
-      navigate("/farmer/home");
-    } catch (err) {
-      console.error("[login] verify threw", err);
-      toast.error(`Hindi naverify. (${(err as Error)?.message ?? "unknown"})`);
+      await refreshAal();
+      toast.success("Administrator identity verified.");
+      navigate("/admin/overview", { replace: true });
+    } catch (error) {
+      toast.error((error as Error).message || "Invalid authenticator code");
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-forest-950 via-forest-900 to-emerald-900 grid place-items-center px-5 py-10">
+    <main className="min-h-screen bg-[#0b2f23] grid place-items-center px-5 py-10">
       <div className="w-full max-w-md">
-        <Link
-          to="/"
-          className="inline-flex items-center gap-2 text-white/60 hover:text-white mb-8 text-sm"
-        >
-          <ArrowLeft size={16} /> Bumalik
-        </Link>
-
-        <div className="bg-white rounded-3xl p-8 md:p-10 shadow-2xl">
-          {step === "phone" ? (
-            <>
-              <div className="w-14 h-14 rounded-2xl bg-rice-100 grid place-items-center text-forest-800 mb-5">
-                <Phone size={26} />
-              </div>
-              <h1 className="font-display text-3xl font-bold">Mag-login</h1>
-              <p className="text-stone-500 mt-2">
-                Ipasok ang iyong cellphone number. Padadalhan ka namin ng 6-digit na code.
-              </p>
-
-              <form onSubmit={handleSendOtp} className="mt-8 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-2">
-                    Cellphone number
-                  </label>
-                  <div className="flex">
-                    <span className="inline-flex items-center px-4 rounded-l-xl border border-r-0 border-stone-300 bg-stone-50 text-stone-600 font-medium select-none">
-                      +63
-                    </span>
-                    <input
-                      type="tel"
-                      inputMode="numeric"
-                      autoComplete="tel-national"
-                      placeholder="912 345 6789"
-                      value={phoneInput}
-                      onChange={(e) => setPhoneInput(formatPhInput(e.target.value))}
-                      maxLength={12}
-                      className="flex-1 px-4 py-3.5 rounded-r-xl border border-stone-300 focus:border-forest-600 focus:ring-2 focus:ring-forest-100 outline-none text-lg tracking-wide"
-                      required
-                    />
-                  </div>
-                  <p className="mt-2 text-xs text-stone-500">
-                    Dapat magsimula sa <strong>9</strong> at 10 digits lahat.
-                  </p>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={busy}
-                  className="w-full tap rounded-xl bg-forest-900 hover:bg-forest-950 text-white font-semibold py-4 transition disabled:opacity-50"
-                >
-                  {busy ? "Naghahatid…" : "Padalhan ako ng Code"}
-                </button>
-              </form>
-
-              <p className="text-stone-500 text-sm text-center mt-6">
-                Wala pang account?{" "}
-                <Link to="/register" className="text-forest-800 font-semibold hover:underline">
-                  Magrehistro
-                </Link>
-              </p>
-            </>
+        <Link to="/" className="inline-flex items-center gap-2 text-white/65 hover:text-white mb-8 text-sm"><ArrowLeft size={16} /> Public website</Link>
+        <section className="bg-white rounded-3xl p-8 md:p-10 shadow-2xl">
+          <div className="w-14 h-14 rounded-2xl bg-emerald-50 grid place-items-center text-emerald-900 mb-5">
+            {step === "password" ? <LockKeyhole size={26} /> : <ShieldCheck size={26} />}
+          </div>
+          <p className="text-xs font-bold tracking-[.15em] text-emerald-700 uppercase">Invite-only workspace</p>
+          <h1 className="text-3xl font-bold mt-2">RiceGuardAI Admin</h1>
+          {authError === "otp_expired" && <p role="alert" className="mt-5 rounded-xl bg-amber-50 p-4 text-sm text-amber-950">That one-time email link has expired or was already opened. Request a new account setup link below.</p>}
+          {step === "password" ? (
+            <form onSubmit={signIn} className="mt-7 space-y-4">
+              <p className="text-stone-500">Sign in with the email and password issued to an active administrator.</p>
+              <label className="block text-sm font-semibold text-stone-700"><span className="flex items-center gap-2 mb-2"><Mail size={16} /> Email</span><input className="w-full rounded-xl border border-stone-300 px-4 py-3.5" type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+              <label className="block text-sm font-semibold text-stone-700"><span className="flex items-center gap-2 mb-2"><KeyRound size={16} /> Password</span><input className="w-full rounded-xl border border-stone-300 px-4 py-3.5" type="password" autoComplete="current-password" required minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+              <button className="w-full rounded-xl bg-[#153e2f] py-4 text-white font-bold disabled:opacity-50" disabled={busy}>{busy ? "Verifying…" : "Continue securely"}</button>
+              <button type="button" className="w-full text-sm font-semibold text-emerald-800 underline" onClick={() => setStep("recovery")}>Need a new setup link?</button>
+            </form>
+          ) : step === "recovery" ? (
+            <form onSubmit={requestRecovery} className="mt-7 space-y-4">
+              <p className="text-stone-600">Request a new one-time link for your invited administrator account.</p>
+              <label className="block text-sm font-semibold text-stone-700">Email<input className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3.5" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+              <button className="w-full rounded-xl bg-[#153e2f] py-4 text-white font-bold disabled:opacity-50" disabled={busy}>{busy ? "Sending…" : "Send account setup link"}</button>
+              {recoverySent && <p role="status" className="text-sm text-emerald-900">If this email has an account, a new link is on its way. Open the newest email once, in this browser.</p>}
+              <button type="button" className="w-full text-sm font-semibold text-emerald-800 underline" onClick={() => setStep("password")}>Back to sign in</button>
+            </form>
+          ) : step === "setup" ? (
+            <form onSubmit={finishInvitation} className="mt-7 space-y-4">
+              <p className="text-stone-500">Finish your invited account by creating a password. Your authenticator will be set up next.</p>
+              <label className="block text-sm font-semibold text-stone-700">New password<input className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3.5" type="password" autoComplete="new-password" required minLength={12} value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+              <label className="block text-sm font-semibold text-stone-700">Confirm password<input className="mt-2 w-full rounded-xl border border-stone-300 px-4 py-3.5" type="password" autoComplete="new-password" required minLength={12} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /></label>
+              <button className="w-full rounded-xl bg-[#153e2f] py-4 text-white font-bold disabled:opacity-50" disabled={busy || password.length < 12 || password !== confirmPassword}>{busy ? "Saving…" : "Save password and set up MFA"}</button>
+              <button className="w-full text-sm font-semibold text-emerald-800 underline" type="button" disabled={busy} onClick={() => void prepareMfa()}>I already have a password — continue to MFA</button>
+            </form>
           ) : (
-            <>
-              <div className="w-14 h-14 rounded-2xl bg-rice-100 grid place-items-center text-forest-800 mb-5">
-                <KeyRound size={26} />
-              </div>
-              <h1 className="font-display text-3xl font-bold">Ipasok ang Code</h1>
-              <p className="text-stone-500 mt-2">
-                Tingnan ang SMS sa <strong>{phone && formatPhDisplay(phone)}</strong>.
-              </p>
-
-              <form onSubmit={handleVerify} className="mt-8 space-y-4">
-                <div className="rounded-xl border border-rice-200 bg-rice-50 px-4 py-3 text-sm text-forest-900">
-                  {secondsLeft > 0 ? (
-                    <>Mag-eexpire ang code sa <strong>{formatSeconds(secondsLeft)}</strong>.</>
-                  ) : (
-                    <strong>Expired na ang code. Humingi ng bago.</strong>
-                  )}
-                </div>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="\d{6}"
-                  maxLength={6}
-                  autoComplete="one-time-code"
-                  placeholder="000000"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                  className="w-full px-4 py-5 rounded-xl border border-stone-300 focus:border-forest-600 focus:ring-2 focus:ring-forest-100 outline-none text-3xl tracking-[0.6em] text-center font-mono"
-                  autoFocus
-                  required
-                />
-
-                <button
-                  type="submit"
-                  disabled={busy || otp.length !== 6}
-                  className="w-full tap rounded-xl bg-forest-900 hover:bg-forest-950 text-white font-semibold py-4 transition disabled:opacity-50"
-                >
-                  {busy ? "Sini-check…" : "Patunayan"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleResendOtp}
-                  disabled={!canResend}
-                  className="w-full rounded-xl border border-stone-300 py-3 text-sm font-semibold text-forest-900 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {resendSecondsLeft > 0
-                    ? `Resend code in ${resendSecondsLeft}s`
-                    : "Resend code"}
-                </button>
-              </form>
-
-              <button
-                onClick={() => {
-                  setStep("phone");
-                  setOtp("");
-                }}
-                className="block mx-auto mt-6 text-sm text-stone-500 hover:text-stone-800"
-              >
-                Mali ang number? Bumalik
-              </button>
-            </>
+            <form onSubmit={verify} className="mt-7 space-y-4">
+              <p className="text-stone-500">{step === "enroll" ? "Scan this QR code in an authenticator app, then enter the six-digit code. This is required for every administrator." : "Enter the current six-digit code from your authenticator app."}</p>
+              {step === "enroll" && qr ? <img className="mx-auto w-52 h-52" src={qr} alt="TOTP enrollment QR code" /> : null}
+              <input className="w-full rounded-xl border border-stone-300 px-4 py-4 text-center text-2xl tracking-[.45em]" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" required value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} />
+              <button className="w-full rounded-xl bg-[#153e2f] py-4 text-white font-bold disabled:opacity-50" disabled={busy || code.length !== 6}>{busy ? "Verifying…" : step === "enroll" ? "Activate MFA and continue" : "Verify and continue"}</button>
+            </form>
           )}
-        </div>
+          <p className="mt-6 text-xs text-stone-500">Farmer SMS registration and consent are separate from administrator authorization.</p>
+        </section>
       </div>
-    </div>
+    </main>
   );
-}
-
-function formatSeconds(total: number): string {
-  const minutes = Math.floor(total / 60);
-  const seconds = total % 60;
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }

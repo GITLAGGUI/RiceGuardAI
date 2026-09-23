@@ -83,18 +83,18 @@ function buildInsights(current: OwmCurrent, forecast: OwmForecast): string[] {
   const pop = forecast.list?.[0]?.pop ?? 0;
 
   if (humidity > 85 && temp >= 22 && temp <= 30) {
-    out.push("Mataas ang panganib ng Rice Blast — humid at malamig-malamig.");
+    out.push("Mataas ang humidity; i-review ang field observations at approved disease guidance bago maglabas ng advisory.");
   }
   if (humidity > 90 && temp > 27) {
-    out.push("Magandang panahon para sa BLB — mag-ingat sa malakas na ulan.");
+    out.push("Mainit at napakataas ng humidity; dagdagan ang visual monitoring pagkatapos ng ulan.");
   }
   if (wind < 5 && pop < 0.3) {
-    out.push("Magandang oras mag-spray — mahina ang hangin at malabong umulan.");
+    out.push("Mahina ang hangin at mababa ang kasalukuyang rain probability; i-record ito bilang survey context.");
   } else if (pop > 0.6) {
-    out.push("Huwag mag-spray — malamang umulan sa susunod na oras.");
+    out.push("Mataas ang rain probability; maaaring maapektuhan ang image quality at field access.");
   }
   if (wind > 8) {
-    out.push("Malakas ang hangin — masamang oras para sa spraying.");
+    out.push("Malakas ang hangin; ipagpaliban ang drone capture kung hindi ligtas ang paglipad.");
   }
 
   if (out.length === 0) out.push("Normal ang panahon. Magpatuloy sa pang-araw-araw na inspeksyon.");

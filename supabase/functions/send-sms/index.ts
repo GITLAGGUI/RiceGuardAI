@@ -1,202 +1,88 @@
-// Send SMS via SMS Gate API.
-// Two calling shapes supported:
-//   { advisory_id }          → fetches phone + message from advisory
-//   { phone, body }          → free-form (still admin-only)
-//
-// Respects notification_preferences.sms_enabled — silently drops the send
-// (returns ok:true skipped:true) so the admin doesn't see a hard error when
-// the farmer has opted out.
+import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.46.1";
-import { handleCors, jsonResponse } from "../_shared/cors.ts";
-import { rateLimit } from "../_shared/ratelimit.ts";
+const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+const gatewayUrl = Deno.env.get("SMS_GATE_URL") || "https://api.sms-gate.app/3rdparty/v1/messages";
+const gatewayToken = Deno.env.get("SMS_GATE_TOKEN");
+const gatewayUser = Deno.env.get("SMS_GATE_USER");
+const gatewayPass = Deno.env.get("SMS_GATE_PASS");
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
-const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const SMS_GATE_USER = Deno.env.get("SMS_GATE_USER") ?? "";
-const SMS_GATE_PASS = Deno.env.get("SMS_GATE_PASS") ?? "";
-
-interface BodyAdvisory {
-  advisory_id: string;
-  phone?: never;
-  body?: never;
+function quietHours() {
+  const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Manila", hour: "2-digit", hourCycle: "h23" }).format(new Date()));
+  return hour >= 20 || hour < 6;
 }
-interface BodyFree {
-  advisory_id?: never;
-  phone: string;
-  body: string;
+function nextSixAm() {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const dayOffset = Number(value.hour) >= 20 ? 1 : 0;
+  const localMidnightUtc = Date.UTC(Number(value.year), Number(value.month) - 1, Number(value.day) + dayOffset, 22, 0, 0); // 06:00 Asia/Manila
+  return new Date(localMidnightUtc).toISOString();
 }
-type Body = BodyAdvisory | BodyFree;
 
 Deno.serve(async (req) => {
-  const cors = handleCors(req);
-  if (cors) return cors;
-  if (req.method !== "POST") return jsonResponse({ error: "method not allowed" }, 405);
-
-  const auth = req.headers.get("authorization");
-  if (!auth) return jsonResponse({ error: "missing authorization" }, 401);
-
-  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON, {
-    global: { headers: { authorization: auth } },
-    auth: { persistSession: false },
-  });
-  const { data: userData, error: userErr } = await userClient.auth.getUser();
-  if (userErr || !userData.user) return jsonResponse({ error: "invalid session" }, 401);
-
-  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
-    auth: { persistSession: false },
-  });
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("role")
-    .eq("id", userData.user.id)
-    .single();
-  if (profile?.role !== "admin") return jsonResponse({ error: "admin only" }, 403);
-
-  if (!SMS_GATE_USER || !SMS_GATE_PASS)
-    return jsonResponse({ error: "sms gateway not configured" }, 500);
-
-  let payload: Body;
-  try {
-    payload = await req.json();
-  } catch {
-    return jsonResponse({ error: "invalid json" }, 400);
+  const cronSecret = Deno.env.get("CRON_SECRET");
+  if (!cronSecret || req.headers.get("authorization") !== `Bearer ${cronSecret}`) return json({ error: "Unauthorized" }, 401);
+  if ((!gatewayToken && !(gatewayUser && gatewayPass)) || !gatewayUrl) return json({ error: "SMS Gate is not configured; queued messages were preserved" }, 503);
+  if (quietHours()) {
+    const resume = nextSixAm();
+    await db.from("rg_recipients").update({ not_before: resume }).eq("status", "queued").lt("not_before", resume);
+    return json({ status: "quiet_hours", resume_at: resume });
   }
-
-  // Resolve {phone, text, advisory_id} from either shape
-  let phone: string;
-  let text: string;
-  let advisoryId: string | null = null;
-
-  if ("advisory_id" in payload && payload.advisory_id) {
-    advisoryId = payload.advisory_id;
-    const { data: advisory, error: aErr } = await admin
-      .from("advisories")
-      .select("id, sms_text, severity, farmer_id, state")
-      .eq("id", advisoryId)
-      .single();
-    if (aErr || !advisory) return jsonResponse({ error: "advisory not found" }, 404);
-    if (!advisory.sms_text)
-      return jsonResponse({ error: "advisory has no sms_text — generate first" }, 400);
-    if (!advisory.farmer_id)
-      return jsonResponse({ error: "advisory has no linked farmer" }, 400);
-
-    const { data: farmer } = await admin
-      .from("profiles")
-      .select("phone")
-      .eq("id", advisory.farmer_id)
-      .single();
-    if (!farmer?.phone)
-      return jsonResponse({ error: "farmer has no phone" }, 400);
-
-    // Notification prefs
-    const { data: prefs } = await admin
-      .from("notification_preferences")
-      .select("sms_enabled, critical_alerts")
-      .eq("farmer_id", advisory.farmer_id)
-      .maybeSingle();
-    const smsEnabled = prefs?.sms_enabled ?? true;
-    const criticalOnly = prefs?.critical_alerts ?? true;
-
-    if (!smsEnabled) {
-      await admin
-        .from("advisories")
-        .update({ sms_status: "failed", sms_error: "farmer opted out of SMS" })
-        .eq("id", advisoryId);
-      return jsonResponse({ ok: true, skipped: true, reason: "farmer opted out" });
+  const recipients = await db.from("rg_recipients").select("id,campaign_id,contact_id,phone,attempts,client_message_id,rg_campaigns!inner(id,bulletin_id,rg_bulletins!inner(title,disease,location,action,slug,status))").eq("status", "queued").lte("not_before", new Date().toISOString()).order("created_at").limit(25);
+  if (recipients.error) return json({ error: recipients.error.message }, 500);
+  const report = { accepted: 0, suppressed: 0, failed: 0, unknown: 0 };
+  for (const recipient of recipients.data || []) {
+    const contact = await db.from("rg_contacts").select("consent,verified").eq("id", recipient.contact_id).single();
+    if (!contact.data?.consent || !contact.data?.verified) {
+      await db.from("rg_recipients").update({ status: "suppressed", error: "Consent or phone verification no longer active" }).eq("id", recipient.id);
+      report.suppressed++;
+      continue;
     }
-    if (criticalOnly && advisory.severity !== "high") {
-      await admin
-        .from("advisories")
-        .update({ sms_status: "failed", sms_error: "below critical threshold" })
-        .eq("id", advisoryId);
-      return jsonResponse({ ok: true, skipped: true, reason: "below critical threshold" });
+    const bulletin = recipient.rg_campaigns.rg_bulletins;
+    if (bulletin.status !== "published") {
+      await db.from("rg_recipients").update({ status: "suppressed", error: "Publication is no longer active" }).eq("id", recipient.id);
+      report.suppressed++;
+      continue;
     }
-
-    phone = farmer.phone;
-    text = advisory.sms_text;
-  } else if ("phone" in payload && payload.phone && payload.body) {
-    phone = payload.phone;
-    text = payload.body;
-  } else {
-    return jsonResponse({ error: "advisory_id OR (phone+body) required" }, 400);
-  }
-
-  if (text.length > 320) return jsonResponse({ error: "message too long (>320)" }, 400);
-  if (!/^\+639\d{9}$/.test(phone))
-    return jsonResponse({ error: "phone must be +639XXXXXXXXX" }, 400);
-
-  // Rate limits
-  if (!(await rateLimit(`sms:phone:${phone}`, 5)))
-    return jsonResponse({ error: "rate limit (5/hour per phone)" }, 429);
-  if (!(await rateLimit("sms:global", 200)))
-    return jsonResponse({ error: "rate limit (200/day global)" }, 429);
-
-  const basic = btoa(`${SMS_GATE_USER}:${SMS_GATE_PASS}`);
-  let providerJson: unknown = null;
-  let ok = false;
-  let httpStatus = 0;
-  let errorBody: string | null = null;
-
-  try {
-    const res = await fetch("https://api.sms-gate.app/3rdparty/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Basic ${basic}`,
-      },
-      signal: AbortSignal.timeout(20_000),
-      body: JSON.stringify({
-        textMessage: { text },
-        phoneNumbers: [phone],
-        withDeliveryReport: false,
-      }),
-    });
-    httpStatus = res.status;
-    if (res.ok) {
-      providerJson = await res.json().catch(() => null);
-      ok = true;
-    } else {
-      errorBody = await res.text();
-    }
-  } catch (e) {
-    errorBody = e instanceof Error ? e.message : String(e);
-  }
-
-  if (advisoryId) {
-    await admin
-      .from("advisories")
-      .update(
-        ok
-          ? {
-              sms_status: "sent",
-              sms_sent_at: new Date().toISOString(),
-              sms_error: null,
-              state: "sent",
-            }
-          : {
-              sms_status: "failed",
-              sms_error: errorBody?.slice(0, 500) ?? `http ${httpStatus}`,
-            }
-      )
-      .eq("id", advisoryId);
-  }
-
-  // Audit
-  await admin.from("audit_events").insert({
-    actor_id: userData.user.id,
-    action: ok ? "sms.sent" : "sms.failed",
-    target_table: advisoryId ? "advisories" : null,
-    target_id: advisoryId,
-    meta: { phone, ok, http: httpStatus, error: errorBody?.slice(0, 200) ?? null },
-  });
-
-  if (!ok)
-    return jsonResponse(
-      { error: "send failed", http: httpStatus, detail: errorBody?.slice(0, 500) },
-      502
+    const publicUrl = `${Deno.env.get("APP_ORIGIN") || "https://riceguardai.dev"}/advisories/${bulletin.slug}`;
+    const inboundOptOutEnabled = Boolean(
+      Deno.env.get("SMS_GATE_WEBHOOK_SECRET") || Deno.env.get("SMS_GATE_WEBHOOK_TOKEN"),
     );
-
-  return jsonResponse({ ok: true, provider: providerJson });
+    const stopText = inboundOptOutEnabled ? " Reply STOP to opt out." : " Manage alerts on the RiceGuardAI website.";
+    const message = `RiceGuardAI: Reviewed ${bulletin.disease} advisory near ${bulletin.location}. ${bulletin.action} Details: ${publicUrl}.${stopText}`.slice(0, 620);
+    const authorization = gatewayToken ? `Bearer ${gatewayToken}` : `Basic ${btoa(`${gatewayUser}:${gatewayPass}`)}`;
+    try {
+      const response = await fetch(gatewayUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: authorization },
+        signal: AbortSignal.timeout(25_000),
+        body: JSON.stringify({
+          id: recipient.client_message_id,
+          textMessage: { text: message },
+          phoneNumbers: [recipient.phone],
+          ttl: 3600,
+          withDeliveryReport: true,
+        }),
+      });
+      const provider = await response.json().catch(() => ({}));
+      if (response.ok) {
+        const messageId = provider.id || provider.messageId || provider.messages?.[0]?.id || null;
+        await db.from("rg_recipients").update({ status: "accepted", message_id: messageId, accepted_at: new Date().toISOString(), last_attempt_at: new Date().toISOString(), attempts: recipient.attempts + 1, error: null }).eq("id", recipient.id).eq("status", "queued");
+        report.accepted++;
+      } else if (response.status === 409) {
+        await db.from("rg_recipients").update({ status: "unknown", attempts: recipient.attempts + 1, last_attempt_at: new Date().toISOString(), error: "Gateway reported a duplicate message ID; verify provider status before retry" }).eq("id", recipient.id);
+        report.unknown++;
+      } else if (response.status >= 500 && recipient.attempts < 3) {
+        await db.from("rg_recipients").update({ attempts: recipient.attempts + 1, last_attempt_at: new Date().toISOString(), not_before: new Date(Date.now() + 15 * 60_000).toISOString(), error: `Gateway unavailable (${response.status})` }).eq("id", recipient.id);
+        report.failed++;
+      } else {
+        await db.from("rg_recipients").update({ status: "failed", attempts: recipient.attempts + 1, last_attempt_at: new Date().toISOString(), error: `Gateway rejected request (${response.status})` }).eq("id", recipient.id);
+        report.failed++;
+      }
+    } catch (error) {
+      await db.from("rg_recipients").update({ status: "unknown", attempts: recipient.attempts + 1, last_attempt_at: new Date().toISOString(), error: `Send outcome uncertain: ${error instanceof Error ? error.message.slice(0, 180) : "network error"}` }).eq("id", recipient.id);
+      report.unknown++;
+    }
+  }
+  return json(report);
 });

@@ -53,7 +53,10 @@ secrets = "env(SEND_SMS_HOOK_SECRETS)"
 verify_jwt = false
 
 [functions.send-sms]
-verify_jwt = true
+verify_jwt = false
+
+[functions.sms-webhook]
+verify_jwt = false
 
 [functions.ai-advisor]
 verify_jwt = true

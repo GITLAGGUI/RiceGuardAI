@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 
 export type Lang = "tl" | "en";
 
@@ -15,16 +15,12 @@ interface LangContextValue {
 const LangContext = createContext<LangContextValue | undefined>(undefined);
 
 export function LangProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Lang>("tl");
-  const [chosen, setChosen] = useState<boolean>(false);
-
-  useEffect(() => {
+  const getStoredLanguage = () => {
     const stored = localStorage.getItem(STORAGE_KEY) as Lang | null;
-    if (stored === "tl" || stored === "en") {
-      setLangState(stored);
-      setChosen(true);
-    }
-  }, []);
+    return stored === "tl" || stored === "en" ? stored : null;
+  };
+  const [lang, setLangState] = useState<Lang>(() => getStoredLanguage() ?? "tl");
+  const [chosen, setChosen] = useState<boolean>(() => getStoredLanguage() !== null);
 
   const setLang = (next: Lang) => {
     setLangState(next);

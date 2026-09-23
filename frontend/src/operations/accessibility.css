@@ -1,0 +1,50 @@
+/* Final readability and keyboard-access overrides, shared across route chunks. */
+.rg-image-viewer { height: clamp(220px, 32vw, 460px); }
+@media (max-width: 640px) {
+  .rg-viewer-toolbar { flex-wrap: wrap; }
+  .rg-viewer-toolbar > .rg-segment { flex-basis: 100%; }
+  .rg-viewer-toolbar > .rg-segment button { flex: 1; font-size: 12px; }
+  .rg-viewer-toolbar > div:last-child { margin-left: auto; font-size: 12px; }
+  .rg-viewer-toolbar .rg-icon-button { min-width: 44px; width: 44px; }
+}
+.rg-public,
+.rg-ops {
+  --rg-muted: #5e6d55;
+}
+.rg-page-heading p,
+.rg-page-intro > p,
+.rg-stat span,
+.rg-stat > small,
+.rg-panel-heading p,
+.rg-row-main small,
+.rg-panel-footer small,
+.rg-card-body .rg-location,
+.rg-footer a:not(.rg-brand),
+.rg-footer p,
+.rg-story-strip p,
+.rg-demo-ribbon,
+.rg-hero-assurance,
+.rg-system-card p,
+.rg-registration-story > p {
+  color: #65715c;
+}
+.rg-ops .rg-status {
+  color: #57664b;
+}
+.rg-ops .rg-status.needs-review,
+.rg-ops .rg-status.draft {
+  color: #806b2a;
+}
+.rg-ops .rg-status.reviewed,
+.rg-ops .rg-status.published,
+.rg-ops .rg-status.verified {
+  color: #527032;
+}
+@media (max-width: 980px) {
+  .rg-sidebar {
+    visibility: hidden;
+  }
+  .rg-sidebar.open {
+    visibility: visible;
+  }
+}

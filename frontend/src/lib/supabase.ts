@@ -1,11 +1,19 @@
 import { createClient } from "@supabase/supabase-js";
 
-const url = import.meta.env.VITE_SUPABASE_URL;
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const configuredUrl = import.meta.env.VITE_SUPABASE_URL;
+const configuredAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!url || !anonKey) {
-  throw new Error(
-    "Missing Supabase env vars. Copy frontend/.env.example to frontend/.env.local and fill them in."
+export const supabaseConfigured = Boolean(configuredUrl && configuredAnonKey);
+
+// Public research pages must remain viewable before deployment credentials are
+// attached. Protected routes still require a real Supabase project; this local
+// placeholder only prevents the public site from crashing at module import.
+const url = configuredUrl || "http://127.0.0.1:54321";
+const anonKey = configuredAnonKey || "riceguard-public-preview";
+
+if (!supabaseConfigured && import.meta.env.DEV) {
+  console.info(
+    "RiceGuard public preview: Supabase is not configured; authenticated features are unavailable."
   );
 }
 

@@ -3,7 +3,6 @@ import type { Disease, Severity } from "./database";
 export const DISEASE_LABEL: Record<Disease, { tl: string; en: string }> = {
   rice_blast: { tl: "Sakit na Blast", en: "Rice Blast" },
   bacterial_leaf_blight: { tl: "Bacterial Leaf Blight", en: "Bacterial Leaf Blight" },
-  tungro: { tl: "Tungro", en: "Tungro Virus" },
 };
 
 export const SEVERITY_LABEL: Record<Severity, { tl: string; en: string; color: string }> = {
@@ -13,5 +12,5 @@ export const SEVERITY_LABEL: Record<Severity, { tl: string; en: string; color: s
 };
 
 export const REGION_II = {
-  provinces: ["Isabela", "Cagayan"],
+  provinces: ["Batanes", "Cagayan", "Isabela", "Nueva Vizcaya", "Quirino"],
 } as const;
