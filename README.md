@@ -36,6 +36,7 @@ retried conservatively. There is no automatic paid AWS fallback.
 - Kaggle private notebook runs for asynchronous GPU processing
 - Leaflet for private and approximate public maps
 - Ollama Cloud provider adapter for structured advisory drafts
+- Optional feature-flagged OpenAI provider for reviewed-source drafts and candidate-only web research (not enabled by default)
 - SMS Gate Android device for outbound messages and delivery callbacks
 - Vercel for the frontend and lightweight Python Kaggle dispatcher
 
@@ -81,6 +82,13 @@ KAGGLE_DISPATCH_SECRET=<random-long-secret>
 OLLAMA_API_KEY=<optional until specialist sources are approved>
 OLLAMA_BASE_URL=https://ollama.com/api
 OLLAMA_MODEL=<configured model>
+# Optional OpenAI rollout; disabled until API credentials, review and tests are ready.
+OPENAI_API_KEY=<server-side OpenAI API credential>
+OPENAI_MODEL=<an enabled Responses API model with web search and Structured Outputs>
+ADVISORY_OPENAI_ENABLED=false
+ADVISORY_WEB_RESEARCH_ENABLED=false
+# OpenWeather: rotate any key pasted into a chat; store the replacement as a secret.
+OPENWEATHER_API_KEY=<server-side OpenWeather API credential>
 SMS_GATE_URL=<gateway endpoint>
 SMS_GATE_TOKEN=<gateway credential, or use user/password secrets>
 SMS_GATE_WEBHOOK_SECRET=<webhook signing secret>
@@ -89,6 +97,40 @@ SMS_GATE_WEBHOOK_SECRET=<webhook signing secret>
 Add `riceguard_project_url` and `riceguard_cron_secret` to Supabase Vault. The
 migration schedules dispatch, reconciliation and SMS outbox processing; missing
 Vault secrets cause those jobs to fail closed without external calls.
+
+## Optional OpenAI advisory rollout (not yet deployed)
+
+The existing reviewed `rg_bulletins` flow remains the release gate. An authorized
+MFA-verified admin can request a draft after a survey result has been reviewed.
+Set `ADVISORY_OPENAI_ENABLED=true` only after testing the new server-side
+adapter with a valid, separately billed OpenAI API key. The existing Ollama
+provider or approved template remains available when OpenAI is disabled or fails.
+`ADVISORY_WEB_RESEARCH_ENABLED=true` separately enables web-search calls;
+these may incur additional API charges. The new search URLs are stored as
+**candidate references** for specialist review, not automatically treated as
+approved pest/disease guidance.
+
+Weather context is obtained from the existing Supabase weather function at
+rounded nearby coordinates, with observation and forecast timestamps. Missing
+or stale data produces no current-weather claim. The existing publication,
+recipient preview, consent, and SMS approval rules are unchanged. No automatic
+AI publication or disease-severity calibration is enabled.
+
+Before deployment, run:
+
+```powershell
+deno test supabase/functions/_shared/openai-advisory.test.ts
+cd frontend
+npm ci
+npm run lint
+npm run test
+npm run build
+```
+
+Check exact-revision approval, source-ID validation, missing GPS, stale weather,
+provider outage, and opt-in SMS in a controlled environment. The new branch
+alone does not update the deployed website or its production secrets. See
+`docs/RICEGUARD_ADVISORY_WORKFLOW.md` for evidence and release rules.
 
 ## Vercel dispatcher
 
