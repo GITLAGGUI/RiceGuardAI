@@ -219,7 +219,7 @@ export async function createOpenAiAdvisory(input: {
   if (result.source_ids.some((id) => typeof id !== "string" || !allowed.has(id))) {
     throw new Error("Unapproved source ID in OpenAI draft");
   }
-  const ids = [...new Set([...result.source_ids as string[], ...actions.map((a) => a.source_id)])];
+  const ids = [...new Set([...(result.source_ids as string[]), ...actions.map((a) => a.source_id)])];
   if (!ids.length) throw new Error("OpenAI draft has no approved source");
   const limitations = result.limitations.filter((x): x is string => typeof x === "string")
     .slice(0, 8).map((x) => x.slice(0, 600));
