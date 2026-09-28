@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { createOpenAiAdvisory, type ResearchCandidate } from "../_shared/openai-advisory.ts";
 
 const url = Deno.env.get("SUPABASE_URL")!;
 const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
@@ -14,6 +15,60 @@ const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body)
 const OLLAMA_KEY = Deno.env.get("OLLAMA_API_KEY");
 const OLLAMA_URL = Deno.env.get("OLLAMA_BASE_URL") || "https://ollama.com/api";
 const OLLAMA_MODEL = Deno.env.get("OLLAMA_MODEL") || "gemma4:31b-cloud";
+const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY");
+const OPENAI_MODEL = Deno.env.get("OPENAI_MODEL") || "gpt-5.6";
+const OPENAI_ENABLED = Deno.env.get("ADVISORY_OPENAI_ENABLED") === "true";
+const WEB_RESEARCH_ENABLED = Deno.env.get("ADVISORY_WEB_RESEARCH_ENABLED") === "true";
+
+// Reuse the deployed, cached weather endpoint and send rounded coordinates only.
+// If any part fails, return null; a draft must never invent current field weather.
+async function approximateWeather(lat: unknown, lng: unknown): Promise<Record<string, unknown> | null> {
+  if (lat == null || lng == null || !Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) return null;
+  const safeLat = Math.round(Number(lat) * 100) / 100;
+  const safeLng = Math.round(Number(lng) * 100) / 100;
+  if (Math.abs(safeLat) > 90 || Math.abs(safeLng) > 180) return null;
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!key) return null;
+  try {
+    const response = await fetch(
+      url + "/functions/v1/weather?lat=" + encodeURIComponent(safeLat) + "&lng=" + encodeURIComponent(safeLng),
+      { headers: { Authorization: "Bearer " + key, apikey: key }, signal: AbortSignal.timeout(10_000) },
+    );
+    if (!response.ok) return null;
+    const payload = await response.json();
+    const now = Date.now();
+    const obs = Number(payload.current?.dt);
+    const current = Number.isFinite(obs) && obs * 1000 <= now + 600_000 && obs * 1000 >= now - 3 * 3600_000
+      ? {
+          observed_at: new Date(obs * 1000).toISOString(),
+          temperature_c: payload.current.main?.temp ?? null,
+          humidity_pct: payload.current.main?.humidity ?? null,
+          wind_m_s: payload.current.wind?.speed ?? null,
+          rain_1h_mm: payload.current.rain?.["1h"] ?? null,
+        }
+      : null;
+    const forecast = (Array.isArray(payload.forecast5) ? payload.forecast5 : [])
+      .filter((step: { dt?: number }) => Number.isFinite(step.dt) && Number(step.dt) * 1000 > now && Number(step.dt) * 1000 <= now + 72 * 3600_000)
+      .slice(0, 24)
+      .map((step: { dt: number; main?: { temp?: number; humidity?: number }; wind?: { speed?: number }; pop?: number; rain?: { "3h"?: number } }) => ({
+        forecast_at: new Date(step.dt * 1000).toISOString(),
+        temperature_c: step.main?.temp ?? null,
+        humidity_pct: step.main?.humidity ?? null,
+        wind_m_s: step.wind?.speed ?? null,
+        precipitation_probability: step.pop ?? null,
+        rain_3h_mm: step.rain?.["3h"] ?? null,
+      }));
+    if (!current && !forecast.length) return null;
+    return {
+      provider: "OpenWeather", spatial_limit: "Rounded nearby weather point, not a field sensor",
+      units: "metric", retrieved_at: new Date().toISOString(),
+      current_observation: current, forecast_3hour_intervals: forecast,
+      disease_risk_calibrated: false,
+    };
+  } catch {
+    return null;
+  }
+}
 const assuranceLevel = (token: string) => {
   try {
     const part = token.split(".")[1].replaceAll("-", "+").replaceAll("_", "/");
@@ -39,6 +94,12 @@ Deno.serve(async (req) => {
     const bulletin = await admin.from("rg_bulletins").select("id,survey_id,disease,location,result_revision,advisory_revision,status").eq("id", bulletinId).single();
     if (bulletin.error || !bulletin.data) return reply({ error: "Advisory draft not found" }, 404);
     if (bulletin.data.status === "published") return reply({ error: "Create a correction revision before regenerating published advice" }, 409);
+    const survey = await admin.from("rg_surveys")
+      .select("status,approved_result_revision,lat,lng").eq("id", bulletin.data.survey_id).single();
+    if (survey.error || !survey.data || survey.data.status !== "Reviewed" ||
+        survey.data.approved_result_revision !== bulletin.data.result_revision) {
+      return reply({ error: "Approve the exact reviewed survey result before generating an advisory" }, 409);
+    }
     const result = await admin.from("rg_result_revisions").select("manifest,blb_coverage,brown_spot_affected_leaf_coverage,severity_status,severity_label,warnings").eq("survey_id", bulletin.data.survey_id).eq("revision", bulletin.data.result_revision).single();
     if (result.error || !result.data) return reply({ error: "Validated result revision not found" }, 409);
     const sources = await admin.from("rg_advisory_sources").select("id,title,version,guidance,source_reference").eq("disease", bulletin.data.disease).eq("active", true).order("approved_at", { ascending: false });
@@ -57,9 +118,40 @@ Deno.serve(async (req) => {
     };
     const approved = sources.data.map((source) => ({ id: source.id, title: source.title, version: source.version, reference: source.source_reference, guidance: source.guidance }));
 
-    let draft: { summary: string; recommended_actions: string[]; limitations: string[]; source_ids: string[] };
-    let mode: "ollama" | "expert_template";
-    if (OLLAMA_KEY) {
+    let draft: { summary: string; recommended_actions: string[]; limitations: string[]; source_ids: string[] } | null = null;
+    let mode: "openai" | "ollama" | "expert_template" = "expert_template";
+    let researchCandidates: ResearchCandidate[] = [];
+    let researchStatus = "disabled";
+    let openAiUnavailable = false;
+    let weather: Record<string, unknown> | null = null;
+    if (OPENAI_ENABLED && OPENAI_KEY) {
+      try {
+        weather = await approximateWeather(survey.data.lat, survey.data.lng);
+        const generated = await createOpenAiAdvisory({
+          apiKey: OPENAI_KEY,
+          model: OPENAI_MODEL,
+          facts,
+          guidance: approved,
+          weather,
+          enableWebResearch: WEB_RESEARCH_ENABLED,
+        });
+        draft = {
+          summary: generated.summary,
+          recommended_actions: generated.recommended_actions,
+          limitations: generated.limitations,
+          source_ids: generated.source_ids,
+        };
+        researchCandidates = generated.research_candidates;
+        researchStatus = generated.research_status;
+        mode = "openai";
+      } catch {
+        // Preserve existing reviewed-guidance flow if the optional provider is unavailable.
+        // Never silently claim that fresh weather or recent research was verified.
+        openAiUnavailable = true;
+        weather = null;
+      }
+    }
+    if (!draft && OLLAMA_KEY) {
       const response = await fetch(`${OLLAMA_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${OLLAMA_KEY}` },
@@ -80,7 +172,8 @@ Deno.serve(async (req) => {
       const raw = String(payload?.message?.content || payload?.response || "").replace(/^```json|```$/g, "").trim();
       draft = JSON.parse(raw);
       mode = "ollama";
-    } else {
+    }
+    if (!draft) {
       const template = sources.data[0].guidance as Record<string, unknown>;
       draft = {
         summary: String(template.summary || `${bulletin.data.disease} model candidates require field verification.`),
@@ -89,6 +182,9 @@ Deno.serve(async (req) => {
         source_ids: [sources.data[0].id],
       };
       mode = "expert_template";
+    }
+    if (openAiUnavailable) {
+      draft.limitations.push("OpenAI provider unavailable; this draft uses approved guidance only and does not assert current web research or field weather.");
     }
     if (!draft.summary?.trim() || !Array.isArray(draft.recommended_actions) || !draft.recommended_actions.length || !Array.isArray(draft.limitations))
       throw new Error("Advisory provider returned an invalid structured draft");
@@ -106,13 +202,24 @@ Deno.serve(async (req) => {
       reviewer: null,
       reviewer_id: null,
       updated_at: new Date().toISOString(),
-    }).eq("id", bulletinId).eq("advisory_revision", bulletin.data.advisory_revision);
+    }).eq("id", bulletinId).eq("advisory_revision", bulletin.data.advisory_revision).select("id").maybeSingle();
     if (updated.error) throw new Error(updated.error.message);
+    if (!updated.data) return reply({ error: "Advisory changed during generation; review the latest revision and retry" }, 409);
     await admin.from("rg_events").insert({
       kind: "advisory-draft-generated",
       entity_id: bulletinId,
       actor_id: auth.data.user.id,
-      detail: { mode, model: mode === "ollama" ? OLLAMA_MODEL : null, result_revision: bulletin.data.result_revision, advisory_revision: nextRevision, source_ids: sourceIds },
+      detail: {
+        mode,
+        model: mode === "ollama" ? OLLAMA_MODEL : mode === "openai" ? OPENAI_MODEL : null,
+        result_revision: bulletin.data.result_revision,
+        advisory_revision: nextRevision,
+        source_ids: sourceIds,
+        weather_observed_at: (weather?.current_observation as { observed_at?: string } | undefined)?.observed_at || null,
+        research_status: researchStatus,
+        research_candidates: researchCandidates,
+        provider_fallback: openAiUnavailable,
+      },
     });
     return reply({ bulletin_id: bulletinId, advisory_revision: nextRevision, generation_mode: mode });
   } catch (error) {
