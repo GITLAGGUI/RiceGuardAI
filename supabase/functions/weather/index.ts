@@ -1,6 +1,6 @@
 // Weather + agronomy insights edge function.
 // Wraps OpenWeather, caches results for 10 minutes in weather_cache,
-// adds deterministic Tagalog agronomy insights (no AI).
+// adds conservative Tagalog weather context (no AI or calibrated disease risk).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.46.1";
 import { handleCors, jsonResponse } from "../_shared/cors.ts";
@@ -24,10 +24,14 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "openweather not configured" }, 500);
 
   const url = new URL(req.url);
-  const lat = Number(url.searchParams.get("lat"));
-  const lng = Number(url.searchParams.get("lng"));
-  if (!Number.isFinite(lat) || !Number.isFinite(lng))
+  const latText = url.searchParams.get("lat");
+  const lngText = url.searchParams.get("lng");
+  if (!latText?.trim() || !lngText?.trim())
     return jsonResponse({ error: "lat + lng required" }, 400);
+  const lat = Number(latText);
+  const lng = Number(lngText);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180)
+    return jsonResponse({ error: "Invalid geographic coordinates" }, 400);
 
   const key = `${lat.toFixed(3)}:${lng.toFixed(3)}`;
   const { data: cached } = await admin
@@ -45,7 +49,7 @@ Deno.serve(async (req) => {
       `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${OPENWEATHER_API_KEY}&units=metric`
     ),
     fetch(
-      `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lng}&appid=${OPENWEATHER_API_KEY}&units=metric&cnt=8`
+      `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lng}&appid=${OPENWEATHER_API_KEY}&units=metric&cnt=24`
     ),
   ]);
 
@@ -56,7 +60,23 @@ Deno.serve(async (req) => {
   const forecast = await forecastRes.json();
 
   const insights = buildInsights(current, forecast);
-  const payload = { current, forecast5: forecast.list ?? [], agronomy_tl: insights };
+  // Keep forecast5 for existing clients; 24 three-hour steps cover up to 72 hours.
+  const payload = {
+    current,
+    forecast5: forecast.list ?? [],
+    agronomy_tl: insights,
+    weather_meta: {
+      provider: "OpenWeather",
+      units: "metric",
+      requested_lat: lat,
+      requested_lng: lng,
+      fetched_at: new Date().toISOString(),
+      observed_at: Number.isFinite(Number(current?.dt)) ? new Date(Number(current.dt) * 1000).toISOString() : null,
+      forecast_step_hours: 3,
+      forecast_horizon_hours: 72,
+      disease_risk_calibrated: false,
+    },
+  };
 
   await admin
     .from("weather_cache")
@@ -77,26 +97,26 @@ interface OwmForecast {
 
 function buildInsights(current: OwmCurrent, forecast: OwmForecast): string[] {
   const out: string[] = [];
-  const temp = current.main?.temp ?? 0;
-  const humidity = current.main?.humidity ?? 0;
-  const wind = current.wind?.speed ?? 0;
-  const pop = forecast.list?.[0]?.pop ?? 0;
+  const temp = current.main?.temp;
+  const humidity = current.main?.humidity;
+  const wind = current.wind?.speed;
+  const pop = forecast.list?.[0]?.pop;
 
-  if (humidity > 85 && temp >= 22 && temp <= 30) {
+  if (typeof humidity === "number" && typeof temp === "number" && humidity > 85 && temp >= 22 && temp <= 30) {
     out.push("Mataas ang humidity; i-review ang field observations at approved disease guidance bago maglabas ng advisory.");
   }
-  if (humidity > 90 && temp > 27) {
+  if (typeof humidity === "number" && typeof temp === "number" && humidity > 90 && temp > 27) {
     out.push("Mainit at napakataas ng humidity; dagdagan ang visual monitoring pagkatapos ng ulan.");
   }
-  if (wind < 5 && pop < 0.3) {
+  if (typeof wind === "number" && typeof pop === "number" && wind < 5 && pop < 0.3) {
     out.push("Mahina ang hangin at mababa ang kasalukuyang rain probability; i-record ito bilang survey context.");
-  } else if (pop > 0.6) {
+  } else if (typeof pop === "number" && pop > 0.6) {
     out.push("Mataas ang rain probability; maaaring maapektuhan ang image quality at field access.");
   }
-  if (wind > 8) {
+  if (typeof wind === "number" && wind > 8) {
     out.push("Malakas ang hangin; ipagpaliban ang drone capture kung hindi ligtas ang paglipad.");
   }
 
-  if (out.length === 0) out.push("Normal ang panahon. Magpatuloy sa pang-araw-araw na inspeksyon.");
+  if (out.length === 0) out.push("Walang sapat na batayan sa available weather indicators para sa espesyal na alerto. Patuloy na obserbahan ang palay; hindi ito patunay na ligtas sa sakit.");
   return out;
 }
