@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
       requested_lat: lat,
       requested_lng: lng,
       fetched_at: new Date().toISOString(),
-      observed_at: Number.isFinite(Number(current?.dt)) ? new Date(Number(current.dt) * 1000).toISOString() : null,
+      observed_at: current?.dt != null && Number.isFinite(Number(current.dt)) ? new Date(Number(current.dt) * 1000).toISOString() : null,
       forecast_step_hours: 3,
       forecast_horizon_hours: 72,
       disease_risk_calibrated: false,
