@@ -774,9 +774,11 @@ export function AdvisoryDesk() {
                         void act(async () => {
                           const mode = await generateAdvisory(b.id);
                           toast.success(
-                            mode === "ollama"
-                              ? "Structured LLM draft created from approved specialist guidance."
-                              : "Approved expert template draft created.",
+                            mode === "openai"
+                              ? "OpenAI draft created from approved specialist guidance; new web references, if any, still need specialist review."
+                              : mode === "ollama"
+                                ? "Structured LLM draft created from approved specialist guidance."
+                                : "Approved expert template draft created.",
                           );
                           setConfirmed(false);
                         })
