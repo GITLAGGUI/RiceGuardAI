@@ -1,7 +1,9 @@
 # RiceGuardAI Gemini connection setup
 
 Date: 23 October 2026
-Status: Proposed setup design, awaiting written-spec review.
+Status: Written setup design approved by the user on 23 October 2026.
+Implementation-plan review, deployment authorization and actual connection consent
+remain separate steps.
 
 ## Goal
 
@@ -192,5 +194,5 @@ unattended or bypass Google's control.
 
 Self-review: scope limited to connection/private trial; no invented live endpoint,
 no implicit publication, no fabricated scientific calibration, no promise that Pro
-removes confirmations. Written-spec approval and implementation-plan review remain
-required before product implementation.
+removes confirmations. Written-spec approval is recorded above; implementation-plan
+review and execution-method selection remain required before product implementation.
