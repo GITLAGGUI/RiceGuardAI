@@ -168,6 +168,41 @@ begin
   return next_revision;
 end $function$;
 
+-- 5b. Automated posts cite the web sources the advisory model actually used; specialist-written
+-- posts keep projecting their approved DA-PhilRice guidance exactly as before.
+create or replace function private.rg_project_advisory_sources()
+returns trigger language plpgsql security definer set search_path to '' as $function$
+declare b public.rg_bulletins; needed text; is_v2 boolean;
+begin
+  select * into b from public.rg_bulletins where id=new.id;
+  if not found then raise exception 'Published advisory has no source bulletin'; end if;
+  if b.auto_generated then
+    if cardinality(b.diseases)=0 then raise exception 'Automated post has no disease'; end if;
+    if jsonb_typeof(new.advisory_sources) is distinct from 'array' then new.advisory_sources := '[]'::jsonb; end if;
+    return new;
+  end if;
+  select coalesce(r.manifest->>'schema_version'='riceguard.result.v2',false)
+    into is_v2 from public.rg_result_revisions r
+    where r.survey_id=b.survey_id and r.revision=b.result_revision;
+  if coalesce(is_v2,false) then
+    if cardinality(b.diseases)=0 then raise exception 'Reviewed disease decisions are missing'; end if;
+    foreach needed in array b.diseases loop
+      if not exists(select 1 from public.rg_advisory_sources s
+        where s.id=any(b.advisory_source_ids) and s.active and s.disease=needed)
+        then raise exception 'Approved advisory source missing for %', needed; end if;
+    end loop;
+  end if;
+  new.advisory_sources := (
+    select coalesce(jsonb_agg(jsonb_build_object('disease',s.disease,
+      'title',s.title,'version',s.version,'reference',s.source_reference)
+      order by s.disease,s.title,s.version),'[]'::jsonb)
+    from public.rg_advisory_sources s
+    where s.id=any(b.advisory_source_ids) and s.active
+      and s.source_reference ~ '^https://'
+  );
+  return new;
+end $function$;
+
 -- 6. Claim the next survey for the automation worker (atomic, crash-safe lease).
 create or replace function public.rg_auto_claim(p_survey uuid default null)
 returns setof public.rg_surveys language plpgsql security definer set search_path to '' as $$

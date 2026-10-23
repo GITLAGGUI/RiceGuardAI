@@ -4,7 +4,7 @@ import { validateResultV2, type ModelBundle, type ResultV2 } from "../../../shar
 // private two-specialist bundle. Changing any source requires a new pin.
 // New jobs use the lesion bundle (b10 UNet ConvNeXt-B for BLB, YOLO26l for Brown Spot).
 export const PINNED_KAGGLE_WORKFLOW_SHA256 = "20d3fc452a6f4575791162fbf28a21a592cf7b9ea8992852940e165459b03eb2";
-const YOLO26M_WORKFLOWS = [
+export const YOLO26M_WORKFLOWS = [
   "df3d156e64d778ea818fdb34005a340570661d40e0d9a306ec891087f68a35de",
   "09533f998a7e51ad8f44703aef1d7dee8eb91b4251681a538cabe881b5bec5b0",
   "7695ca57f8d093c05fe73c916bb9c13315b615b6210ef76343dae0423a84ab62",
