@@ -1,4 +1,4 @@
-"""Independent semantic masks. No leaf counts, disease exclusivity or severity."""
+"""Independent semantic masks and display overlays. Severity math lives in workers/kaggle/severity.py."""
 import math
 from xml.etree import ElementTree
 
@@ -141,77 +141,59 @@ def stitch(image, predict, cache_get=None, cache_put=None, progress=None):
     return votes * 2 >= coverage
 
 
-def overlay(image, masks, alpha=0.42, *, show_boxes=True, show_outlines=True,
-            minimum_box_pixels=1000):
-    """Display-only regions; never modify masks or infer leaf counts/confidence."""
+COLORS = {"BLB": (255, 212, 0), "Brown Spot": (229, 38, 43)}
+WEB_MAX_SIDE = 2048
+
+
+def overlay(image, masks, alpha=0.45, *, show_boxes=False, show_outlines=True):
+    """Display-only tint and outline per disease; the website draws the legend.
+
+    BLB is yellow and Brown Spot red. No text or boxes are burned into pixels.
+    `show_boxes` is accepted for older callers and ignored.
+    """
+    del show_boxes
     rgb = np.asarray(image.convert("RGB")).copy()
-    if not 0 <= alpha <= 1 or minimum_box_pixels < 1:
+    if not 0 <= alpha <= 1:
         raise ValueError("Invalid overlay display settings")
-    colors = {"BLB": (255, 184, 0), "Brown Spot": (25, 180, 245)}
-    selected = np.zeros(rgb.shape[:2], dtype=bool)
-    color = np.zeros_like(rgb)
     checked = {}
     for disease, mask in masks.items():
         mask = np.asarray(mask)
-        if disease not in colors or mask.shape != rgb.shape[:2] or not np.isin(mask, (0, 1)).all():
+        if disease not in COLORS or mask.shape != rgb.shape[:2] or not np.isin(mask, (0, 1)).all():
             raise ValueError("Unknown mask or wrong native dimensions")
-        mask = mask.astype(bool)
-        checked[disease] = mask
-        selected |= mask
-        color[mask] = colors[disease]
-    if all(d in masks for d in DISEASES):
-        color[checked["BLB"] & checked["Brown Spot"]] = (226, 75, 210)
-    rgb[selected] = ((1 - alpha) * rgb[selected] + alpha * color[selected]).astype(np.uint8)
-    height, width = rgb.shape[:2]
-    thickness = max(1, round(min(width, height) / 600))
-    font = max(0.45, min(width, height) / 1400)
-    occupied = []
-    # All contours remain visible, including regions below the box threshold.
+        checked[disease] = mask.astype(bool)
+    thickness = max(1, round(min(rgb.shape[:2]) / 900))
     for disease in DISEASES:
-        if disease not in checked:
+        if disease not in checked or not checked[disease].any():
             continue
-        binary = checked[disease].astype(np.uint8)
+        selected = checked[disease]
+        tint = np.array(COLORS[disease], dtype=np.float32)
+        rgb[selected] = ((1 - alpha) * rgb[selected] + alpha * tint).astype(np.uint8)
         if show_outlines:
-            contours, _ = cv2.findContours(binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-            cv2.drawContours(rgb, contours, -1, (12, 18, 24), thickness + 2)
-            cv2.drawContours(rgb, contours, -1, colors[disease], thickness)
-        if not show_boxes:
-            continue
-        _, _, stats, _ = cv2.connectedComponentsWithStats(binary, 8)
-        for x, y, box_width, box_height, area in sorted(stats[1:], key=lambda row: (-row[4], row[1], row[0])):
-            if area < minimum_box_pixels:
-                continue
-            x, y, right, bottom = int(x), int(y), int(x + box_width - 1), int(y + box_height - 1)
-            cv2.rectangle(rgb, (x, y), (right, bottom), (12, 18, 24), thickness + 2)
-            cv2.rectangle(rgb, (x, y), (right, bottom), colors[disease], thickness)
-            text = f"{disease} region"
-            (tw, th), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font, thickness)
-            if tw + 8 > width or th + baseline + 8 > height:
-                continue
-            left = min(x, width - tw - 8)
-            label_height = th + baseline + 8
-            bounds = None
-            for top in (max(0, y - label_height), min(y + 3, height - label_height),
-                        max(0, bottom - label_height)):
-                candidate = (left, top, left + tw + 8, top + label_height)
-                if not any(candidate[0] < old[2] and candidate[2] > old[0] and
-                           candidate[1] < old[3] and candidate[3] > old[1] for old in occupied):
-                    bounds = candidate
-                    break
-            if bounds is None:
-                continue  # Keep the box; omit only colliding text.
-            top = bounds[1]
-            occupied.append(bounds)
-            cv2.rectangle(rgb, bounds[:2], bounds[2:], (12, 18, 24), -1)
-            cv2.putText(rgb, text, (left + 4, top + th + 4), cv2.FONT_HERSHEY_SIMPLEX,
-                        font, colors[disease], thickness, cv2.LINE_AA)
-    if show_boxes and selected.any():
-        text = "Boxes: predicted regions, not leaf counts"
-        (tw, th), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font, thickness)
-        if tw + 12 <= width and th + baseline + 12 <= height:
-            top = height - th - baseline - 12
-            cv2.rectangle(rgb, (0, top), (tw + 12, height - 1), (12, 18, 24), -1)
-            cv2.putText(rgb, text, (6, top + th + 4), cv2.FONT_HERSHEY_SIMPLEX,
-                        font, (245, 248, 250), thickness, cv2.LINE_AA)
+            contours, _ = cv2.findContours(selected.astype(np.uint8), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+            cv2.drawContours(rgb, contours, -1, (12, 18, 24), thickness + 1)
+            cv2.drawContours(rgb, contours, -1, COLORS[disease], thickness)
     return Image.fromarray(rgb)
 
+
+def web_size(width, height, max_side=WEB_MAX_SIDE):
+    scale = min(1.0, max_side / max(width, height))
+    return max(1, round(width * scale)), max(1, round(height * scale))
+
+
+def disease_layer(mask, disease, max_side=WEB_MAX_SIDE):
+    """Transparent RGBA layer for the website: fill plus solid outline, web-sized.
+
+    Downscaling uses area coverage so hairline lesions stay visible instead of vanishing.
+    """
+    mask = np.asarray(mask).astype(bool)
+    height, width = mask.shape
+    size = web_size(width, height, max_side)
+    coverage = cv2.resize(mask.astype(np.float32), size, interpolation=cv2.INTER_AREA)
+    small = coverage > 0.15
+    layer = np.zeros((size[1], size[0], 4), dtype=np.uint8)
+    layer[small] = (*COLORS[disease], 140)
+    contours, _ = cv2.findContours(small.astype(np.uint8), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    edge = np.zeros(small.shape, dtype=np.uint8)
+    cv2.drawContours(edge, contours, -1, 1, max(1, round(min(size) / 700)))
+    layer[edge.astype(bool)] = (*COLORS[disease], 255)
+    return Image.fromarray(layer, "RGBA")
