@@ -73,35 +73,57 @@ function PhotoView({ photo, compact }: { photo: PublicPhoto; compact?: boolean }
     alt={photo.alt} width={photo.width} height={photo.height} />;
 }
 
+function ago(value: string) {
+  const ms = Date.now() - new Date(value).getTime();
+  if (!Number.isFinite(ms)) return "";
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 60) return `${Math.max(1, minutes)}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.round(hours / 24);
+  return days < 7 ? `${days}d` : new Date(value).toLocaleDateString("en-PH", { month: "short", day: "numeric" });
+}
+
+/** A post in the X / Threads shape: avatar rail, one header line, text, photos, actions. */
 export function BulletinCard({ item }: { item: Bulletin }) {
   const { bookmarks, toggle } = useBookmarks();
   const saved = bookmarks.includes(item.id);
   const photos = photosOf(item);
   const steps = advisoryActionSteps(item.action).slice(0, 2).map(stripCitations);
+  const href = `/advisories/${item.slug}`;
+  const when = item.published_at || item.date;
   const share = async () => {
-    const url = `${location.origin}/advisories/${item.slug}`;
+    const url = `${location.origin}${href}`;
     try { if (navigator.share) await navigator.share({ title: item.title, url }); else await navigator.clipboard.writeText(url); }
     catch { /* dismissed */ }
   };
+  const shown = photos.slice(0, 2);
   return (
-    <article className="rg-post3">
-      {photos[0] ? (
-        <div className="rg-post3-media">
-          <PhotoView photo={photos[0]} compact />
-          {photos.length > 1 ? <Link className="rg-post3-more" to={`/advisories/${item.slug}`}>+{photos.length - 1} larawan</Link> : null}
-        </div>
-      ) : null}
-      <div className="rg-post3-body">
-        <div className="rg-post3-meta">
-          <DiseaseChips item={item} />
+    <article className="rg-xpost">
+      <img className="rg-xpost-avatar" src="/images/mascot/field-companion.png" alt="" width={40} height={40} loading="lazy" />
+      <div className="rg-xpost-main">
+        <header className="rg-xpost-head">
+          <b>RiceGuardAI</b>
+          <span className="rg-xpost-sub">· {item.location} · <time dateTime={when} title={formatDate(when)}>{ago(when)}</time></span>
           <VerificationBadge status={item.verification_status} verifiedAt={item.verified_at} size="sm" />
-        </div>
-        <h2><Link to={`/advisories/${item.slug}`}>{stripCitations(item.title)}</Link></h2>
-        <p className="rg-post3-place"><MapPin size={13} aria-hidden /> {item.location} · {formatDate(item.published_at || item.date)}</p>
-        <p className="rg-post3-summary">{stripCitations(item.body)}</p>
-        {steps.length ? <ul className="rg-post3-steps">{steps.map((step, i) => <li key={i}>{step}</li>)}</ul> : null}
-        <footer>
-          <Link to={`/advisories/${item.slug}`}>Buong payo <ArrowRight size={14} /></Link>
+        </header>
+        <h2><Link to={href}>{stripCitations(item.title)}</Link></h2>
+        <DiseaseChips item={item} />
+        <p className="rg-xpost-text">{stripCitations(item.body)}</p>
+        {steps.length ? <ul className="rg-xpost-steps">{steps.map((step, i) => <li key={i}>{step}</li>)}</ul> : null}
+        {shown.length ? (
+          <div className={`rg-xpost-media count-${shown.length}`}>
+            {shown.map((photo, i) => (
+              <div key={photo.url} className="rg-xpost-cell">
+                <PhotoView photo={photo} compact />
+                {i === shown.length - 1 && photos.length > shown.length
+                  ? <Link className="rg-post3-more" to={href}>+{photos.length - shown.length}</Link> : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <footer className="rg-xpost-actions">
+          <Link to={href}>Buong payo <ArrowRight size={14} /></Link>
           <button type="button" onClick={() => toggle(item.id)} aria-pressed={saved} aria-label={saved ? "Alisin sa saved" : "I-save"}>
             <PhBookmark size={18} weight={saved ? "fill" : "regular"} /></button>
           <button type="button" onClick={() => void share()} aria-label="I-share"><PhShare size={18} /></button>

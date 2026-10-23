@@ -1,0 +1,238 @@
+/* ===================================================================================
+   Landing v4 layout, loaded after landing.css. Every section fits one screen, nothing
+   collapses to a single column, media and corners are smaller.
+   Type: display 36-76, h2 21-40, h3 15-20, body 13-16.
+   =================================================================================== */
+.lp { --radius: 16px; --gap-section: clamp(48px, 6vw, 96px); --head: 72px; }
+.lp-section { scroll-margin-top: var(--head); }
+
+/* Hero: headline left, the mascot patrols the field on the right. */
+.lp-hero { min-height: min(100svh, 980px); }
+.lp-hero-copy { left: var(--margin); top: clamp(108px, 18vh, 190px); width: min(560px, 48%); translate: none; text-align: left; }
+.lp-hero-tag, .lp-line, .lp-hero-actions { justify-content: flex-start; }
+.lp-hero h1 { font-size: clamp(42px, 5vw, 76px); line-height: 1; }
+.lp-hero-lead { margin: 18px 0 0 !important; max-width: 42ch; font-size: clamp(15px, 1.15vw, 18px); }
+.lp-hero-actions { margin-top: 26px; }
+.lp-button-lg { min-height: 50px; padding: 0 22px; font-size: 15px; }
+.lp-hero-scrim { background: linear-gradient(90deg, rgba(5, 26, 19, 0.78) 0%, rgba(5, 26, 19, 0.45) 38%, rgba(5, 26, 19, 0) 62%), linear-gradient(180deg, rgba(5, 26, 19, 0.5) 0%, rgba(5, 26, 19, 0) 30%, rgba(5, 26, 19, 0) 80%, rgba(5, 26, 19, 0.5) 100%); }
+.lp .lp-hero-card { width: min(320px, 36vw); border-radius: 14px; box-shadow: none; }
+.lp-hero-status { font-size: 13px; padding: 8px 14px; }
+
+.lp-mascot { position: absolute; left: 0; top: 0; z-index: 2; width: 0; height: 0; will-change: transform; pointer-events: none; }
+.lp-mascot-body { position: absolute; left: 0; top: 0; width: clamp(130px, 13vw, 210px); transform-origin: 50% 100%; will-change: transform; }
+.lp-mascot-body button { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: pointer; pointer-events: auto; filter: drop-shadow(0 18px 18px rgba(0, 0, 0, 0.35)); }
+.lp-mascot-body img { width: 100%; height: auto; -webkit-user-drag: none; }
+.lp-mascot-shadow { position: absolute; left: 0; top: 0; width: 120px; height: 40px; border-radius: 50%; background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), transparent); will-change: transform, opacity; }
+.lp-mascot-scan { position: absolute; left: 0; top: 0; opacity: 0; transition: opacity 300ms ease; }
+.lp-mascot-scan i { position: absolute; left: -70px; top: -18px; width: 140px; height: 48px; border-radius: 50%; border: 2px solid var(--leaf); box-shadow: 0 0 24px rgba(168, 212, 92, 0.6), inset 0 0 18px rgba(168, 212, 92, 0.45); animation: lp-scan-ring 1.2s ease-out infinite; }
+.lp-mascot-scan b { position: absolute; left: 50%; top: 40px; translate: -50% 0; padding: 5px 10px; border-radius: 999px; background: rgba(8, 34, 25, 0.82); color: var(--leaf); font-size: 12px; font-weight: 650; white-space: nowrap; }
+.lp-mascot.is-inspecting .lp-mascot-scan { opacity: 1; }
+@keyframes lp-scan-ring { from { transform: scale(0.6); opacity: 1; } to { transform: scale(1.35); opacity: 0; } }
+
+/* Ticker smaller */
+.lp-ticker-row span { padding: 12px 0 12px 22px; font-size: clamp(15px, 1.4vw, 20px); gap: 22px; }
+
+/* Shared section heads */
+.lp-section-head { gap: 8px; }
+.lp-section-head h2, .lp-see h2, .lp-sms-copy h2, .lp-map h2 { font-size: clamp(24px, 2.6vw, 40px); line-height: 1.08; letter-spacing: -0.03em; }
+.lp-section-head p, .lp-see-copy > p, .lp-sms-copy > p, .lp-map-copy > p { font-size: clamp(14px, 1vw, 16px); line-height: 1.55; }
+
+/* Problem: statement left, cards right */
+.lp-problem { display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); gap: 16px clamp(24px, 4vw, 56px); align-items: center; }
+.lp-problem > .lp-eyebrow-title { grid-column: 1; justify-self: start; align-self: end; font-size: 13px !important; padding: 6px 12px; }
+.lp-problem > .lp-statement { grid-column: 1; align-self: start; margin-top: 0 !important; max-width: 28ch; font-size: clamp(20px, 2.2vw, 32px); line-height: 1.25; letter-spacing: -0.02em; }
+.lp-problem > .lp-disease-grid { grid-column: 2; grid-row: 1 / span 2; margin-top: 0; gap: 12px; grid-template-columns: 1fr 1fr 0.9fr; }
+.lp-disease { border-radius: var(--radius); box-shadow: none; }
+.lp-disease img { aspect-ratio: auto; height: clamp(230px, 44svh, 400px); scale: 1.16; }
+.lp-disease > div { left: 14px; right: 14px; bottom: 14px; }
+.lp-disease h3 { margin-top: 8px; font-size: clamp(15px, 1.25vw, 19px); }
+.lp-disease p { margin-top: 4px; font-size: 13px; line-height: 1.4; }
+.lp-disease .lp-pill { font-size: 11.5px; padding: 4px 9px; }
+.lp-problem-note { padding: 18px; gap: 8px; border-radius: var(--radius); }
+.lp-problem-note h3 { font-size: clamp(16px, 1.4vw, 21px); }
+.lp-problem-note p { font-size: 13px; line-height: 1.45; }
+
+/* See: fits one screen */
+.lp-see { padding: clamp(40px, 5vw, 72px) 0; }
+.lp-see-inner { grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr); gap: clamp(20px, 4vw, 56px); }
+.lp-see-facts { margin-top: 18px !important; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.lp-see-facts li { display: grid; gap: 4px; padding: 10px 0 0; font-size: 13px; line-height: 1.35; }
+.lp-see-facts strong { min-width: 0; font-size: 20px; }
+.lp-see-frame { width: min(100%, calc(64svh * 1.5)); justify-self: end; }
+.lp-compare { border-radius: var(--radius); box-shadow: none; }
+.lp-compare-handle i { width: 42px; height: 42px; margin: -21px 0 0 -21px; }
+.lp-compare-tag, .lp-compare-hint { font-size: 12px; padding: 5px 10px; }
+
+/* How: four steps in one row */
+.lp-bento { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 24px; }
+.lp-card-capture, .lp-card-publish { grid-column: auto; }
+.lp-card { border-radius: var(--radius); box-shadow: none; }
+.lp-card-media, .lp-review-ui, .lp-publish-ui { height: clamp(150px, 26svh, 230px); }
+.lp-card-media > img { scale: 1.14; }
+.lp-card-body { padding: 14px 16px 16px; gap: 4px; }
+.lp-card-body h3 { font-size: clamp(15px, 1.2vw, 18px); }
+.lp-card-body p { font-size: 13px; line-height: 1.45; }
+.lp-step { font-size: 12px; }
+.lp-review-ui, .lp-publish-ui { padding: 14px; }
+.lp-review-ui ul { gap: 5px; margin-top: 10px; }
+.lp-review-ui li { padding: 5px 8px; font-size: 12px; border-radius: 8px; box-shadow: none; }
+.lp-review-ui li span { width: 16px; height: 16px; }
+.lp-stamp { right: 12px; bottom: 12px; font-size: 13px; padding: 5px 10px; border-width: 2px; }
+.lp-mini-bulletin { grid-template-columns: 56px 1fr; gap: 8px; padding: 8px; border-radius: 10px; box-shadow: none; }
+.lp-mini-bulletin img { width: 56px; height: 48px; border-radius: 8px; }
+.lp-mini-bulletin strong { font-size: 12.5px; }
+.lp-mini-bulletin small { font-size: 11.5px; }
+.lp-mini-sms { right: 12px; bottom: 12px; left: 12px; max-width: none; padding: 8px 10px; font-size: 11.5px; border-radius: 12px 12px 4px 12px; }
+.lp-gps, .lp-model-chips b { font-size: 11.5px; padding: 5px 9px; }
+.lp-card.is-live .lp-scanline { animation-name: lp-scan-v4; }
+@keyframes lp-scan-v4 { 0% { transform: translateY(0); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { transform: translateY(var(--scan-h, 220px)); opacity: 0; } }
+
+/* Film: never taller than the screen */
+.lp-film-frame { width: min(960px, 100%, calc(62svh * 16 / 9)); margin-top: 20px; border-radius: var(--radius); box-shadow: none; }
+.lp-film-play span { width: 70px; height: 70px; }
+
+/* SMS: phone and controls side by side at every width */
+.lp-sms-panel { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: clamp(16px, 4vw, 56px); padding: clamp(18px, 3.5vw, 48px); border-radius: 24px; }
+.lp-phone { width: min(280px, 100%); height: min(560px, 68svh); border-radius: 40px; padding: 9px; }
+.lp-phone-status { border-radius: 32px 32px 0 0; }
+.lp-phone-compose { border-radius: 0 0 32px 32px; }
+.lp-bubble { font-size: 12px; }
+.lp-control { margin-top: 16px; gap: 6px; }
+.lp-chips button, .lp-segment button { min-height: 36px; padding: 0 12px; font-size: 13px; }
+.lp-switch { margin-top: 14px; font-size: 14px; }
+.lp-sms-meter { margin: 14px 0 18px; font-size: 13px; }
+
+/* Latest: three across, a swipe row on phones */
+.lp-advisories { margin-top: 20px; gap: 12px; }
+.lp .lp-advisory { min-height: 0; border-radius: var(--radius); box-shadow: none; }
+.lp-advisory-media { aspect-ratio: 16 / 9; }
+.lp-advisory-body { padding: 12px 14px 14px; gap: 4px; }
+.lp-advisory-body strong { font-size: 15px; }
+.lp-advisory-body time, .lp-advisory-body small { font-size: 12.5px; }
+.lp-advisory-media .lp-pill { font-size: 11.5px; padding: 4px 9px; left: 10px; top: 10px; }
+.lp-advisory-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+/* Map: copy and map side by side */
+.lp-map-card { grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr); padding: clamp(16px, 3vw, 36px); border-radius: 24px; gap: clamp(16px, 3vw, 40px); }
+.lp-map-shell, .lp-map-shell .rg-map, .lp-map-placeholder { min-height: min(440px, 58svh); height: min(440px, 58svh); border-radius: 14px; box-shadow: none; }
+.lp-map-provinces { margin: 14px 0 18px !important; gap: 6px; }
+.lp-map-provinces li { font-size: 12.5px; padding: 5px 10px; }
+
+/* Close: text and mascot side by side */
+.lp-close { min-height: min(70svh, 640px); padding-block: clamp(48px, 6vw, 96px); }
+.lp-close h2 { font-size: clamp(40px, 6.4vw, 104px); }
+.lp-close-inner > p { margin-top: 18px !important; font-size: clamp(15px, 1.2vw, 18px); }
+.lp-close-actions { margin-top: 22px; }
+.lp-close-art { position: absolute; right: clamp(16px, 7vw, 120px); bottom: clamp(24px, 6vw, 80px); }
+.lp-close-mascot { position: static; width: clamp(130px, 15vw, 240px); }
+
+/* Footer */
+.lp-footer { gap: 32px; padding: 40px var(--margin) 22px; }
+.lp-footer-cols { font-size: 14px; gap: 20px; }
+
+@media (max-width: 1100px) {
+  .lp-problem { grid-template-columns: 1fr; }
+  .lp-problem > .lp-disease-grid { grid-column: 1; grid-row: auto; }
+  .lp-problem > .lp-eyebrow-title { align-self: start; }
+  .lp-bento { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 860px) {
+  .lp { --margin: 16px; --head: 60px; }
+  .lp-hero { min-height: max(640px, 100svh); }
+  .lp-hero-copy { top: 84px; left: var(--margin); right: var(--margin); width: auto; text-align: center; }
+  .lp-hero-tag, .lp-line, .lp-hero-actions { justify-content: center; }
+  .lp-hero h1 { font-size: clamp(36px, 10vw, 54px); }
+  .lp-hero-lead { margin: 14px auto 0 !important; font-size: 15px; }
+  .lp-hero-actions { gap: 10px 18px; margin-top: 18px; }
+  .lp-hero-scrim { background: linear-gradient(180deg, rgba(5, 26, 19, 0.85) 0%, rgba(5, 26, 19, 0.55) 40%, rgba(5, 26, 19, 0) 62%, rgba(5, 26, 19, 0.45) 100%); }
+  .lp-mascot-body { width: 118px; }
+
+  .lp-problem > .lp-statement { font-size: 19px; }
+  .lp-problem > .lp-disease-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .lp-problem-note { grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: center; }
+  .lp-problem-note h3 { margin-top: 0; }
+  .lp-problem-note p, .lp-problem-note .lp-text-link { grid-column: 1 / -1; }
+  .lp-disease img { height: clamp(190px, 34svh, 280px); }
+  .lp-disease p { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+  .lp-see-inner { grid-template-columns: 1fr; }
+  .lp-see-frame { width: 100%; }
+  .lp-compare { aspect-ratio: 4 / 3; }
+
+  .lp-bento { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .lp-card-media, .lp-review-ui, .lp-publish-ui { height: 128px; --scan-h: 124px; }
+  .lp-card-body { padding: 10px 12px 12px; }
+  .lp-card-body p { font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .lp-review-ui li:nth-child(n + 4) { display: none; }
+  .lp-mini-sms { display: none; }
+  .lp-mini-bulletin { grid-template-columns: 1fr; }
+  .lp-mini-bulletin img { display: none; }
+
+  .lp-sms-panel { grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); align-items: start; border-radius: 20px; }
+  .lp-sms-copy { order: 0; }
+  .lp-phone { height: 420px; border-radius: 28px; padding: 6px; }
+  .lp-phone-island { width: 54px; height: 16px; margin-left: -27px; top: 12px; }
+  .lp-phone-status { padding: 8px 14px 4px; font-size: 11px; border-radius: 22px 22px 0 0; }
+  .lp-phone-app { padding: 8px 10px; }
+  .lp-phone-app img { width: 22px; height: 22px; }
+  .lp-phone-app strong { font-size: 12px; }
+  .lp-phone-app small { font-size: 10.5px; }
+  .lp-phone-thread { padding: 8px; }
+  .lp-bubble { font-size: 10.5px; padding: 8px; }
+  .lp-phone-compose { padding: 6px 8px 10px; border-radius: 0 0 22px 22px; }
+  .lp-phone-compose span { padding: 6px 10px; font-size: 11px; }
+  .lp-sms-copy h2 { font-size: 21px; }
+  .lp-chips button, .lp-segment button { min-height: 34px; padding: 0 10px; font-size: 12.5px; }
+  .lp-switch { font-size: 12.5px; gap: 10px; }
+  .lp-sms-meter { font-size: 12px; }
+  .lp-sms-copy .lp-button-lg { width: 100%; }
+
+  .lp-advisories { display: grid; grid-auto-flow: column; grid-auto-columns: 74%; grid-template-columns: none; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; scrollbar-width: none; }
+  .lp-advisories::-webkit-scrollbar { display: none; }
+  .lp .lp-advisory { scroll-snap-align: start; }
+
+  .lp-map-card { grid-template-columns: 1fr; }
+  .lp-map-shell, .lp-map-shell .rg-map, .lp-map-placeholder { min-height: 280px; height: 280px; }
+
+  .lp-close { min-height: 0; padding: 48px var(--margin); }
+  .lp-close-inner { padding-right: 112px; }
+  .lp-close-art { right: var(--margin); bottom: 40px; }
+  .lp-close-mascot { width: 104px; translate: none; right: auto; }
+  .lp-close h2 { font-size: clamp(34px, 10vw, 52px); }
+  .lp-footer-cols { grid-template-columns: 1fr 1fr; }
+  .lp-footer-brand { grid-column: 1 / -1; }
+}
+
+@media (max-width: 560px) {
+  .lp-disease-grid, .lp-problem > .lp-disease-grid { grid-template-columns: 1fr 1fr; }
+  .lp-bento { grid-template-columns: 1fr 1fr; }
+  .lp-card-capture, .lp-card-publish { grid-column: auto; }
+  .lp-card-media, .lp-review-ui, .lp-publish-ui { height: 128px; }
+  .lp-footer-cols { grid-template-columns: 1fr 1fr; }
+  .lp-see-facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp [data-parallax] { translate: none !important; }
+  .lp-mascot-scan i { animation: none; }
+}
+
+/* fixes after the first look */
+@media (min-width: 861px) {
+  .lp-hero-copy { width: min(620px, 54%); }
+  .lp-hero h1 { font-size: clamp(40px, 4.4vw, 70px); }
+  .lp-line { flex-wrap: nowrap; white-space: nowrap; }
+}
+@media (max-width: 860px) {
+  .lp-review-head { font-size: 12px; }
+  .lp-review-ui ul { gap: 4px; margin-top: 8px; }
+  .lp-review-ui li { padding: 4px 6px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lp-review-ui li span { flex: none; width: 14px; height: 14px; }
+  .lp-stamp { display: none; }
+  .lp-mini-pin { display: none; }
+  .lp-mini-bulletin strong { font-size: 12px; }
+  .lp-mini-bulletin small { font-size: 11px; }
+  .lp .rg-assistant-launcher img { width: 40px; height: 40px; }
+  .lp .rg-assistant { left: auto; right: 12px; bottom: 12px; }
+}

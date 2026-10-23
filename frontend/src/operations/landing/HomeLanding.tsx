@@ -11,8 +11,10 @@ import { smsSegments } from "../domain";
 import type { Bulletin } from "../domain";
 import { useSmoothScroll } from "@/components/motion/useSmoothScroll";
 import { heroInput } from "./heroInput";
+import { HeroMascot } from "./HeroMascot";
 import "../operations.css";
 import "./landing.css";
+import "./landing-v4.css";
 
 const RiceField3D = lazy(() => import("./RiceField3D"));
 
@@ -76,6 +78,36 @@ function useViewportClasses(root: React.RefObject<HTMLElement | null>) {
 }
 
 /** True once the element is within `margin` of the viewport; used to defer heavy widgets. */
+/**
+ * `[data-parallax="0.1"]` drifts against the scroll by that fraction of its distance from the
+ * viewport centre. It writes the `translate` property, so hover transforms still compose.
+ */
+function useParallax(root: React.RefObject<HTMLElement | null>) {
+  const reduced = useReducedMotion();
+  useEffect(() => {
+    const scope = root.current;
+    if (!scope || reduced) return;
+    const nodes = [...scope.querySelectorAll<HTMLElement>("[data-parallax]")];
+    let frame = 0;
+    const apply = () => {
+      frame = 0;
+      const middle = window.innerHeight / 2;
+      for (const node of nodes) {
+        const box = (node.parentElement || node).getBoundingClientRect();
+        if (box.bottom < -200 || box.top > window.innerHeight + 200) continue;
+        const speed = Number(node.dataset.parallax) || 0.08;
+        const offset = box.top + box.height / 2 - middle;
+        node.style.translate = `0 ${(-offset * speed).toFixed(1)}px`;
+      }
+    };
+    const request = () => { if (!frame) frame = requestAnimationFrame(apply); };
+    apply();
+    window.addEventListener("scroll", request, { passive: true });
+    window.addEventListener("resize", request);
+    return () => { cancelAnimationFrame(frame); window.removeEventListener("scroll", request); window.removeEventListener("resize", request); };
+  }, [root, reduced]);
+}
+
 function useNearViewport<T extends HTMLElement>(margin = "600px") {
   const ref = useRef<T>(null);
   const [near, setNear] = useState(false);
@@ -213,6 +245,7 @@ function Hero({ latest, smsPath, smsLabel }: { latest?: Bulletin; smsPath: strin
         ) : null}
       </div>
       <div className="lp-hero-scrim" aria-hidden="true" />
+      <HeroMascot paused={!visible || reduced} narrow={narrow} />
       <div className="lp-hero-copy" ref={copy}>
         <p className="lp-hero-tag"><span><i /> Live in Region II</span> AI rice disease monitoring</p>
         <h1 id="lp-hero-title">
@@ -287,7 +320,7 @@ function ProblemSection() {
       </p>
       <div className="lp-disease-grid" data-reveal>
         <TiltCard className="lp-disease">
-          <img src="/images/field/disease-blb-800.webp" alt="Rice leaves with yellow-to-white streaks running down from the tips" width="800" height="1000" loading="lazy" decoding="async" />
+          <img data-parallax="0.06" src="/images/field/disease-blb-800.webp" alt="Rice leaves with yellow-to-white streaks running down from the tips" width="800" height="1000" loading="lazy" decoding="async" />
           <div>
             <span className="lp-pill">Bacterial Leaf Blight</span>
             <h3>Streaks that start at the tip</h3>
@@ -295,7 +328,7 @@ function ProblemSection() {
           </div>
         </TiltCard>
         <TiltCard className="lp-disease">
-          <img src="/images/field/disease-brownspot-800.webp" alt="Rice leaves dotted with small brown oval spots" width="800" height="1000" loading="lazy" decoding="async" />
+          <img data-parallax="0.09" src="/images/field/disease-brownspot-800.webp" alt="Rice leaves dotted with small brown oval spots" width="800" height="1000" loading="lazy" decoding="async" />
           <div>
             <span className="lp-pill">Brown Spot</span>
             <h3>Specks that multiply</h3>
@@ -359,7 +392,7 @@ function SeeSection() {
             <li><strong>Every</strong> outline open for a specialist to check</li>
           </ul>
         </div>
-        <div className="lp-see-frame" data-reveal><CompareSlider /></div>
+        <div className="lp-see-frame" data-reveal><div data-parallax="0.04"><CompareSlider /></div></div>
       </div>
     </section>
   );
@@ -376,7 +409,7 @@ function HowSection() {
       <div className="lp-bento" data-reveal>
         <article className="lp-card lp-card-capture" data-live>
           <div className="lp-card-media">
-            <img src="/images/field/paddy-water-1600.webp" srcSet="/images/field/paddy-water-960.webp 960w, /images/field/paddy-water-1600.webp 1600w" sizes="(max-width: 860px) 100vw, 60vw" alt="Young rice plants in a flooded paddy, photographed from above" width="1600" height="900" loading="lazy" decoding="async" />
+            <img data-parallax="0.07" src="/images/field/paddy-water-1600.webp" srcSet="/images/field/paddy-water-960.webp 960w, /images/field/paddy-water-1600.webp 1600w" sizes="(max-width: 860px) 100vw, 60vw" alt="Young rice plants in a flooded paddy, photographed from above" width="1600" height="900" loading="lazy" decoding="async" />
             <span className="lp-scanline" aria-hidden="true" />
             <span className="lp-brackets" aria-hidden="true"><i /><i /><i /><i /></span>
             <span className="lp-gps" aria-hidden="true"><MapPin size={14} /> GPS + time read from the photo</span>
@@ -385,7 +418,7 @@ function HowSection() {
         </article>
         <article className="lp-card lp-card-detect" data-live>
           <div className="lp-card-media">
-            <img src="/images/field/leaf-polygons-960.webp" alt="Rice leaves outlined one by one by the models" width="960" height="540" loading="lazy" decoding="async" />
+            <img data-parallax="0.07" src="/images/field/leaf-polygons-960.webp" alt="Rice leaves outlined one by one by the models" width="960" height="540" loading="lazy" decoding="async" />
             <span className="lp-model-chips" aria-hidden="true"><b>BLB</b><b>Brown Spot</b></span>
           </div>
           <div className="lp-card-body"><span className="lp-step">Step 2 · Detect</span><h3>Two models, one photo</h3><p>Each model marks only its own disease, so one finding never hides the other.</p></div>
@@ -498,7 +531,7 @@ function SmsSection({ smsPath, smsLabel }: { smsPath: string; smsLabel: string }
     <section className="lp-section lp-sms" aria-labelledby="lp-sms-title">
       <div className="lp-sms-panel" data-reveal>
         <div className="lp-sms-device">
-          <div className="lp-phone" data-ui>
+          <div className="lp-phone" data-ui data-parallax="0.05">
             <div className="lp-phone-island" />
             <div className="lp-phone-status"><span>9:41</span><span className="lp-phone-signal"><i /><i /><i /><i /></span></div>
             <div className="lp-phone-app">
@@ -532,7 +565,7 @@ function SmsSection({ smsPath, smsLabel }: { smsPath: string; smsLabel: string }
             <div className="lp-segment" role="radiogroup" aria-label="Disease" style={vars({ "--pos": disease === "BLB" ? 0 : 1 })}>
               <span className="lp-segment-thumb" aria-hidden="true" />
               {(["BLB", "Brown Spot"] as const).map((item) => (
-                <button key={item} type="button" role="radio" aria-checked={disease === item} onClick={() => update(() => setDisease(item))}>{item === "BLB" ? "Bacterial Leaf Blight" : item}</button>
+                <button key={item} type="button" role="radio" aria-checked={disease === item} onClick={() => update(() => setDisease(item))}>{item}</button>
               ))}
             </div>
           </div>
@@ -630,7 +663,7 @@ function CloseSection({ smsPath, smsLabel }: { smsPath: string; smsLabel: string
           <Link className="lp-ghost" to="/bulletin">Read the bulletin <ArrowRight size={16} /></Link>
         </div>
       </div>
-      <img className="lp-close-mascot" src="/images/mascot/hero-wave-open-v2.png" alt="" width="420" height="420" loading="lazy" decoding="async" />
+      <div className="lp-close-art" data-parallax="0.12"><img className="lp-close-mascot" src="/images/mascot/mascot-wave.webp" alt="" width="420" height="397" loading="lazy" decoding="async" /></div>
     </section>
   );
 }
@@ -660,6 +693,7 @@ export function HomePage() {
   const { items, loading, error } = usePublicPosts({ limit: 4 });
   useSmoothScroll();
   useViewportClasses(page);
+  useParallax(page);
   return (
     <div className="lp" ref={page}>
       <a className="rg-skip" href="#main">Skip to content</a>

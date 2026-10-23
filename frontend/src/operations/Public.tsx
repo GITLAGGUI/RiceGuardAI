@@ -48,6 +48,7 @@ import { weatherForBulletin, type BulletinWeather } from "./weatherPresentation"
 import { WeatherLocation } from "./WeatherLocation";
 import "./operations.css";
 import "./bulletin.css";
+import "./bulletin-feed.css";
 
 export function Brand({ light = false }: { light?: boolean }) {
   return (

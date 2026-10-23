@@ -1,0 +1,69 @@
+/* Field Bulletin feed v4: one column in the X / Threads shape.
+   Avatar rail 40px, header line 14px, title 16px, text 15px, actions 13px. */
+
+.rg-feed3 { display: block; max-width: 640px; margin: 0 auto; border-radius: 16px; background: #fff; overflow: hidden; }
+.rg-social-bulletin-main > header, .rg-social-bulletin-main > .rg-bulletin-filter-bar, .rg-social-bulletin-main > .rg-feed-context { max-width: 640px; margin-left: auto; margin-right: auto; }
+.rg-feed3 > .rg-load-more { display: flex; margin: 12px auto 16px; }
+
+.rg-xpost { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; padding: 14px 16px 6px; border-bottom: 1px solid #edf1ec; transition: background-color 150ms ease; }
+.rg-xpost:hover { background: #fafcf9; }
+.rg-xpost:last-of-type { border-bottom: 0; }
+.rg-xpost-avatar { width: 40px; height: 40px; border-radius: 50%; background: #e6efe2; object-fit: contain; padding: 2px; }
+.rg-xpost-main { min-width: 0; display: grid; gap: 6px; }
+.rg-xpost-head { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 14px; line-height: 1.3; }
+.rg-xpost-head b { color: #13291f; font-weight: 750; flex: none; }
+.rg-xpost-sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #5c6f65; }
+.rg-xpost-head .rg-verify-badge { margin-left: auto; flex: none; }
+.rg-xpost h2 { margin: 0; font-size: 16px; line-height: 1.3; font-weight: 700; letter-spacing: -0.01em; }
+.rg-xpost h2 a { color: #13291f; text-decoration: none; }
+.rg-xpost h2 a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.rg-xpost-text { margin: 0; color: #24392f; font-size: 15px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.rg-xpost-steps { margin: 0; padding: 0 0 0 18px; color: #24392f; font-size: 14px; line-height: 1.45; display: grid; gap: 2px; }
+.rg-xpost-steps li { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.rg-xpost-steps li::marker { color: #0e5b3d; }
+
+.rg-xpost-media { display: grid; gap: 2px; margin-top: 4px; border-radius: 14px; overflow: hidden; }
+.rg-xpost-media.count-2 { grid-template-columns: 1fr 1fr; }
+.rg-xpost-cell { position: relative; min-width: 0; }
+.rg-xpost-cell .rg-disease-stage { aspect-ratio: 16 / 10 !important; max-height: 360px; }
+.rg-xpost-media.count-2 .rg-disease-stage { aspect-ratio: 4 / 5 !important; max-height: 300px; }
+.rg-xpost-cell .rg-disease-stage > img, .rg-xpost-cell .rg-disease-stage > video { position: absolute; inset: 0; height: 100%; object-fit: cover; }
+.rg-xpost-cell .rg-disease-layer { object-fit: cover; }
+.rg-xpost-cell .rg-disease-legend { padding: 4px 6px; }
+.rg-xpost-cell .rg-disease-legend button { min-height: 24px; font-size: 11.5px; padding: 0 7px; }
+.rg-xpost-cell .rg-post3-more { bottom: 40px; font-size: 14px; }
+
+.rg-xpost-actions { display: flex; align-items: center; gap: 2px; margin: 2px 0 0 -6px; }
+.rg-xpost-actions a { margin-right: auto; display: inline-flex; align-items: center; gap: 4px; padding: 8px 6px; border-radius: 999px; color: #0e5b3d; font-size: 13px; font-weight: 700; text-decoration: none; }
+.rg-xpost-actions a:hover { background: #eaf3e8; }
+.rg-xpost-actions button { width: 36px; height: 36px; border: 0; border-radius: 50%; background: transparent; color: #5c6f65; display: grid; place-items: center; cursor: pointer; transition: background-color 120ms, color 120ms, transform 100ms ease-out; }
+.rg-xpost-actions button:hover { background: #eaf3e8; color: #0e5b3d; }
+.rg-xpost-actions button:active, .rg-xpost-actions a:active { transform: scale(0.94); }
+.rg-xpost-actions button[aria-pressed="true"] { color: #0e5b3d; }
+
+/* Compact header + filters above the feed */
+.rg-social-bulletin-main { padding-top: 16px; }
+.rg-social-bulletin-heading { padding-bottom: 8px; }
+.rg-social-bulletin-heading h1 { font-size: 22px; }
+.rg-social-bulletin-heading img { width: 44px; }
+.rg-bulletin-filter-bar { grid-template-columns: minmax(0, 1fr) 150px 150px 140px auto; padding: 8px; border-radius: 14px; gap: 6px; }
+.rg-bulletin-filter-bar label > span:not(.sr-only) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (max-width: 900px) {
+  .rg-bulletin-filter-bar { grid-template-columns: 1fr 1fr 1fr; }
+  .rg-bulletin-search { grid-column: 1 / -1; }
+  .rg-clear-filters { grid-column: 3; }
+}
+@media (max-width: 700px) {
+  .rg-social-bulletin-main { padding: 8px 0 90px; }
+  .rg-social-bulletin-heading, .rg-bulletin-filter-bar, .rg-social-feed-context { margin-left: 12px !important; margin-right: 12px !important; }
+  .rg-feed3 { border-radius: 0; }
+  .rg-xpost { grid-template-columns: 36px minmax(0, 1fr); gap: 10px; padding: 12px 12px 4px; }
+  .rg-xpost-avatar { width: 36px; height: 36px; }
+  .rg-xpost-text { font-size: 14.5px; }
+  .rg-bulletin-filter-bar { grid-template-columns: 1fr 1fr; }
+  .rg-bulletin-filter-bar label:nth-of-type(4), .rg-clear-filters { display: none; }
+}
+.rg-bulletin-filter-bar { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; }
+.rg-bulletin-filter-bar .rg-bulletin-search { grid-column: 1 / -1; }
+@media (max-width: 700px) { .rg-bulletin-filter-bar { grid-template-columns: 1fr 1fr; } }
