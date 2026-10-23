@@ -44,7 +44,9 @@ import {
   normalizePhone,
   type Survey,
 } from "./domain";
-import { UploadWorkspace, ReviewWorkspace } from "./Upload";
+import { UploadWorkspace } from "./Upload";
+import { VerifyWorkspace } from "./VerifyFindings";
+import { LivePipeline } from "./PipelineMonitor";
 import { reviewedDiseaseLabel, advisoryActionSteps } from "./advisoryPresentation";
 import { reviewHref } from "./ReviewJourney";
 import { SmsDelivery } from "./SmsDelivery";
@@ -54,7 +56,7 @@ const nav = [
   ["overview", "Overview", LayoutDashboard],
   ["surveys", "Drone surveys", ScanLine],
   ["map", "Operations map", Map],
-  ["review", "Detection review", ClipboardCheck],
+  ["review", "Verify findings", ClipboardCheck],
   ["advisories", "Advisory desk", FileImage],
   ["farmers", "Farmers & fields", Users],
   ["sms", "SMS delivery", MessageSquare],
@@ -390,7 +392,7 @@ export function OverviewPage() {
   ];
   const workspaces = [
     { to: "surveys", title: "Surveys & uploads", detail: `${data.surveys.length} flight records · originals and progress`, icon: ScanLine },
-    { to: "review", title: "Detection review", detail: `${pending.length} awaiting a decision`, icon: ClipboardCheck },
+    { to: "review", title: "Verify findings", detail: `${pending.length} naghihintay ng Tama/Mali`, icon: ClipboardCheck },
     { to: "advisories", title: "Advisory desk", detail: "Draft, approve, publish and correct", icon: FileImage },
     { to: "farmers", title: "Farmers & fields", detail: `${data.contacts.length} contact records and farm details`, icon: Users },
     { to: "sms", title: "SMS delivery", detail: "Recipients, outbox and delivery status", icon: MessageSquare },
@@ -421,6 +423,7 @@ export function OverviewPage() {
           </article>
         ))}
       </div>
+      <LivePipeline />
       <section className="rg-ops-hub" aria-labelledby="rg-ops-hub-title">
         <div className="rg-panel-heading">
           <div><h2 id="rg-ops-hub-title">Your workspace</h2><p>Open the next step directly. Counts reflect the current records, not sample figures.</p></div>
@@ -1126,7 +1129,7 @@ export function OperationsPage() {
   const page = location.pathname.split("/").slice(2).join("/");
   const navigate = useNavigate();
   if (page === "surveys/new") return <UploadWorkspace />;
-  if (page === "review") return <ReviewWorkspace />;
+  if (page === "review") return <VerifyWorkspace />;
   switch (page) {
     case "overview":
       return <OverviewPage />;

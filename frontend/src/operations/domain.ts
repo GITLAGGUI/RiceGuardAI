@@ -48,6 +48,34 @@ export interface Prediction {
   tile_count: number;
   profile: string;
 }
+/** Automated severity: the most affected photo per disease, graded on the IRRI SES scale. */
+export interface SeverityDetail {
+  method: "representative_photo_ses_v1";
+  formula: string;
+  overall: "low" | "moderate" | "high";
+  photos: number;
+  usable_photos: number;
+  diseases: Partial<Record<Disease, {
+    percent: number; ses_score: number; category: "low" | "moderate" | "high";
+    representative_asset_id: string; photo_number: number; lesion_pixels: number; plant_pixels: number;
+    affected_photos: number; usable_photos: number;
+  }>>;
+}
+export interface Place {
+  method: "inside" | "nearest" | "region_only" | "outside_region" | "none";
+  label?: string; barangay?: string; municipality?: string; province?: string; barangay_code?: string;
+}
+/** A published photo: base image plus one transparent layer per disease for the viewer. */
+export interface PublicPhoto {
+  url: string; alt: string; type: "image" | "video"; width?: number; height?: number; source_asset_id?: string;
+  original_url?: string; layers?: Partial<Record<Disease, string>>; diseases?: Disease[]; photo_number?: number;
+}
+export interface WebSource { n: number; title: string; url: string; publisher: string; approved?: boolean }
+export type AutoStatus = "pending" | "running" | "retry" | "done" | "failed";
+export interface PipelineStep {
+  id: number; survey_id: string; step: string; status: "running" | "done" | "skipped" | "failed";
+  detail: Record<string, unknown>; attempt: number; created_at: string;
+}
 export interface Survey {
   id: string;
   inference_provider?: "kaggle" | "aws" | "kaggle_yolo26";
@@ -69,6 +97,14 @@ export interface Survey {
   note?: string;
   crop_stage?: "unknown" | "seedling" | "vegetative" | "reproductive" | "ripening" | "post_harvest";
   field_conditions?: ("standing_water" | "lodging" | "dry_or_cracked_soil" | "nutrient_stress_suspected" | "pest_damage_suspected")[];
+  auto_status?: AutoStatus | null;
+  auto_mode?: "initial" | "verify";
+  auto_error?: string | null;
+  auto_attempts?: number;
+  place?: Place | null;
+  severity_detail?: SeverityDetail | null;
+  location_source?: "exif_median" | "manual_pin" | "none";
+  created_at?: string;
   field_assessment?: { basis: "manual_field_assessment" | "reviewed_severity_assessment"; model_calibrated: false; result_revision: number; bulletin_id?: string; evidence_key?: string; diseases: Record<string, { category: string; basis?: string; leaf_area_affected_pct?: number; sampled_leaves?: number; specialist: string; notes: string }> };
 }
 export interface Bulletin {
@@ -97,14 +133,20 @@ export interface Bulletin {
   updated_at?: string;
   approximate_location?: boolean;
   public_location_approved?: boolean;
-  media?: { url: string; alt: string; type: "image" | "video"; width?: number; height?: number; source_asset_id?: string }[];
-  public_media?: { url: string; alt: string; type: "image" | "video"; width?: number; height?: number; source_asset_id?: string }[];
+  media?: PublicPhoto[];
+  public_media?: PublicPhoto[];
+  verification_status?: "unverified" | "verified" | "corrected" | "retracted";
+  verified_at?: string | null;
+  auto_generated?: boolean;
+  severity_detail?: SeverityDetail | null;
+  place?: Place | null;
   revision?: number;
   advisory_revision?: number;
   result_revision?: number | null;
-  advisory_sources?: { disease: string; title: string; version: string; reference: string }[];
+  advisory_sources?: Array<{ disease: string; title: string; version: string; reference: string } | WebSource>;
   advisory_source_ids?: string[];
   limitations?: string;
+  correction_note?: string | null;
 }
 export interface Contact {
   id: string;
@@ -161,7 +203,7 @@ export interface ProcessingJob {
   stage?: string;
   estimated_credits?: number;
   review_urls?: Record<string, Record<string, string>>;
-  finding_reviews?: { source_asset_id: string; disease: Disease; decision: "accepted" | "rejected" | "uncertain" }[];
+  finding_reviews?: { source_asset_id: string; disease: Disease; decision: "accepted" | "rejected" | "uncertain"; reason?: string | null; note?: string | null }[];
   created_at: string;
   updated_at: string;
 }
@@ -194,6 +236,7 @@ export interface OperationsData {
   jobs: ProcessingJob[];
   providers: ProviderStatus;
   models: ModelRegistryItem[];
+  pipeline_steps?: PipelineStep[];
 }
 
 export function normalizePhone(value: string): string {

@@ -1,7 +1,6 @@
 import {
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ComponentProps,
   type ReactNode,
@@ -9,18 +8,13 @@ import {
 import { Link, NavLink, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowRight,
-  CheckCircle2,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   CloudRain,
-  Clock3,
   Droplets,
   Info,
   HelpCircle,
   MapPin,
   Menu,
-  Play,
   ScanLine,
   ShieldCheck,
   MessageSquareText,
@@ -33,16 +27,13 @@ import {
   BellSimple as PhBell,
   BookmarkSimple as PhBookmark,
   CalendarBlank as PhCalendar,
-  CheckCircle as PhCheckCircle,
   ChatCircleText as PhChat,
   House as PhHouse,
   MapPin as PhMapPin,
   MapTrifold as PhMap,
   MagnifyingGlass as PhSearch,
-  ShareNetwork as PhShare,
   ShieldCheck as PhShield,
   SlidersHorizontal as PhFilters,
-  Plant as PhSprout,
   X as PhX,
 } from "@phosphor-icons/react";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
@@ -51,13 +42,12 @@ import { FieldMap } from "./LazyMap";
 import { groupMapPoints, publicMapSummary } from "./mapPoints";
 import type { Bulletin } from "./domain";
 import { AssistantWidget, BulletinWalkthrough, openBulletinWalkthrough } from "./Assistant";
+import { AdvisoryDetail, BulletinCard, useBookmarks } from "./BulletinPost";
 import { useSmsRegistrationStatus } from "./registrationStatus";
-import { socialMosaicItems } from "./bulletinMedia";
-import { reviewedDiseaseLabel, advisoryActionSteps } from "./advisoryPresentation";
-import { advisoryPreview } from "./advisoryContent";
 import { weatherForBulletin, type BulletinWeather } from "./weatherPresentation";
 import { WeatherLocation } from "./WeatherLocation";
 import "./operations.css";
+import "./bulletin.css";
 
 export function Brand({ light = false }: { light?: boolean }) {
   return (
@@ -161,237 +151,6 @@ function HonestState({ title, text }: { title: string; text: string }) {
       <p>{text}</p>
     </div>
   );
-}
-
-function useBookmarks() {
-  const [bookmarks, setBookmarks] = useState<string[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem("riceguard-public-bookmarks") || "[]");
-    } catch {
-      return [];
-    }
-  });
-  useEffect(() => {
-    const sync = () => {
-      try { setBookmarks(JSON.parse(localStorage.getItem("riceguard-public-bookmarks") || "[]")); }
-      catch { setBookmarks([]); }
-    };
-    window.addEventListener("riceguard-bookmarks", sync);
-    window.addEventListener("storage", sync);
-    return () => {
-      window.removeEventListener("riceguard-bookmarks", sync);
-      window.removeEventListener("storage", sync);
-    };
-  }, []);
-  const toggle = (id: string) => {
-    setBookmarks((current) => {
-      const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
-      localStorage.setItem("riceguard-public-bookmarks", JSON.stringify(next));
-      queueMicrotask(() => window.dispatchEvent(new Event("riceguard-bookmarks")));
-      return next;
-    });
-  };
-  return { bookmarks, toggle };
-}
-
-export function BulletinCard({ item }: { item: Bulletin }) {
-  const { bookmarks, toggle } = useBookmarks();
-  const bookmarked = bookmarks.includes(item.id);
-  const media = item.media?.length
-    ? item.media
-    : item.image
-      ? [{ url: item.image, alt: `Approved public preview for ${item.title}`, type: "image" as const }]
-      : [];
-  const summary = item.body;
-  const corrected = Boolean(item.revision && item.revision > 1) || Boolean(
-    item.updated_at && item.published_at && item.updated_at !== item.published_at,
-  );
-  const share = async () => {
-    const url = `${location.origin}/advisories/${item.slug}`;
-    if (navigator.share) await navigator.share({ title: professionalAdvisoryTitle(item), url });
-    else await navigator.clipboard.writeText(url);
-  };
-  return (
-    <article className="rg-bulletin-post">
-      <div className="rg-bulletin-post-head">
-        <span className="rg-bulletin-avatar" aria-hidden="true"><img src="/images/mascot/field-companion.png" alt="" /></span>
-        <div className="rg-bulletin-publisher">
-          <strong>RiceGuardAI Field Monitoring <PhCheckCircle size={16} weight="fill" /></strong>
-          <small>{formatDate(item.published_at || item.date)} · {item.location}</small>
-        </div>
-        <div className="rg-post-statuses">
-          {(item.diseases?.length ? item.diseases : [item.disease]).map((disease) => (
-            <span key={disease} className={`rg-disease-pill ${disease === "BLB" ? "blb" : "brown"}`}>
-              {disease === "BLB" ? "Bacterial Leaf Blight" : "Brown Spot"}
-            </span>
-          ))}
-          <span className="rg-reviewed-pill"><PhCheckCircle size={14} weight="fill" /> Reviewed</span>
-          {corrected ? <span className="rg-updated-pill">Updated</span> : null}
-        </div>
-      </div>
-
-      <div className={`rg-bulletin-post-body ${media.length > 1 ? "has-gallery" : ""}`}>
-        <div className="rg-post-narrative">
-          <h2><Link to={`/advisories/${item.slug}`}>{professionalAdvisoryTitle(item)}</Link></h2>
-          <ExpandableAdvisory summary={professionalAdvisorySummary(summary, item)} action={item.action} />
-        </div>
-        {media.length ? <BulletinMediaGallery item={item} compact /> : null}
-      </div>
-
-      <footer className="rg-bulletin-post-actions">
-        <Link to={`/advisories/${item.slug}`}>View details <ArrowRight size={15} /></Link>
-          <button onClick={() => toggle(item.id)} aria-pressed={bookmarked} aria-label={bookmarked ? "Remove saved advisory" : "Save advisory"}>
-          <PhBookmark size={20} weight={bookmarked ? "fill" : "regular"} />
-          <span>{bookmarked ? "Saved" : "Save"}</span>
-        </button>
-          <button onClick={() => void share()} aria-label="Share advisory"><PhShare size={20} /><span>Share</span></button>
-      </footer>
-    </article>
-  );
-}
-
-function BulletinMediaGallery({ item, compact = false }: { item: Bulletin; compact?: boolean }) {
-  const media = item.media?.length
-    ? item.media
-    : item.image
-      ? [{ url: item.image, alt: `Approved public preview for ${item.title}`, type: "image" as const }]
-      : [];
-  const [selected, setSelected] = useState(0);
-  const [videoStarted, setVideoStarted] = useState(false);
-  const pointerStart = useRef<number | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const activeIndex = Math.min(selected, Math.max(media.length - 1, 0));
-  const active = media[activeIndex];
-  const select = (next: number) => {
-    setSelected((next + media.length) % media.length);
-    setVideoStarted(false);
-  };
-  if (!active) return null;
-  if (compact) {
-    const { visible, remaining } = socialMosaicItems(media);
-    return (
-      <Link
-        to={`/advisories/${item.slug}`}
-        className={`rg-social-media-mosaic count-${Math.min(visible.length, 5)}`}
-        aria-label={`Open all ${media.length} approved media items for ${item.title}`}
-      >
-        {visible.map((entry, index) => (
-          <span className="rg-social-media-cell" key={`${entry.url}-${index}`}>
-            {entry.type === "video" ? (
-              <video src={entry.url} muted playsInline preload="metadata" aria-hidden="true" />
-            ) : (
-              <img src={entry.url} alt="" loading="lazy" />
-            )}
-            {entry.type === "video" ? <span className="rg-social-media-kind">Video</span> : null}
-            {remaining > 0 && index === visible.length - 1 ? (
-              <span className="rg-social-media-more">+{remaining}</span>
-            ) : null}
-          </span>
-        ))}
-      </Link>
-    );
-  }
-  return (
-    <section className="rg-bulletin-gallery detail" aria-label={`Approved media for ${professionalAdvisoryTitle(item)}`}>
-      <div
-        className="rg-bulletin-media-stage"
-        onPointerDown={(event) => { pointerStart.current = event.clientX; }}
-        onPointerUp={(event) => {
-          if (pointerStart.current == null || media.length < 2) return;
-          const distance = event.clientX - pointerStart.current;
-          pointerStart.current = null;
-          if (Math.abs(distance) > 45) select(activeIndex + (distance < 0 ? 1 : -1));
-        }}
-      >
-        {media.length > 1 ? <button className="rg-gallery-arrow previous" type="button" onClick={() => select(activeIndex - 1)} aria-label="Previous media"><ChevronLeft /></button> : null}
-        {active.type === "video" ? (
-          <div className="rg-video-playback">
-            <video
-              ref={videoRef}
-              key={active.url}
-              src={active.url}
-              controls={videoStarted}
-              playsInline
-              preload="metadata"
-              aria-label={active.alt || `Field assessment video for ${professionalAdvisoryTitle(item)}`}
-              onEnded={() => setVideoStarted(false)}
-            />
-            {!videoStarted ? <button type="button" className="rg-tap-to-play" onClick={() => { setVideoStarted(true); void videoRef.current?.play(); }}><Play size={26} fill="currentColor" /> Tap to play video</button> : null}
-          </div>
-        ) : (
-          <Link to={`/advisories/${item.slug}`} aria-label={`Open ${professionalAdvisoryTitle(item)}`}>
-            <img src={active.url} alt={active.alt} loading="lazy" />
-          </Link>
-        )}
-        {media.length > 1 ? <button className="rg-gallery-arrow next" type="button" onClick={() => select(activeIndex + 1)} aria-label="Next media"><ChevronRight /></button> : null}
-      </div>
-      {media.length > 1 ? (
-        <div className="rg-bulletin-media-pagination" aria-label="Media position">
-          <span>{activeIndex + 1} / {media.length}</span>
-          <div>{media.map((entry, index) => (
-            <button
-              key={`${entry.url}-${index}`}
-              type="button"
-              aria-label={`Open media ${index + 1}`}
-              aria-current={index === activeIndex ? "true" : undefined}
-              className={index === activeIndex ? "selected" : ""}
-              onClick={() => select(index)}
-            />
-          ))}</div>
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
-function formatDate(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" }).format(date);
-}
-
-function professionalAdvisoryTitle(item: Bulletin) {
-  if (!/^reviewed rice field assessment/i.test(item.title)) return item.title;
-  const place = item.location.split(",").slice(0, 2).join(",").trim() || "the monitored field";
-  return `Rice Health Advisory for ${place}`;
-}
-
-function professionalAdvisorySummary(summary: string, item: Bulletin) {
-  if (!/^the reviewed image findings indicate possible/i.test(summary)) return summary;
-  const diseases = (item.diseases?.length ? item.diseases : [item.disease])
-    .map((value) => value === "BLB" ? "Bacterial Leaf Blight" : value)
-    .join(" and ");
-  return `RiceGuardAI identified image patterns consistent with ${diseases} in the submitted field media. The advisory combines these model findings with the recorded location, nearby weather, and approved agricultural guidance.`;
-}
-
-function AdvisoryActionList({ action }: { action: string }) {
-  const steps = advisoryActionSteps(action);
-  return steps.length > 1
-    ? <ul className="rg-action-list">{steps.map((step, index) => <li key={`${index}:${step}`}>{step}</li>)}</ul>
-    : <p>{steps[0]}</p>;
-}
-
-function ExpandableAdvisory({ summary, action }: { summary: string; action: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
-  const preview = advisoryPreview(summary, action);
-  return <div ref={root} className="rg-expandable-advisory">
-    <p className="rg-post-summary">{expanded ? summary : preview.summary}</p>
-    <div className="rg-post-recommendation"><PhSprout size={22} weight="bold" />
-      <div><strong>Recommended actions</strong>{expanded ? <AdvisoryActionList action={action} /> : <ul className="rg-action-list">{preview.actions.map((step, index) => <li key={index}>{step}</li>)}</ul>}</div>
-    </div>
-    {preview.expandable ? <button type="button" className="rg-see-more" aria-expanded={expanded} onClick={() => {
-      const collapsing = expanded;
-      setExpanded(!expanded);
-      if (collapsing) requestAnimationFrame(() => { root.current?.scrollIntoView({ block: "nearest", behavior: "auto" }); root.current?.querySelector<HTMLButtonElement>(".rg-see-more")?.focus({ preventScroll: true }); });
-    }}>{expanded ? "See less / I-collapse" : "See more…"}</button> : null}
-  </div>;
-}
-
-function assessmentLabel(value: Bulletin["severity"]) {
-  if (value === "not_calibrated" || value === "unknown") return "Field severity not assessed";
-  return `${value === "high" ? "Severe" : value[0].toUpperCase() + value.slice(1)} · field category`;
 }
 
 type CommunityPage = "bulletin" | "map" | "sms";
@@ -535,7 +294,7 @@ export function CommunityShell({
           ) : null}
           <section className="rg-bulletin-policy">
             <PhShield size={25} weight="fill" />
-            <div><h2>Publication policy</h2><p>Authorized staff review every post. Results support decisions and do not replace field confirmation.</p></div>
+            <div><h2>Paano ito gumagana</h2><p>Awtomatikong sinusuri ng AI ang bawat upload at agad itong ipino-post. Ang may <b>?</b> ay hindi pa nave-verify ng specialist.</p></div>
           </section>
         </aside>
 
@@ -589,7 +348,7 @@ export function BulletinPage() {
           <header className="rg-social-bulletin-heading">
             <h1>Field Bulletin</h1>
             <button className="rg-tour-replay" onClick={openBulletinWalkthrough}><HelpCircle size={18} /> Gabay</button>
-            <img src="/images/mascot/bulletin-reader-v2.png" alt="RiceGuardAI field companion reading a field bulletin" />
+            <img src="/images/mascot/bulletin-reader-v2.png" alt="" />
           </header>
 
           <section className="rg-bulletin-filter-bar" aria-label="Filter advisories" data-tour="filters">
@@ -606,14 +365,14 @@ export function BulletinPage() {
           </section>
 
           <div className="rg-feed-context rg-social-feed-context">
-            <strong>{visible.length} reviewed {visible.length === 1 ? "advisory" : "advisories"}</strong>
-            <span>Newest first</span>
+            <strong>{visible.length} {visible.length === 1 ? "advisory" : "advisories"}</strong>
+            <span>Pinakabago muna</span>
           </div>
-          <section className="rg-social-feed" aria-live="polite" data-tour="feed">
+          <section className="rg-feed3" aria-live="polite" data-tour="feed">
             {error && <HonestState title="The bulletin is unavailable" text={error} />}
             {loading && !items.length ? <div className="rg-feed-skeleton"><i /><i /><i /></div> : null}
             {visible.map((item) => <BulletinCard key={item.id} item={item} />)}
-            {!loading && !visible.length && !error ? <HonestState title="No matching advisories" text="Only approved and published findings appear here. Clear the filters to view other reviewed notices." /> : null}
+            {!loading && !visible.length && !error ? <HonestState title="Walang tugmang advisory" text="Subukang alisin ang mga filter." /> : null}
             {hasMore ? <button className="rg-button rg-secondary rg-load-more" disabled={loading} onClick={() => void loadMore()}>Load older advisories <ChevronDown size={17} /></button> : null}
           </section>
     </CommunityShell>
@@ -643,32 +402,15 @@ function useAdvisory(slug?: string) {
 
 export function AdvisoryPage() {
   const { slug } = useParams();
-  const { item: b, loading, error } = useAdvisory(slug);
-  if (!b) return <PublicFrame><div className="rg-advisory-state"><HonestState title={loading ? "Loading advisory" : "Advisory unavailable"} text={loading ? "Retrieving the approved publication…" : error} /><Link to="/bulletin">Return to bulletin</Link></div></PublicFrame>;
-  const corrected = b.updated_at && b.published_at && b.updated_at !== b.published_at;
+  const { item, loading, error } = useAdvisory(slug);
   return (
     <PublicFrame>
-      <article className="rg-public-advisory">
-        <Link to="/bulletin" className="rg-back-link">← Field bulletin</Link>
-        <header>
-          <div><span className="rg-badge">{reviewedDiseaseLabel(b)}</span><span className="rg-reviewed"><CheckCircle2 size={15} /> Reviewed publication</span></div>
-          <h1>{professionalAdvisoryTitle(b)}</h1>
-          <p><MapPin size={17} /> {b.location}<Clock3 size={16} /> Published {formatDate(b.published_at || b.date)}</p>
-          {corrected ? <div className="rg-correction">Updated {formatDate(b.updated_at!)} · Revision {b.revision}</div> : null}
-        </header>
-        {(b.media?.length || b.image) ? <BulletinMediaGallery item={b} /> : null}
-        <div className="rg-advisory-body">
-          <section><h2>AI field assessment</h2><ExpandableAdvisory key={`${b.id}:${b.updated_at}`} summary={professionalAdvisorySummary(b.body, b)} action={b.action} />
-            {Boolean(b.advisory_sources?.length) && <div className="rg-advisory-citations"><h2>Agricultural sources</h2><ul>{b.advisory_sources?.map((source) => <li key={`${source.disease}:${source.version}`}><a href={source.reference} target="_blank" rel="noopener noreferrer">{source.title}</a> <span>({source.disease})</span></li>)}</ul></div>}
-          </section>
-          <aside>
-            <ShieldCheck size={25} />
-            <h2>{assessmentLabel(b.severity)}</h2>
-            <p>Model output supports review; it does not independently confirm a field diagnosis.</p>
-            <dl><dt>Reviewer</dt><dd>{b.reviewer || "Authorized RiceGuardAI staff"}</dd><dt>Location</dt><dd>Approximate public area</dd><dt>Revision</dt><dd>{b.revision || 1}</dd></dl>
-          </aside>
+      {item ? <AdvisoryDetail item={item} /> : (
+        <div className="rg-advisory-state">
+          <HonestState title={loading ? "Binubuksan ang payo" : "Hindi mahanap ang payo"} text={loading ? "Sandali lang…" : error} />
+          <Link to="/bulletin">Bumalik sa bulletin</Link>
         </div>
-      </article>
+      )}
     </PublicFrame>
   );
 }

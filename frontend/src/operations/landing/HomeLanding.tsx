@@ -5,6 +5,7 @@ import { AssistantWidget } from "../Assistant";
 import { useSmsRegistrationStatus } from "../registrationStatus";
 import { bulletinMapPoint, usePublicPosts } from "../publicPosts";
 import { FieldMap } from "../LazyMap";
+import { VerificationBadge } from "../VerificationBadge";
 import { reviewedDiseaseLabel, smsAdvisoryMessage } from "../advisoryPresentation";
 import { smsSegments } from "../domain";
 import type { Bulletin } from "../domain";
@@ -225,8 +226,8 @@ function Hero({ latest, smsPath, smsLabel }: { latest?: Bulletin; smsPath: strin
           ))}
         </h1>
         <p className="lp-hero-lead">
-          RiceGuardAI reads drone photos of Region II paddies for Bacterial Leaf Blight and Brown Spot.
-          Our team checks every finding, then texts nearby farmers what to do.
+          RiceGuardAI reads drone photos of Region II paddies for Bacterial Leaf Blight and Brown Spot,
+          grades how bad it is, and texts nearby farmers what to do within minutes.
         </p>
         <div className="lp-hero-actions">
           <Link className="lp-button lp-button-lg" to={smsPath}>{smsLabel} <MessageSquareText size={18} /></Link>
@@ -234,7 +235,7 @@ function Hero({ latest, smsPath, smsLabel }: { latest?: Bulletin; smsPath: strin
         </div>
       </div>
       <div className="lp-hero-bottom">
-        <p className="lp-hero-status"><i /> Two disease models · every finding reviewed by a person</p>
+        <p className="lp-hero-status"><i /> Two disease models · advice in minutes · checked by specialists</p>
         <a className="lp-scroll-cue" href="#problem" aria-label="Scroll to learn more"><i /></a>
         <Link to={latest ? `/advisories/${latest.slug}` : "/bulletin"} className="lp-hero-card">
           <img src={latestImage || "/images/field/compare-detected-960.webp"} alt="" width="96" height="72" loading="lazy" />
@@ -247,7 +248,7 @@ function Hero({ latest, smsPath, smsLabel }: { latest?: Bulletin; smsPath: strin
 }
 
 function Ticker() {
-  const items = ["Batanes", "Cagayan", "Isabela", "Nueva Vizcaya", "Quirino", "Bacterial Leaf Blight", "Brown Spot", "Reviewed advisories", "SMS alerts"];
+  const items = ["Batanes", "Cagayan", "Isabela", "Nueva Vizcaya", "Quirino", "Bacterial Leaf Blight", "Brown Spot", "Automatic advisories", "SMS alerts"];
   const row = (hidden: boolean) => (
     <div className="lp-ticker-row" aria-hidden={hidden || undefined}>
       {items.map((item) => <span key={item}>{item}<i /></span>)}
@@ -276,7 +277,7 @@ function TiltCard({ children, className = "" }: { children: ReactNode; className
 }
 
 function ProblemSection() {
-  const statement = "Bacterial Leaf Blight and Brown Spot start as a few streaks on scattered leaves. By the time they show from the dike, they have often spread, and no one can walk every hectare.";
+  const statement = "BLB and Brown Spot start as a few streaks on scattered leaves. By the time they show from the dike, they have spread.";
   const words = statement.split(" ");
   return (
     <section className="lp-section lp-problem" id="problem" aria-labelledby="lp-problem-title">
@@ -350,13 +351,12 @@ function SeeSection() {
     <section className="lp-see" id="see" aria-labelledby="lp-see-title">
       <div className="lp-see-inner">
         <div className="lp-see-copy" data-reveal>
-          <span className="lp-pill is-dark"><i /> Live model output</span>
-          <h2 id="lp-see-title">See what the models see</h2>
-          <p>Drag across a real drone photo from our September validation run. The outlined leaves are the areas the Bacterial Leaf Blight and Brown Spot models marked for a reviewer to check.</p>
+                    <h2 id="lp-see-title">See what the models see</h2>
+          <p>Drag across a real drone photo from our September validation run. The outlines are exactly what the Bacterial Leaf Blight and Brown Spot models drew on it.</p>
           <ul className="lp-see-facts">
             <li><strong>2</strong> specialist models, one photo</li>
             <li><strong>Full</strong> resolution, never a thumbnail</li>
-            <li><strong>Every</strong> outline reviewed by a person</li>
+            <li><strong>Every</strong> outline open for a specialist to check</li>
           </ul>
         </div>
         <div className="lp-see-frame" data-reveal><CompareSlider /></div>
@@ -366,12 +366,12 @@ function SeeSection() {
 }
 
 function HowSection() {
-  const checks = ["Original photo", "BLB model view", "Brown Spot model view", "Weather context", "Approximate map pin"];
+  const checks = ["Worst photo found", "Leaf area measured", "IRRI scale applied", "Sources searched", "Barangay named"];
   return (
     <section className="lp-section lp-how" id="how" aria-labelledby="lp-how-title">
       <div className="lp-section-head" data-reveal>
         <h2 id="lp-how-title">From one flight to one text</h2>
-        <p>Four steps, each one checked before the next. Nothing reaches a farmer's phone without a person approving it.</p>
+        <p>Four steps that run on their own, in minutes. A specialist checks every finding afterwards, and a wrong alert is corrected by text.</p>
       </div>
       <div className="lp-bento" data-reveal>
         <article className="lp-card lp-card-capture" data-live>
@@ -392,22 +392,22 @@ function HowSection() {
         </article>
         <article className="lp-card lp-card-review" data-live>
           <div className="lp-review-ui" aria-hidden="true">
-            <div className="lp-review-head"><ShieldCheck size={16} /> Reviewer checklist</div>
+            <div className="lp-review-head"><ShieldCheck size={16} /> Automatic checks</div>
             <ul>{checks.map((check, index) => <li key={check} style={vars({ "--k": index })}><span><Check size={13} strokeWidth={3} /></span>{check}</li>)}</ul>
-            <div className="lp-stamp">Approved</div>
+            <div className="lp-stamp">Ready</div>
           </div>
-          <div className="lp-card-body"><span className="lp-step">Step 3 · Review</span><h3>A person decides</h3><p>Weak or doubtful findings stop here. Approved ones get weather and an approximate pin.</p></div>
+          <div className="lp-card-body"><span className="lp-step">Step 3 · Grade and advise</span><h3>Severity, place and advice</h3><p>The most affected photo is graded on the IRRI scale, and the AI writes the advice from IRRI and PhilRice sources.</p></div>
         </article>
         <article className="lp-card lp-card-publish" data-live>
           <div className="lp-publish-ui" aria-hidden="true">
             <div className="lp-mini-bulletin">
               <img src="/images/field/disease-blb-800.webp" alt="" width="800" height="1000" loading="lazy" />
-              <div><span className="lp-pill">Reviewed</span><strong>BLB advisory · Cagayan</strong><small>Walk the marked area and check the leaf tips.</small></div>
+              <div><span className="lp-pill">?</span><strong>BLB advisory · Cagayan</strong><small>Walk the marked area and check the leaf tips.</small></div>
             </div>
             <div className="lp-mini-sms"><MessageSquareText size={16} /><span><b>RiceGuardAI</b> BLB advisory near your field. Details: riceguardai.dev</span></div>
             <span className="lp-mini-pin"><MapPin size={18} /></span>
           </div>
-          <div className="lp-card-body"><span className="lp-step">Step 4 · Publish</span><h3>Bulletin, map and SMS</h3><p>The advisory goes public, and a separate decision texts farmers registered nearby.</p></div>
+          <div className="lp-card-body"><span className="lp-step">Step 4 · Publish</span><h3>Bulletin, map and SMS</h3><p>The post goes up with a ? until a specialist confirms it, and farmers registered within 3 km get a text.</p></div>
         </article>
       </div>
     </section>
@@ -517,8 +517,7 @@ function SmsSection({ smsPath, smsLabel }: { smsPath: string; smsLabel: string }
           </div>
         </div>
         <div className="lp-sms-copy">
-          <span className="lp-pill is-dark"><MessageSquareText size={14} /> Works on any phone</span>
-          <h2 id="lp-sms-title">An alert built for a basic phone</h2>
+                    <h2 id="lp-sms-title">An alert built for a basic phone</h2>
           <p>No app, no data plan. Try the options and watch the real message format update.</p>
           <div className="lp-control">
             <span className="lp-control-label">Province</span>
@@ -529,7 +528,7 @@ function SmsSection({ smsPath, smsLabel }: { smsPath: string; smsLabel: string }
             </div>
           </div>
           <div className="lp-control">
-            <span className="lp-control-label">Disease confirmed by the reviewer</span>
+            <span className="lp-control-label">Disease found</span>
             <div className="lp-segment" role="radiogroup" aria-label="Disease" style={vars({ "--pos": disease === "BLB" ? 0 : 1 })}>
               <span className="lp-segment-thumb" aria-hidden="true" />
               {(["BLB", "Brown Spot"] as const).map((item) => (
@@ -565,7 +564,7 @@ function AdvisoriesSection({ items, loading, error }: { items: Bulletin[]; loadi
       <div className="lp-section-head is-row" data-reveal>
         <div>
           <h2 id="lp-latest-title">Latest field advisories</h2>
-          <p>Reviewed findings, published with what to do next.</p>
+          <p>Automatic findings with what to do next. A ? means a specialist has not checked it yet.</p>
         </div>
         <Link className="lp-button lp-button-dark" to="/bulletin">Open the bulletin <ArrowRight size={17} /></Link>
       </div>
@@ -579,7 +578,7 @@ function AdvisoriesSection({ items, loading, error }: { items: Bulletin[]; loadi
               <Link key={item.id} to={`/advisories/${item.slug}`} className="lp-advisory">
                 <div className="lp-advisory-media">{image ? <img src={image} alt="" loading="lazy" decoding="async" /> : null}<span className="lp-pill">{reviewedDiseaseLabel(item) === "BLB" ? "Bacterial Leaf Blight" : reviewedDiseaseLabel(item)}</span></div>
                 <div className="lp-advisory-body">
-                  <time dateTime={item.published_at}>{formatDay(item.published_at || item.date)}</time>
+                  <span className="lp-advisory-meta"><time dateTime={item.published_at}>{formatDay(item.published_at || item.date)}</time><VerificationBadge status={item.verification_status} size="sm" /></span>
                   <strong>{item.title}</strong>
                   <small><MapPin size={13} /> {item.location}</small>
                 </div>
@@ -591,7 +590,7 @@ function AdvisoriesSection({ items, loading, error }: { items: Bulletin[]; loadi
             <img src="/images/mascot/bulletin-reader-v2.png" alt="" width="160" height="160" loading="lazy" />
             <div>
               <strong>{error ? "Field updates are out of reach right now." : "No published advisories yet."}</strong>
-              <p>{error ? "Please check back in a little while." : "Only approved findings appear here. An empty bulletin does not mean a field is disease-free."}</p>
+              <p>{error ? "Please check back in a little while." : "Only analysed surveys appear here. An empty bulletin does not mean a field is disease-free."}</p>
             </div>
           </div>
         )}
@@ -607,7 +606,7 @@ function MapSection({ items }: { items: Bulletin[] }) {
       <div className="lp-map-card" data-reveal>
         <div className="lp-map-copy">
           <h2 id="lp-map-title">Where the updates come from</h2>
-          <p>Browse reviewed updates across the five provinces of Region II. Each marker is a general survey area; exact farm locations stay private.</p>
+          <p>Browse updates across the five provinces of Region II. Each marker is a surveyed field; farmers' names and numbers stay private.</p>
           <ul className="lp-map-provinces">{PROVINCES.map((item) => <li key={item.name}>{item.name}</li>)}</ul>
           <Link className="lp-button" to="/map">Explore the map <ArrowUpRight size={17} /></Link>
         </div>
@@ -625,7 +624,7 @@ function CloseSection({ smsPath, smsLabel }: { smsPath: string; smsLabel: string
       <div className="lp-close-glow" aria-hidden="true" />
       <div className="lp-close-inner" data-reveal>
         <h2 id="lp-close-title"><span>Know before</span> <span>it spreads.</span></h2>
-        <p>Register your farm and mobile number. We text you only when a reviewed advisory concerns fields near yours.</p>
+        <p>Register your farm and mobile number. We text you when a disease is found in fields near yours.</p>
         <div className="lp-close-actions">
           <Link className="lp-button lp-button-lg" to={smsPath}>{smsLabel} <MessageSquareText size={18} /></Link>
           <Link className="lp-ghost" to="/bulletin">Read the bulletin <ArrowRight size={16} /></Link>
@@ -640,7 +639,7 @@ function LandingFooter({ smsPath, registered }: { smsPath: string; registered: b
   return (
     <footer className="lp-footer">
       <div className="lp-footer-cols">
-        <div className="lp-footer-brand"><Wordmark light /><p>Drone imagery, two disease models and human review, for rice farmers in Region II.</p></div>
+        <div className="lp-footer-brand"><Wordmark light /><p>Drone imagery, two disease models and specialist checks, for rice farmers in Region II.</p></div>
         <div><strong>Public information</strong><Link to="/bulletin">Field advisories</Link><Link to="/map">Monitoring map</Link><Link to={smsPath}>{registered ? "SMS preferences" : "SMS registration"}</Link></div>
         <div><strong>Account</strong><Link to="/preferences">Alert preferences</Link><Link to="/login">Authorized staff login</Link></div>
         <div><strong>Coverage</strong><span>Batanes, Cagayan, Isabela, Nueva Vizcaya and Quirino</span></div>

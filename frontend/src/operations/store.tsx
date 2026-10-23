@@ -135,6 +135,17 @@ export function OperationsProvider({
       document.removeEventListener("visibilitychange", wake);
     };
   }, [demo, refresh]);
+  // Realtime: automation steps, surveys and jobs push changes the moment they happen.
+  useEffect(() => {
+    if (demo) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const soon = () => { clearTimeout(timer); timer = setTimeout(() => void refresh(), 600); };
+    const channel = supabase.channel("rg-operations-live");
+    for (const table of ["rg_pipeline_steps", "rg_surveys", "rg_processing_jobs"])
+      channel.on("postgres_changes", { event: "*", schema: "public", table }, soon);
+    channel.subscribe();
+    return () => { clearTimeout(timer); void supabase.removeChannel(channel); };
+  }, [demo, refresh]);
   useEffect(() => {
     if (demo) localStorage.setItem(key, JSON.stringify(data));
   }, [data, demo]);

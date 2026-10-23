@@ -16,6 +16,7 @@ import {
 import * as exifr from "exifr";
 import { createMD5, createSHA256 } from "hash-wasm";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 import { FieldMap } from "./Map";
 import { useOperations, operation } from "./store";
 import { ReviewJourney } from "./ReviewJourney";
@@ -37,6 +38,8 @@ interface UploadFile {
   kind: "image" | "video" | "sidecar";
   gps?: { latitude: number; longitude: number };
   gpsSource?: "exif" | "dji_xmp";
+  make?: string;
+  takenAt?: string;
   clipStart: number;
   clipDuration: number;
   linkedPhotoLocalId: string;
@@ -148,6 +151,9 @@ async function inspect(file: File): Promise<UploadFile> {
     height,
     duration,
     orientation: normalizeExifOrientation(meta?.Orientation),
+    make: typeof meta?.Make === "string" ? meta.Make.trim() : undefined,
+    takenAt: meta?.DateTimeOriginal instanceof Date && !Number.isNaN(meta.DateTimeOriginal.getTime())
+      ? meta.DateTimeOriginal.toISOString() : undefined,
     mime,
     kind,
     gps,
@@ -214,19 +220,40 @@ export function UploadWorkspace() {
   const [errors, setErrors] = useState<string[]>([]);
   const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null);
   const [pinSource, setPinSource] = useState<"photo_average" | "manual" | null>(null);
-  const [confirmed, setConfirmed] = useState(false);
+  const [place, setPlace] = useState<string | null>(null);
+  const [camera, setCamera] = useState("auto");
   const photoLocation = useMemo(() => surveyPhotoLocation(files), [files]);
+  // Every photo carries GPS (and they sit within 1 km): the pin is set for you.
+  // One photo without GPS is enough to ask for a manual pin.
+  const autoLocation = photoLocation.photoCount > 0 && photoLocation.gpsCount === photoLocation.photoCount && photoLocation.center
+    ? photoLocation.center : null;
   const previousPhotoSelection = useRef("");
   useEffect(() => {
     const selection = files.map(file => file.hash).join(":");
     if (previousPhotoSelection.current === selection) return;
     previousPhotoSelection.current = selection;
-    setConfirmed(false);
-    if (pinSource !== "manual") {
-      setPin(photoLocation.center);
-      setPinSource(photoLocation.center ? "photo_average" : null);
+    if (autoLocation) {
+      setPin(autoLocation);
+      setPinSource("photo_average");
+    } else if (pinSource !== "manual") {
+      setPin(null);
+      setPinSource(null);
     }
-  }, [files, photoLocation, pinSource]);
+  }, [files, autoLocation, pinSource]);
+  useEffect(() => {
+    setPlace(null);
+    if (!pin || demo) return;
+    let cancelled = false;
+    void supabase.rpc("rg_reverse_geocode", { p_lat: pin.lat, p_lng: pin.lng }).then(({ data: found }) => {
+      if (!cancelled) setPlace(found?.label || (found?.method === "outside_region" ? "Labas sa Region II" : null));
+    });
+    return () => { cancelled = true; };
+  }, [pin, demo]);
+  const detectedCamera = useMemo(() => {
+    const makes = [...new Set(files.map((file) => file.make).filter(Boolean))];
+    return makes.length ? makes.join(" / ") : null;
+  }, [files]);
+  const takenAt = useMemo(() => files.map((file) => file.takenAt).filter(Boolean).sort()[0] || null, [files]);
   const base = demo ? "/demo" : "/admin";
   const resumableSurvey = useMemo(() => findResumableSurvey(
     data.surveys,
@@ -297,7 +324,7 @@ export function UploadWorkspace() {
   };
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!files.length || (!resumableSurvey && (!pin || !confirmed))) return;
+    if (!files.length || (!resumableSurvey && !pin)) return;
     const photos = files.filter((item) => item.kind === "image");
     const videos = files.filter((item) => item.kind === "video");
     const eligiblePhotos = photos.length >= 1 && photos.length <= 4 && files.length === photos.length && files.every((item) =>
@@ -329,25 +356,29 @@ export function UploadWorkspace() {
       return;
     }
     const id = resumableSurvey?.id || crypto.randomUUID();
-    const capturedAt = resumableSurvey?.captured_at || new Date(String(form.get("captured_at"))).toISOString();
-    const camera = resumableSurvey?.camera || String(form.get("camera"));
+    const capturedAt = resumableSurvey?.captured_at || takenAt || new Date().toISOString();
+    const cameraLabel = resumableSurvey?.camera || (camera === "auto" ? detectedCamera || "Hindi natukoy"
+      : camera === "other" ? String(form.get("camera_other") || "Iba pa").trim() : camera);
+    const surveyName = String(form.get("name") || "").trim() ||
+      `${(place || "Rice field").replace(/^Brgy\. /, "")} · ${new Date(capturedAt).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}`;
     setBusy(true);
     try {
       if (!resumableSurvey) {
         await addSurvey({
           id,
           ...(!demo ? { inference_provider: pinnedMediaEnabled ? "kaggle_yolo26" as const : "aws" as const } : {}),
-          name: String(form.get("name")),
-          location: String(form.get("location")),
+          name: surveyName.slice(0, 160),
+          location: place || "",
           captured_at: capturedAt,
-          camera,
+          camera: cameraLabel.slice(0, 120),
           status: "Awaiting upload",
           photos: files.length,
           expected_assets: files.length,
           severity: "not_calibrated",
           lat: pin?.lat ?? null,
           lng: pin?.lng ?? null,
-          location_status: pin ? pinSource === "manual" ? "needs_review" : "extracted" : "missing",
+          location_status: pin ? "verified" : "missing",
+          location_source: pinSource === "manual" ? "manual_pin" : pin ? "exif_median" : "none",
           crop_stage: String(form.get("crop_stage") || "unknown") as "unknown" | "seedling" | "vegetative" | "reproductive" | "ripening" | "post_harvest",
           field_conditions: form.getAll("field_conditions").map(String) as ("standing_water" | "lodging" | "dry_or_cracked_soil" | "nutrient_stress_suspected" | "pest_damage_suspected")[],
         });
@@ -480,8 +511,8 @@ export function UploadWorkspace() {
     <>
       <div className="rg-page-heading">
         <div>
-          <div className="rg-eyebrow">CAPTURE → UPLOAD → REVIEW</div>
-          <h1>Create a drone survey</h1>
+          <div className="rg-eyebrow">UPLOAD → AUTOMATIC ADVISORY</div>
+          <h1>Bagong survey</h1>
           <p>
             {demo
               ? "Explore photo, video, and DJI telemetry validation with local demo files. No model inference runs in demo mode."
@@ -503,16 +534,6 @@ export function UploadWorkspace() {
       </div>
       <form className="rg-upload-grid" onSubmit={submit}>
         <section className="rg-panel rg-form">
-          <div className="rg-upload-guide" aria-label="Manual upload guide">
-            <strong>Manual upload — four quick steps</strong>
-            <ol>
-              <li>Select all field photos together, plus one optional video.</li>
-              <li>RiceGuardAI reads valid DJI/EXIF coordinates and suggests one average camera location for the photo batch.</li>
-              <li>Confirm that the images belong to one field. Check the suggested pin, or choose a manual pin when GPS is missing or conflicting.</li>
-              <li>Submit once. Detection, weather context, source-backed advisory drafting, and the review record continue automatically.</li>
-            </ol>
-            <small>The verified production batch is 1–10 photos plus one video clip. For more media, create the next batch so every file retains a traceable result revision.</small>
-          </div>
           {resumableSurvey ? (
             <div className="rg-notice rg-warning" role="status">
               <CheckCircle2 size={18} />
@@ -522,64 +543,7 @@ export function UploadWorkspace() {
               </div>
             </div>
           ) : null}
-          <h2>01 · Flight details</h2>
-          <div className="rg-form-grid">
-            <label>
-              Survey name
-              <input
-                required={!resumableSurvey}
-                name="name"
-                placeholder="Santa Maria · Morning flight"
-                maxLength={160}
-              />
-            </label>
-            <label>
-              Camera / aircraft ID
-              <input
-                required={!resumableSurvey}
-                name="camera"
-                placeholder="DJI-LITO-X1-01"
-                maxLength={120}
-              />
-            </label>
-            <label>
-              Capture date & time
-              <input required={!resumableSurvey} type="datetime-local" name="captured_at" />
-            </label>
-            <label>
-              Location note
-              <input
-                name="location"
-                placeholder="Barangay, municipality, province (optional until review)"
-                maxLength={240}
-              />
-            </label>
-          </div>
-          <h2>02 · Field context</h2>
-          <p className="rg-muted">These reviewed observations make the advisory situation-specific. The disease models do not infer flooding, crop stage, nutrient stress, or pests.</p>
-          <div className="rg-form-grid">
-            <label>
-              Crop stage
-              <select name="crop_stage" defaultValue="unknown">
-                <option value="unknown">Not confirmed</option>
-                <option value="seedling">Seedling</option>
-                <option value="vegetative">Vegetative / tillering</option>
-                <option value="reproductive">Reproductive / heading</option>
-                <option value="ripening">Ripening / maturity</option>
-                <option value="post_harvest">Post-harvest</option>
-              </select>
-            </label>
-          </div>
-          <fieldset className="rg-field-conditions">
-            <legend>Conditions observed during capture</legend>
-            <label className="rg-check"><input type="checkbox" name="field_conditions" value="standing_water" />Standing water / possible flooding</label>
-            <label className="rg-check"><input type="checkbox" name="field_conditions" value="lodging" />Lodged or flattened plants</label>
-            <label className="rg-check"><input type="checkbox" name="field_conditions" value="dry_or_cracked_soil" />Dry or cracked soil</label>
-            <label className="rg-check"><input type="checkbox" name="field_conditions" value="nutrient_stress_suspected" />Possible nutrient stress</label>
-            <label className="rg-check"><input type="checkbox" name="field_conditions" value="pest_damage_suspected" />Possible pest or animal damage</label>
-          </fieldset>
-          <small className="rg-muted">Leave all unchecked when none is confirmed. Weather alone never marks a field as flooded.</small>
-          <h2>03 · Original media</h2>
+          <h2>1 · Mga larawan</h2>
           <label
             className="rg-dropzone"
             onDragOver={(e) => e.preventDefault()}
@@ -588,11 +552,9 @@ export function UploadWorkspace() {
               void choose(e.dataTransfer.files);
             }}
           >
-            <UploadCloud size={36} />
-            <strong>
-              {busy ? "Working on the batch…" : demo ? "Drop drone photos, videos or telemetry here" : pinnedMediaEnabled ? "Drop survey photos and one optional MP4 here" : "Drop drone photos here"}
-            </strong>
-            <span>{demo ? "or tap to browse · JPEG / PNG / MP4 / SRT / CSV / JSON · up to 250 files" : pinnedMediaEnabled ? "or tap to browse · 1–10 JPEG/PNG + optional MP4 · up to 11 files" : "or tap to browse · JPEG / PNG · up to 4 photos · 60 MP / 200 MB each"}</span>
+            <UploadCloud size={32} />
+            <strong>{busy ? "Inihahanda ang mga larawan…" : "I-drop dito ang mga larawan ng palayan"}</strong>
+            <span>{pinnedMediaEnabled ? "o i-tap para pumili · 1–10 JPEG/PNG + isang MP4 (opsyonal)" : "o i-tap para pumili · JPEG / PNG"}</span>
             <input
               type="file"
               accept={demo || pinnedMediaEnabled ? "image/jpeg,image/png,video/mp4" : "image/jpeg,image/png"}
@@ -603,9 +565,6 @@ export function UploadWorkspace() {
                 e.target.value = "";
               }}
             />
-            <small>
-              Native dimensions preserved. SHA-256 exact-duplicate checking.
-            </small>
           </label>
           {errors.length > 0 && (
             <div className="rg-notice rg-warning" role="alert">
@@ -624,121 +583,151 @@ export function UploadWorkspace() {
                   <strong>{f.file.name}</strong>
                   <small>
                     {f.width && f.height ? `${f.width} × ${f.height} · ` : ""}
-                    {(f.file.size / 1048576).toFixed(1)} MB ·{" "}
-                    {f.gps
-                      ? "Camera GPS available for the survey average"
-                      : "No embedded GPS; not included in the location average"}
+                    {(f.file.size / 1048576).toFixed(1)} MB · {f.kind === "video" ? "video" : f.gps ? "may GPS" : "walang GPS"}
                   </small>
                   <small>{f.status}</small>
                   {!demo && pinnedMediaEnabled && f.kind === "video" ? (
                     <div className="rg-form-grid">
                       <label>
-                        Clip start (seconds)
+                        Simula ng clip (segundo)
                         <input type="number" min={0} max={Math.max(0, (f.duration || 0) - 1 / 30)} step={1 / 30}
                           value={f.clipStart} disabled={busy}
                           onChange={(event) => setFiles((current) => current.map((item) => item.id === f.id
                             ? { ...item, clipStart: Number(event.target.value) } : item))} />
                       </label>
                       <label>
-                        Clip duration (max 30 seconds)
+                        Haba ng clip (max 30 s)
                         <input type="number" min={1 / 30} max={Math.min(30, Math.max(1 / 30, (f.duration || 0) - f.clipStart))}
                           step={1 / 30} value={f.clipDuration} disabled={busy}
                           onChange={(event) => setFiles((current) => current.map((item) => item.id === f.id
                             ? { ...item, clipDuration: Number(event.target.value) } : item))} />
                       </label>
                       <label>
-                        Location-reference photo
+                        Larawang kasama ng video
                         <select value={f.linkedPhotoLocalId} required disabled={busy}
                           onChange={(event) => setFiles((current) => current.map((item) => item.id === f.id
                             ? { ...item, linkedPhotoLocalId: event.target.value } : item))}>
-                          <option value="">Auto-select the first survey photo</option>
+                          <option value="">Unang larawan (auto)</option>
                           {files.filter((item) => item.kind === "image").map((photo) =>
                             <option key={photo.id} value={photo.id}>{photo.file.name}</option>)}
                         </select>
                       </label>
-                      <small>Video location will use this photo’s verified camera/survey reference point. The video does not create a flight path.</small>
                     </div>
                   ) : null}
-                  <progress
-                    aria-label={`Upload progress for ${f.file.name}`}
-                    value={f.progress}
-                    max={100}
-                  />
+                  {f.progress > 0 ? (
+                    <progress aria-label={`Upload progress for ${f.file.name}`} value={f.progress} max={100} />
+                  ) : null}
                 </span>
                 <button
                   type="button"
                   className="rg-icon-button"
                   aria-label={`Remove ${f.file.name}`}
                   disabled={busy}
-                  onClick={() =>
-                    setFiles((fs) => fs.filter((x) => x.id !== f.id))
-                  }
+                  onClick={() => setFiles((fs) => fs.filter((x) => x.id !== f.id))}
                 >
                   ×
                 </button>
               </div>
             ))}
           </div>
+          <details className="rg-upload-details">
+            <summary>3 · Detalye (opsyonal)</summary>
+            <div className="rg-form-grid">
+              <label>
+                Pangalan ng survey
+                <input name="name" placeholder={place ? `${place.replace(/^Brgy\. /, "")} · ngayon` : "Awtomatiko kung blangko"} maxLength={160} />
+              </label>
+              <label>
+                Camera
+                <select value={camera} onChange={(event) => setCamera(event.target.value)}>
+                  <option value="auto">{detectedCamera ? `Auto: ${detectedCamera}` : "Auto (mula sa larawan)"}</option>
+                  <option value="DJI drone">DJI drone</option>
+                  <option value="Cellphone">Cellphone</option>
+                  <option value="other">Iba pa (pakisulat)</option>
+                </select>
+              </label>
+              {camera === "other" ? (
+                <label>
+                  Anong camera?
+                  <input name="camera_other" required maxLength={120} placeholder="hal. Canon EOS" />
+                </label>
+              ) : null}
+              <label>
+                Yugto ng palay
+                <select name="crop_stage" defaultValue="unknown">
+                  <option value="unknown">Hindi sigurado</option>
+                  <option value="seedling">Punla (seedling)</option>
+                  <option value="vegetative">Nag-uusbong / tillering</option>
+                  <option value="reproductive">Nagbubuntis / heading</option>
+                  <option value="ripening">Nahihinog</option>
+                  <option value="post_harvest">Tapos na ang ani</option>
+                </select>
+              </label>
+            </div>
+            <fieldset className="rg-field-conditions">
+              <legend>Kalagayan ng bukid (lagyan ng check kung meron)</legend>
+              <label className="rg-check"><input type="checkbox" name="field_conditions" value="standing_water" />Nakababad sa tubig / baha</label>
+              <label className="rg-check"><input type="checkbox" name="field_conditions" value="lodging" />Nakadapa ang palay</label>
+              <label className="rg-check"><input type="checkbox" name="field_conditions" value="dry_or_cracked_soil" />Tuyo o bitak ang lupa</label>
+              <label className="rg-check"><input type="checkbox" name="field_conditions" value="nutrient_stress_suspected" />Mukhang kulang sa abono</label>
+              <label className="rg-check"><input type="checkbox" name="field_conditions" value="pest_damage_suspected" />May sira ng peste o hayop</label>
+            </fieldset>
+          </details>
         </section>
         <aside className="rg-panel rg-form">
-          <h2>04 · Confirm the field</h2>
-          <p className="rg-muted">
-            One survey, one field pin. Valid EXIF/DJI camera coordinates suggest an average location across the photos. Check that all photos show the same field, then confirm or move the pin. This is not a surveyed field boundary. Public pins still use an approved approximate area.
-          </p>
-          <p role="status">{photoLocation.gpsCount ? `${photoLocation.gpsCount} of ${photoLocation.photoCount} photos have GPS · capture spread ${Math.round(photoLocation.spreadMeters)} m. Photos without GPS do not affect the average.` : "No photo GPS found. For screenshots or video captures, the administrator must choose a field pin manually."}</p>
-          {photoLocation.spreadMeters > 1000 ? <p className="rg-notice rg-warning" role="alert">Capture points are over 1 km apart. No average pin was applied. Verify whether these belong to one field; separate surveys if they do not, or choose a reviewed manual pin.</p> : null}
-          {pinSource === "manual" && photoLocation.center ? <button type="button" className="rg-button rg-secondary" disabled={busy} onClick={()=>{setPin(photoLocation.center);setPinSource("photo_average");setConfirmed(false);}}>Use photo GPS average</button> : null}
+          <h2>2 · Lokasyon ng bukid</h2>
+          {!files.length ? (
+            <p className="rg-muted">Pumili muna ng larawan. Kapag lahat ay may GPS, kusa nang ilalagay ang pin.</p>
+          ) : autoLocation && pinSource === "photo_average" ? (
+            <div className="rg-notice rg-success" role="status">
+              <CheckCircle2 size={18} />
+              <div>
+                <strong>Awtomatiko ang lokasyon</strong>
+                <p>Lahat ng {photoLocation.photoCount} larawan ay may GPS, kaya ginamit namin ang gitnang punto nila.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="rg-notice rg-warning" role="alert">
+              <MapPin size={18} />
+              <div>
+                <strong>Kailangan ng pin</strong>
+                <p>{photoLocation.requiresManualPin && photoLocation.gpsCount
+                  ? "Higit 1 km ang layo ng mga larawan sa isa't isa. I-tap ang mapa kung nasaan ang bukid."
+                  : `${photoLocation.photoCount - photoLocation.gpsCount} sa ${photoLocation.photoCount} larawan ang walang GPS. I-tap ang mapa kung nasaan ang bukid.`}</p>
+              </div>
+            </div>
+          )}
           <FieldMap
             onPick={(lat, lng) => {
               setPin({ lat, lng });
               setPinSource("manual");
-              setConfirmed(false);
             }}
-            points={
-              pin
-                ? [
-                    {
-                      ...pin,
-                      id: "selection",
-                      name: "Proposed survey location",
-                      severity: "unknown",
-                    },
-                  ]
-                : []
-            }
+            points={pin ? [{ ...pin, id: "selection", name: place || "Bukid", severity: "unknown" }] : []}
           />
           <p className="rg-location">
             <MapPin size={16} />
-            {pin
-              ? `${pin.lat.toFixed(6)}, ${pin.lng.toFixed(6)} · ${pinSource === "photo_average" ? "average camera location — needs confirmation" : "manual field pin"}`
-              : "Choose a manual field pin before creating this survey"}
+            {pin ? (place || "Hinahanap ang barangay…") : "Wala pang pin"}
           </p>
-          {resumableSurvey ? <p role="status">Resuming preserves the original survey location. Change it later in the location review step; the pin shown here does not overwrite it.</p> : null}
-          <label className="rg-check">
-            <input
-              type="checkbox"
-              checked={confirmed}
-              disabled={!pin}
-              onChange={(e) => setConfirmed(e.target.checked)}
-            />
-            I checked that these images belong to one field and confirmed this survey pin.
-          </label>
+          {pinSource === "manual" && autoLocation ? (
+            <button type="button" className="rg-button rg-secondary" disabled={busy}
+              onClick={() => { setPin(autoLocation); setPinSource("photo_average"); }}>
+              Gamitin ulit ang GPS ng larawan
+            </button>
+          ) : null}
+          {resumableSurvey ? <p role="status">Itutuloy ang dating survey gamit ang naunang lokasyon nito.</p> : null}
           <button
             className="rg-button rg-primary"
-            disabled={busy || !files.length || (!resumableSurvey && (!pin || !confirmed))}
+            disabled={busy || !files.length || (!resumableSurvey && !pin)}
             type="submit"
           >
             <UploadCloud size={18} />
-            {demo ? "Create demo survey" : resumableSurvey ? "Resume this upload" : "Create survey & upload"}
+            {demo ? "Create demo survey" : resumableSurvey ? "Ituloy ang upload" : "I-upload at suriin"}
           </button>
-          <div className="rg-notice">
-            <CircleAlert size={18} />
-            {demo
-              ? "Preview mode does not upload files or generate synthetic predictions for your photos."
-              : busy
-                ? "Keep this page open. Each original is verified before the private processing job is created."
-                : "If an upload is interrupted, reselect the exact original batch here to resume the same survey safely."}
-          </div>
+          <p className="rg-muted rg-upload-after">
+            {busy
+              ? "Huwag isara ang page habang nag-a-upload."
+              : "Pagkatapos nito, awtomatiko na ang detection, severity, payo, pag-post sa bulletin at SMS sa mga magsasaka."}
+          </p>
         </aside>
       </form>
     </>

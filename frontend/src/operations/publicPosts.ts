@@ -23,6 +23,10 @@ export type PublicPostRow = {
   approximate_lng: number | null;
   revision: number;
   advisory_sources?: Bulletin["advisory_sources"];
+  verification_status?: Bulletin["verification_status"];
+  verified_at?: string | null;
+  severity_detail?: Bulletin["severity_detail"];
+  place?: Bulletin["place"];
 };
 
 export function toBulletin(row: PublicPostRow): Bulletin {
@@ -35,7 +39,8 @@ export function toBulletin(row: PublicPostRow): Bulletin {
     disease: row.disease,
     diseases: row.diseases,
     severity: row.assessment_label,
-    body: [row.summary, row.limitations].filter(Boolean).join("\n\n"),
+    // Automated posts keep "what to watch for" separate; older posts appended limitations.
+    body: row.severity_detail ? row.summary : [row.summary, row.limitations].filter(Boolean).join("\n\n"),
     action: row.recommended_actions,
     date: row.published_at,
     status: "published",
@@ -48,6 +53,12 @@ export function toBulletin(row: PublicPostRow): Bulletin {
     updated_at: row.updated_at,
     revision: row.revision,
     advisory_sources: Array.isArray(row.advisory_sources) ? row.advisory_sources : [],
+    limitations: row.limitations || undefined,
+    correction_note: row.correction_note,
+    verification_status: row.verification_status || "verified",
+    verified_at: row.verified_at,
+    severity_detail: row.severity_detail,
+    place: row.place,
   };
 }
 
