@@ -12,7 +12,8 @@ export interface DiseaseFinding {
   disease: DiseaseName;
   status: "detected" | "not_detected" | "failed";
   predicted_pixels: number;
-  mask_meaning: "disease_region" | "affected_leaf";
+  /** Pinned-v3 specialists output lesion polygons; older results keep their historical meanings. */
+  mask_meaning: "disease_region" | "affected_leaf" | "lesion_area";
   mask_path: string | null;
   review_decision: FindingDecision;
   quality_flags: string[];
@@ -20,7 +21,8 @@ export interface DiseaseFinding {
 export interface ResultMedia {
   source_asset_id: string;
   type: "image" | "video";
-  variant: "original" | "BLB" | "Brown Spot" | "combined" | "video" | "publication_candidate";
+  variant: "original" | "BLB" | "Brown Spot" | "combined" | "video" | "publication_candidate" |
+    "web_original" | "web_combined" | "layer_BLB" | "layer_Brown Spot";
   path: string;
   width: number;
   height: number;
@@ -42,6 +44,14 @@ export interface ModelBundle {
     preprocessing: string;
   }>;
 }
+/** Integer pixel counts measured on the GPU worker (method exg_otsu_hsv_v1). */
+export interface PhotoMeasurements {
+  method: "exg_otsu_hsv_v1";
+  frame_pixels: number;
+  plant_pixels: number;
+  lesion_pixels: Record<DiseaseName, number>;
+}
+export const WEB_VARIANTS = ["web_original", "web_combined", "layer_BLB", "layer_Brown Spot"] as const;
 export interface VideoFrameReceipt {
   index: number;
   source_time_seconds: number;
@@ -76,6 +86,7 @@ export interface ResultV2 {
     capture_time: string | null;
     quality_flags: string[];
     ambiguous_overlap_pixels: number;
+    measurements?: PhotoMeasurements;
     frame_series?: VideoFrameSeries;
   }>;
   media: ResultMedia[];
@@ -110,6 +121,8 @@ export function bulletinDiseases(value: { disease: DiseaseName; diseases?: Disea
 /** A callback must match every source, pinned model, and authorized artifact prefix. */
 export function validateResultV2(value: unknown, expected: {
   run_id: string; manifest_hash: string; asset_ids: string[]; path_prefix: string; model_bundle: ModelBundle;
+  /** Set for the lesion-specialist bundle: every photo needs measurements and web variants. */
+  lesion_contract?: boolean;
   video_clips?: Record<string, { start_seconds: number; duration_seconds: number; fps: 30; linked_photo_asset_id: string }>;
 }): ResultV2 {
   const r = value as ResultV2;
@@ -128,7 +141,8 @@ export function validateResultV2(value: unknown, expected: {
     for (const d of a.diseases) {
       if (!DISEASES.includes(d.disease) || !["detected", "not_detected"].includes(d.status) || !Number.isInteger(d.predicted_pixels) || d.predicted_pixels < 0 || (a.kind === "image" && d.predicted_pixels > a.width * a.height) || (d.status === "detected") !== (d.predicted_pixels > 0) || d.review_decision !== "pending")
         throw new Error("Invalid disease finding");
-      if (d.mask_meaning !== (d.disease === "BLB" ? "disease_region" : "affected_leaf")) throw new Error("Invalid mask meaning");
+      const meaning = expected.lesion_contract ? "lesion_area" : d.disease === "BLB" ? "disease_region" : "affected_leaf";
+      if (d.mask_meaning !== meaning) throw new Error("Invalid mask meaning");
       if (!safePath(d.mask_path)) throw new Error("Each specialist must provide a private mask artifact");
     }
     const location = a.location;
@@ -184,7 +198,17 @@ export function validateResultV2(value: unknown, expected: {
         frameMembers.forEach((member) => members.add(member));
       }
     }
-    const requiredVariants = a.kind === "image" ? ["original", "BLB", "Brown Spot", "combined"] : ["video"];
+    if (expected.lesion_contract && a.kind === "image") {
+      const m = a.measurements;
+      const count = (n: unknown, max: number) => Number.isSafeInteger(n) && (n as number) >= 0 && (n as number) <= max;
+      if (!m || m.method !== "exg_otsu_hsv_v1" || m.frame_pixels !== a.width * a.height ||
+        !count(m.plant_pixels, m.frame_pixels) || !m.lesion_pixels ||
+        DISEASES.some((disease) => !count(m.lesion_pixels[disease], m.plant_pixels)))
+        throw new Error("Photo severity measurements are missing or invalid");
+    }
+    const requiredVariants = a.kind === "image"
+      ? ["original", "BLB", "Brown Spot", "combined", ...(expected.lesion_contract ? WEB_VARIANTS : [])]
+      : ["video"];
     if (!a.review_paths || requiredVariants.some((variant) => !safePath(a.review_paths[variant])) || Object.values(a.review_paths).some((path) => !safePath(path)))
       throw new Error("Private review variants are missing");
   }

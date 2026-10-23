@@ -1,0 +1,40 @@
+{
+  "activated": true,
+  "id": "riceguard-b10unet-yolo26l-20261023",
+  "models": {
+    "BLB": {
+      "architecture": "unet-convnext-b-dinov3",
+      "bucket": "riceguard-l40s-78407276-20260824",
+      "bytes": 185436939,
+      "foreground_class_id": 1,
+      "input_size": 1024,
+      "key": "website-inference/v2/models/7006f33bf08cdfe291a2e3907b28e9e71107289ad6ea81299c9c9b17e98bdf17.pt",
+      "mask_meaning": "lesion_area",
+      "preprocessing": "imagenet_rgb_mean_std_reflect_pad32_sigmoid_0.5",
+      "sha256": "7006f33bf08cdfe291a2e3907b28e9e71107289ad6ea81299c9c9b17e98bdf17",
+      "stitching": "binary_class_map_majority_vote_ties_foreground",
+      "stride": 768,
+      "validation": "b10 fold_a; 3-fold stitched Dice 0.786 (0.791 TTA), precision 0.772, recall 0.803"
+    },
+    "Brown Spot": {
+      "architecture": "yolo26l-semantic",
+      "bucket": "riceguard-l40s-78407276-20260824",
+      "bytes": 36084825,
+      "foreground_class_id": 1,
+      "input_size": 1024,
+      "key": "website-inference/v2/models/b311478a6c47e353c353b9ec060a3e885ad431394d7dade04b6972fd59060b33.pt",
+      "mask_meaning": "lesion_area",
+      "preprocessing": "ultralytics_pil_rgb_letterbox",
+      "sha256": "b311478a6c47e353c353b9ec060a3e885ad431394d7dade04b6972fd59060b33",
+      "stitching": "binary_class_map_majority_vote_ties_foreground",
+      "stride": 768,
+      "validation": "y02 LOSO scene 0002; 3-scene stitched Dice 0.865 (0.876 TTA), precision 0.873, recall 0.858"
+    }
+  },
+  "provider": "kaggle",
+  "runtime": {
+    "segmentation_models_pytorch": "0.5.0",
+    "timm": "1.0.30",
+    "ultralytics": "8.4.115"
+  }
+}

@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { awsSettings, signedAwsPost } from "../_shared/awsSigV4.ts";
 import { validateMediaSelection, type SourceAsset } from "../_shared/mediaSelection.ts";
-import { isSupportedPinnedWorkflow, validatePinnedResult } from "../_shared/pinnedResult.ts";
+import { expectedBundle, isSupportedPinnedWorkflow, validatePinnedResult } from "../_shared/pinnedResult.ts";
 import { handleAdvisoryMedia } from "../_shared/geminiConnector/completion.ts";
 import { notifyReadyEvent } from "../_shared/geminiConnector/notice.ts";
 
@@ -62,6 +62,20 @@ async function googleAccessToken() {
   driveToken = { value: body.access_token, expires: Date.now() + Number(body.expires_in || 3600) * 1000 };
   return driveToken.value;
 }
+// Start the automation now instead of waiting for the 2-minute sweeper. The response to
+// the GPU worker does not wait for it; the sweeper retries if this request is lost.
+function startAutoPipeline(surveyId: string) {
+  const secret = Deno.env.get("CRON_SECRET");
+  if (!secret) return;
+  const request = fetch(`${supabaseUrl}/functions/v1/auto-pipeline`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ survey_id: surveyId }),
+    signal: AbortSignal.timeout(5_000),
+  }).catch(() => undefined);
+  (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime?.waitUntil(request);
+}
+
 function validateManifest(manifest: Record<string, unknown>, job: Record<string, unknown>) {
   if (manifest.schema_version !== "riceguard.result.v1") throw new Error("Unsupported result schema");
   if (manifest.run_id !== job.run_id || manifest.source_manifest_hash !== job.manifest_hash)
@@ -213,10 +227,11 @@ Deno.serve(async (req) => {
       const response = await signedAwsPost(requestBody, awsSettings());
       const modelContext = await response.json().catch(() => null);
       const models = modelContext?.bundle?.models;
+      const pinned = expectedBundle(job.manifest?.pinned_workflow_sha256);
       if (!response.ok || !modelContext?.model_downloads ||
-        modelContext?.bundle?.id !== "riceguard-yolo26m-semantic-20260928" ||
-        models?.BLB?.sha256 !== "aa10d1f6c03baf189c56484db99e96ba55c646be1668d102bdaed78a43315bc6" ||
-        models?.["Brown Spot"]?.sha256 !== "58a1f4600887577749a22f7a8b43b81174bb082d68afd5f09f1079b79a18bca5")
+        modelContext?.bundle?.id !== pinned.id ||
+        models?.BLB?.sha256 !== pinned.models.BLB ||
+        models?.["Brown Spot"]?.sha256 !== pinned.models["Brown Spot"])
         throw new Error("Pinned private model downloads are unavailable");
       return json({
         job_id: job.id,
@@ -338,6 +353,7 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString(),
         }).eq("survey_id", job.survey_id).eq("result_revision", completed.data).eq("status", "draft");
         if (titled.error) throw new Error(titled.error.message);
+        startAutoPipeline(job.survey_id);
         return json({ accepted: true, result_revision: completed.data });
       }
       validateAwsResult(manifest, job);

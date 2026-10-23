@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
 
-BUNDLE_SHA256 = "98faa7b8541366bfd5751036f8111930fa3bb8cb2f0233d90c6c3d82e683a0da"
+BUNDLE_SHA256 = "0cdd9ec7c4846f5bf8c15449081bef38be1379da715f04240aab68161add86fd"
 KAGGLE_RUN_TIMEOUT_SECONDS = "3600"
 PINNED_SOURCES = {
     "prepare_clip.py": "workers/kaggle/prepare_clip.py",
@@ -23,9 +23,8 @@ PINNED_SOURCES = {
     "website_runner.py": "workers/kaggle/website_runner.py",
     "aws_website_adapter.py": "workers/aws/website_adapter.py",
     "aws_inference_core.py": "workers/aws/inference_core.py",
-    "advisory_media_derivatives.py": "workers/advisory_media/derivatives.py",
-    "advisory_media_catalogue.py": "workers/advisory_media/catalogue.py",
-    "advisory_media_orchestration.py": "workers/advisory_media/orchestration.py",
+    "specialists.py": "workers/kaggle/specialists.py",
+    "severity.py": "workers/kaggle/severity.py",
 }
 
 

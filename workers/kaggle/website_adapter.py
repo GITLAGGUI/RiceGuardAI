@@ -12,7 +12,6 @@ import json
 from pathlib import Path
 import re
 
-from workers.aws.website_adapter import BUNDLE_SHA256, pinned_bundle
 from .prepare_clip import digest
 
 
@@ -21,6 +20,12 @@ UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-
 SHA = re.compile(r"^[0-9a-f]{64}$")
 RUN = re.compile(r"^[a-zA-Z0-9_-]{1,80}$")
 VARIANTS = ("original", "BLB", "Brown Spot", "combined")
+# Web-sized public candidates: (variant, file suffix, media type label).
+WEB_VARIANTS = (("web_original", "jpg"), ("web_combined", "jpg"), ("layer_BLB", "png"), ("layer_Brown Spot", "png"))
+MASK_MEANING = "lesion_area"
+BUNDLE_SHA256 = "0cdd9ec7c4846f5bf8c15449081bef38be1379da715f04240aab68161add86fd"
+BUNDLE_ID = "riceguard-b10unet-yolo26l-20261023"
+ARCHITECTURES = {"BLB": "unet-convnext-b-dinov3", "Brown Spot": "yolo26l-semantic"}
 WORKFLOW_FILES = {
     "prepare_clip.py": "workers/kaggle/prepare_clip.py",
     "pinned_video_core.py": "workers/kaggle/pinned_video_core.py",
@@ -30,10 +35,46 @@ WORKFLOW_FILES = {
     "website_runner.py": "workers/kaggle/website_runner.py",
     "aws_website_adapter.py": "workers/aws/website_adapter.py",
     "aws_inference_core.py": "workers/aws/inference_core.py",
-    "advisory_media_derivatives.py": "workers/advisory_media/derivatives.py",
-    "advisory_media_catalogue.py": "workers/advisory_media/catalogue.py",
-    "advisory_media_orchestration.py": "workers/advisory_media/orchestration.py",
+    "specialists.py": "workers/kaggle/specialists.py",
+    "severity.py": "workers/kaggle/severity.py",
 }
+
+
+def pinned_bundle(bundle: dict) -> dict:
+    if bundle.get("id") != BUNDLE_ID or set(bundle.get("models", {})) != set(DISEASES):
+        raise ValueError("Unexpected model bundle")
+    models = {}
+    for disease in DISEASES:
+        spec = bundle["models"][disease]
+        artifact = spec["sha256"]
+        if not SHA.fullmatch(artifact) or spec["architecture"] != ARCHITECTURES[disease]:
+            raise ValueError("Unpinned model artifact")
+        if spec["foreground_class_id"] != 1 or spec["input_size"] != 1024 or spec["stride"] != 768:
+            raise ValueError("Model preprocessing mismatch")
+        models[disease] = {
+            "model_id": f"riceguard-{disease.lower().replace(' ', '-')}-{spec['architecture']}",
+            "version": artifact[:16],
+            "artifact_sha256": artifact,
+            "foreground_class_id": 1,
+            "input_size": 1024,
+            "overlap": 0.25,
+            "preprocessing": spec["preprocessing"],
+        }
+    return {"id": bundle["id"], "workflow_id": "kaggle-private-two-specialist-media-v1",
+            "workflow_sha256": BUNDLE_SHA256, "models": models}
+
+
+def _measurements(value: object, width: int, height: int) -> dict:
+    if not isinstance(value, dict):
+        raise ValueError("Invalid severity pixel measurements")
+    lesions, plant = value.get("lesion_pixels"), value.get("plant_pixels")
+    if (value.get("method") != "exg_otsu_hsv_v1" or value.get("frame_pixels") != width * height or
+            not isinstance(plant, int) or not 0 <= plant <= width * height or
+            not isinstance(lesions, dict) or set(lesions) != set(DISEASES) or
+            any(not isinstance(n, int) or not 0 <= n <= plant for n in lesions.values())):
+        raise ValueError("Invalid severity pixel measurements")
+    return {"method": value["method"], "frame_pixels": width * height, "plant_pixels": plant,
+            "lesion_pixels": {disease: lesions[disease] for disease in DISEASES}}
 
 
 def _local(root: Path, name: str) -> Path:
@@ -115,7 +156,7 @@ def build_result_v2(submitted_manifest: dict, bundle: dict, code_hashes: dict[st
             pixels = item.get("predicted_pixels")
             if (not isinstance(pixels, int) or not 0 <= pixels <= width * height or
                     item.get("status") != ("detected" if pixels else "not_detected") or
-                    item.get("mask_meaning") != ("disease_region" if disease == "BLB" else "affected_leaf")):
+                    item.get("mask_meaning") != MASK_MEANING):
                 raise ValueError("Invalid independent photo mask")
             local = _local(photos_root, item.get("mask_path"))
             key = private_prefix + f"photos/{asset_id}/{disease.lower().replace(' ', '-')}.png"
@@ -132,6 +173,18 @@ def build_result_v2(submitted_manifest: dict, bundle: dict, code_hashes: dict[st
             media.append({"source_asset_id": asset_id, "type": "image", "variant": variant,
                           "path": key, "width": width, "height": height, "sanitized": True,
                           "alt": f"Private {variant} review image"})
+        web_width, web_height = receipt.get("web_width"), receipt.get("web_height")
+        if (not isinstance(web_width, int) or not isinstance(web_height, int) or
+                not 0 < web_width <= width or not 0 < web_height <= height or max(web_width, web_height) > 2048):
+            raise ValueError("Invalid web-sized derivative dimensions")
+        for variant, suffix in WEB_VARIANTS:
+            local = _local(photos_root, receipt["review_paths"].get(variant))
+            key = private_prefix + f"photos/{asset_id}/{variant.lower().replace(' ', '-').replace('_', '-')}.{suffix}"
+            uploads[key] = local
+            review_paths[variant] = key
+            media.append({"source_asset_id": asset_id, "type": "image", "variant": variant,
+                          "path": key, "width": web_width, "height": web_height, "sanitized": True,
+                          "alt": f"Web {variant.replace('_', ' ')}"})
         location = receipt.get("location")
         if not isinstance(location, dict) or location.get("source") not in ("exif", "dji_xmp", "missing"):
             raise ValueError("Unverified photo location")
@@ -140,6 +193,7 @@ def build_result_v2(submitted_manifest: dict, bundle: dict, code_hashes: dict[st
                         "status": "complete", "diseases": diseases, "review_paths": review_paths,
                         "location": deepcopy(location), "capture_time": receipt.get("capture_time"),
                         "quality_flags": list(receipt.get("quality_flags") or []),
+                        "measurements": _measurements(receipt.get("measurements"), width, height),
                         "ambiguous_overlap_pixels": receipt.get("ambiguous_overlap_pixels", 0)})
 
     if videos:
@@ -201,7 +255,7 @@ def build_result_v2(submitted_manifest: dict, bundle: dict, code_hashes: dict[st
                         "status": "complete", "diseases": [
                             {"disease": disease, "status": "detected" if pixels[disease] else "not_detected",
                              "predicted_pixels": pixels[disease],
-                             "mask_meaning": "disease_region" if disease == "BLB" else "affected_leaf",
+                             "mask_meaning": MASK_MEANING,
                              "mask_path": archive_key, "review_decision": "pending", "quality_flags": []}
                             for disease in DISEASES],
                         "review_paths": {"video": video_key}, "location": linked_location,
@@ -231,5 +285,5 @@ def build_result_v2(submitted_manifest: dict, bundle: dict, code_hashes: dict[st
              "artifacts": artifacts,
              "severity": {"value": None, "method_version": None, "scope": "visible_leaf_area",
                           "availability_reason": "lesion_measurement_not_validated"},
-             "warnings": ["AI-assisted findings require staff review; frame-area coverage is not disease severity."]}, uploads)
+             "warnings": ["Automated findings; a specialist may still accept or reject each one."]}, uploads)
 

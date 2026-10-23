@@ -1,7 +1,8 @@
-"""Private native-size photo inference using the same pinned semantic specialists.
+"""Private native-size photo inference with the two pinned lesion specialists.
 
-Inputs are already verified Drive originals. Outputs are review candidates only;
-this module neither uploads, publishes nor computes disease severity.
+Inputs are already verified Drive originals. Outputs are full-resolution private review
+images, web-sized public candidates (original, combined and one transparent layer per
+disease) and pixel measurements for automated severity. Nothing here uploads or publishes.
 """
 
 from __future__ import annotations
@@ -14,18 +15,34 @@ import re
 import numpy as np
 from PIL import Image
 
-from workers.aws.inference_core import DISEASES, inspect_image, overlay
-from .pinned_video_core import stitch
+from workers.aws.inference_core import DISEASES, disease_layer, inspect_image, overlay, web_size
+from .severity import measure
+from .specialists import stitch
 
 
 UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", re.I)
 MAX_SOURCE_BYTES = 200_000_000
 MAX_PHOTOS = 10
+MASK_MEANING = "lesion_area"
+REVIEW_VARIANTS = ("original", "BLB", "Brown Spot", "combined")
+WEB_VARIANTS = ("web_original", "web_combined", "layer_BLB", "layer_Brown Spot")
 
 
 def digest(path: Path) -> str:
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def slug(name: str) -> str:
+    return name.lower().replace(" ", "-").replace("_", "-")
+
+
+def save_clean_jpeg(picture: Image.Image, out: Path, quality: int) -> None:
+    # Saving a new RGB pixel image drops source EXIF, DJI GPS and XMP.
+    picture.save(out, "JPEG", quality=quality, optimize=True)
+    with Image.open(out) as encoded:
+        if encoded.size != picture.size or encoded.getexif():
+            raise RuntimeError("Review derivative retained sensitive metadata")
 
 
 def run_photos(sources: list[dict], models: dict, output_dir: Path) -> list[dict]:
@@ -49,29 +66,37 @@ def run_photos(sources: list[dict], models: dict, output_dir: Path) -> list[dict
         asset_dir.mkdir()
         diseases = []
         for disease, mask in masks.items():
-            mask_path = asset_dir / f"{disease.lower().replace(' ', '-')}.png"
-            Image.fromarray(mask.astype(np.uint8) * 255).save(mask_path)
+            mask_path = asset_dir / f"{slug(disease)}.png"
+            Image.fromarray(mask.astype(np.uint8) * 255).save(mask_path, optimize=True)
             pixels = int(mask.sum())
             diseases.append({"disease": disease, "status": "detected" if pixels else "not_detected",
                              "predicted_pixels": pixels, "mask_path": mask_path.relative_to(output_dir).as_posix(),
-                             "mask_meaning": "disease_region" if disease == "BLB" else "affected_leaf",
-                             "review_decision": "pending"})
+                             "mask_meaning": MASK_MEANING, "review_decision": "pending"})
         review_paths = {}
-        for variant in ("original", "BLB", "Brown Spot", "combined"):
+        for variant in REVIEW_VARIANTS:
             picture = image if variant == "original" else overlay(
                 image, masks if variant == "combined" else {variant: masks[variant]})
-            out = asset_dir / f"{variant.lower().replace(' ', '-')}.jpg"
-            # Saving a new RGB pixel image drops source EXIF, DJI GPS and XMP.
-            picture.save(out, "JPEG", quality=92)
-            with Image.open(out) as encoded:
-                if encoded.size != image.size or encoded.getexif():
-                    raise RuntimeError("Native review derivative retained sensitive metadata")
+            out = asset_dir / f"{slug(variant)}.jpg"
+            save_clean_jpeg(picture, out, 90)
             review_paths[variant] = out.relative_to(output_dir).as_posix()
+        size = web_size(image.width, image.height)
+        web_original = image.resize(size, Image.Resampling.LANCZOS)
+        out = asset_dir / "web-original.jpg"
+        save_clean_jpeg(web_original, out, 84)
+        review_paths["web_original"] = out.relative_to(output_dir).as_posix()
+        out = asset_dir / "web-combined.jpg"
+        save_clean_jpeg(overlay(image, masks).resize(size, Image.Resampling.LANCZOS), out, 84)
+        review_paths["web_combined"] = out.relative_to(output_dir).as_posix()
+        for disease, mask in masks.items():
+            out = asset_dir / f"layer-{slug(disease)}.png"
+            disease_layer(mask, disease).save(out, optimize=True)
+            review_paths[f"layer_{disease}"] = out.relative_to(output_dir).as_posix()
         receipts.append({"source_asset_id": asset_id, "kind": "image", "status": "complete",
                          "source_sha256": expected_hash, "width": image.width, "height": image.height,
+                         "web_width": size[0], "web_height": size[1],
                          **metadata, "diseases": diseases, "review_paths": review_paths,
+                         "measurements": measure(np.asarray(image), masks),
                          "ambiguous_overlap_pixels": int((masks["BLB"] & masks["Brown Spot"]).sum()),
                          "severity": None})
     (output_dir / "photo_receipts.json").write_text(json.dumps(receipts, indent=2), encoding="utf-8")
     return receipts
-

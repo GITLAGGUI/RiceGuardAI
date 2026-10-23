@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
    const resume=nextManilaSixAm();checked(await db.from("rg_recipients").update({not_before:resume}).eq("status","queued").lt("not_before",resume));
    return json({...report,status:"quiet_hours",resume_at:resume});
   }
-  const recipients=checked(await db.from("rg_recipients").select("id,campaign_id,contact_id,phone,client_message_id,rg_campaigns!inner(id,bulletin_id,revision,message_text,device_id,sim_number,rg_bulletins!inner(status,advisory_revision,archived_at))").eq("status","queued").lte("not_before",new Date().toISOString()).order("created_at").limit(1));
+  const recipients=checked(await db.from("rg_recipients").select("id,campaign_id,contact_id,phone,client_message_id,rg_campaigns!inner(id,bulletin_id,revision,message_text,device_id,sim_number,rg_bulletins!inner(status,advisory_revision,archived_at))").eq("status","queued").lte("not_before",new Date().toISOString()).order("created_at").limit(10));
   for(const recipient of recipients || []) {
    const campaign=recipient.rg_campaigns;const bulletin=campaign.rg_bulletins;
    const contact=checked(await db.from("rg_contacts").select("consent,verified,phone").eq("id",recipient.contact_id).single());

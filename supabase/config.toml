@@ -94,3 +94,6 @@ verify_jwt = false
 
 [functions.advisory-notifier]
 verify_jwt = false
+
+[functions.auto-pipeline]
+verify_jwt = false

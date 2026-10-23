@@ -28,6 +28,13 @@ QUEUE = "riceguard-private-inference"
 JOB_DEFINITION = "riceguard-private-inference:4"
 ACCOUNT = "342278407276"
 BUNDLE_SHA256 = "98faa7b8541366bfd5751036f8111930fa3bb8cb2f0233d90c6c3d82e683a0da"
+# Kaggle website workflow: b10 UNet ConvNeXt-B (BLB) + YOLO26l semantic (Brown Spot).
+PINNED_BUNDLE_SHA256 = "0cdd9ec7c4846f5bf8c15449081bef38be1379da715f04240aab68161add86fd"
+PINNED_BUNDLE_ID = "riceguard-b10unet-yolo26l-20261023"
+PINNED_MODELS = {
+    "BLB": ("7006f33bf08cdfe291a2e3907b28e9e71107289ad6ea81299c9c9b17e98bdf17", "unet-convnext-b-dinov3"),
+    "Brown Spot": ("b311478a6c47e353c353b9ec060a3e885ad431394d7dade04b6972fd59060b33", "yolo26l-semantic"),
+}
 MAX_SOURCE = 200_000_000
 s3 = boto3.client("s3")
 presign_s3 = boto3.client("s3", config=Config(signature_version="s3v4"))
@@ -258,7 +265,7 @@ def signed_pinned_review(body):
     prefix = f"{PREFIX}/jobs/{run_id}/outputs/"
     if any(not isinstance(key, str) or not key.startswith(prefix) or ".." in key or
            "?" in key or ":" in key or "\\" in key or
-           not key.endswith((".jpg", ".mp4")) for key in paths):
+           not key.endswith((".jpg", ".png", ".mp4")) for key in paths):
         raise ValueError("Unauthorized private review key")
     return {key: s3.generate_presigned_url("get_object", Params={"Bucket": BUCKET, "Key": key}, ExpiresIn=900)
             for key in paths}
@@ -269,24 +276,19 @@ def signed_pinned_models(body):
     run_id = body.get("run_id", "")
     if not isinstance(run_id, str) or not re.fullmatch(r"rg-[a-z0-9-]{8,80}", run_id):
         raise ValueError("Invalid pinned run identifier")
-    bundle_key = f"{PREFIX}/bundles/{BUNDLE_SHA256}.json"
+    bundle_key = f"{PREFIX}/bundles/{PINNED_BUNDLE_SHA256}.json"
     raw = s3.get_object(Bucket=BUCKET, Key=bundle_key)["Body"].read()
-    if hashlib.sha256(raw).hexdigest() != BUNDLE_SHA256:
+    if hashlib.sha256(raw).hexdigest() != PINNED_BUNDLE_SHA256:
         raise ValueError("Private model bundle checksum differs")
     bundle = json.loads(raw)
-    if (bundle.get("id") != "riceguard-yolo26m-semantic-20260928" or
-            set(bundle.get("models", {})) != {"BLB", "Brown Spot"}):
+    if bundle.get("id") != PINNED_BUNDLE_ID or set(bundle.get("models", {})) != set(PINNED_MODELS):
         raise ValueError("Unexpected private model bundle")
     downloads = {}
-    expected = {
-        "BLB": "aa10d1f6c03baf189c56484db99e96ba55c646be1668d102bdaed78a43315bc6",
-        "Brown Spot": "58a1f4600887577749a22f7a8b43b81174bb082d68afd5f09f1079b79a18bca5",
-    }
-    for disease, expected_hash in expected.items():
+    for disease, (expected_hash, architecture) in PINNED_MODELS.items():
         model = bundle["models"][disease]
         key = model.get("key")
         if (model.get("sha256") != expected_hash or key != f"{PREFIX}/models/{expected_hash}.pt" or
-                model.get("architecture") != "yolo26m-semantic"):
+                model.get("architecture") != architecture):
             raise ValueError("Unpinned private model artifact")
         head = s3.head_object(Bucket=BUCKET, Key=key)
         if (head.get("ContentLength") != model.get("bytes") or

@@ -13,16 +13,17 @@ import tempfile
 import time
 
 subprocess.check_call([sys.executable, "-m", "pip", "install", "-q",
-                       "ultralytics==8.4.115", "requests==2.32.5", "Pillow==11.3.0"])
+                       "ultralytics==8.4.115", "segmentation-models-pytorch==0.5.0", "timm==1.0.30",
+                       "requests==2.32.5", "Pillow==11.3.0"])
 
 import requests
 
 from workers.kaggle.pinned_photo_core import run_photos
-from workers.kaggle.pinned_video_core import load_models, run as run_video
+from workers.kaggle.pinned_video_core import run as run_video
+from workers.kaggle.specialists import load_specialists
 from workers.kaggle.prepare_clip import digest, prepare
 from workers.kaggle.private_upload import upload_private
 from workers.kaggle.website_adapter import build_result_v2, local_code_hashes
-from workers.advisory_media.orchestration import prepare_advisory_media
 
 
 JOB_ID = os.environ.get("RICEGUARD_JOB_ID", "")
@@ -105,7 +106,7 @@ def main():
     for disease, filename in (("BLB", "blb.pt"), ("Brown Spot", "brownspot.pt")):
         model = context["bundle"]["models"][disease]
         download(context["model_downloads"][disease], inputs / filename, model["sha256"])
-    models, runtime = load_models(inputs)
+    models, runtime = load_specialists(inputs)
     callback("progress", {"progress": 7, "stage": "models-verified", "runtime": runtime}, True)
 
     sources = []
@@ -153,18 +154,10 @@ def main():
     if not isinstance(completion, dict) or completion.get("accepted") is not True:
         raise RuntimeError("Native result completion was not accepted")
     NATIVE_COMPLETED = True
-    advisory = prepare_advisory_media(result, uploads, root / "advisory-media", context=context,
-                                      job_id=JOB_ID, completion=completion,
-                                      callback=callback, upload_private=upload_private)
     operational = {
         "job_id": JOB_ID, "run_id": RUN_ID, "status": "callback_verified",
         "assets": len(result["assets"]), "private_artifacts": len(result["artifacts"]),
     }
-    if advisory["status"] != "disabled":
-        operational["inference_status"] = "callback_verified"
-        operational["advisory_media"] = advisory
-        if advisory["status"] == "advisory_media_failed":
-            operational["status"] = "advisory_media_failed"
     (Path("/kaggle/working") / "riceguard_private_completion.json").write_text(
         json.dumps(operational, indent=2), encoding="utf-8")
 
@@ -179,6 +172,5 @@ if __name__ == "__main__":
             finally:
                 raise
         # A local post-completion error cannot turn accepted inference into failed.
-        print(json.dumps({"status": "advisory_media_failed", "inference_status": "callback_verified",
-                          "error_code": "ADVISORY_MEDIA_POST_COMPLETION_FAILED"}))
+        print(json.dumps({"status": "post_completion_error", "inference_status": "callback_verified"}))
 

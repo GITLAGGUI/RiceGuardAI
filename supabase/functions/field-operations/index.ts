@@ -252,6 +252,16 @@ async function replaceDriveUploadSession(asset: {
   return uploadUrl;
 }
 
+function startAutoPipeline(surveyId: string) {
+  const secret = Deno.env.get("CRON_SECRET");
+  if (!secret) return;
+  const request = fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/auto-pipeline`, {
+    method: "POST", headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ survey_id: surveyId }), signal: AbortSignal.timeout(5_000),
+  }).catch(() => undefined);
+  (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime?.waitUntil(request);
+}
+
 async function createJobIfReady(surveyId: string, recoveryAttemptId?: string) {
   const survey = requireResult(await db.from("rg_surveys").select("*").eq("id", surveyId).single());
   const assets = check(
@@ -546,8 +556,8 @@ Deno.serve(async (req) => {
 
     if (action === "snapshot") {
       const [surveys, bulletins, contacts, farms, campaigns, assets, jobs, models, smsStatus] = await Promise.all([
-        db.from("rg_surveys").select("id,name,location,captured_at,camera,status,photos,expected_assets,severity,lat,lng,location_status,progress,stage_updated_at,active_result_revision,approved_result_revision,note,crop_stage,field_conditions,field_assessment").is("archived_at", null).order("created_at", { ascending: false }).limit(500),
-        db.from("rg_bulletins").select("id,survey_id,slug,title,location,disease,diseases,severity,severity_recommendation,body,action,limitations,advisory_source_ids,date,status,image,public_media,reviewer,sample,lat,lng,public_location_approved,location_review,context_review_required,media_approved,published_at,updated_at,revision,advisory_revision,result_revision").is("archived_at", null).order("created_at", { ascending: false }).limit(500),
+        db.from("rg_surveys").select("id,name,location,captured_at,camera,status,photos,expected_assets,severity,lat,lng,location_status,progress,stage_updated_at,active_result_revision,approved_result_revision,note,crop_stage,field_conditions,field_assessment,auto_status,auto_mode,auto_error,auto_attempts,place,severity_detail,location_source,created_at").is("archived_at", null).order("created_at", { ascending: false }).limit(500),
+        db.from("rg_bulletins").select("id,survey_id,slug,title,location,disease,diseases,severity,severity_recommendation,body,action,limitations,advisory_source_ids,date,status,image,public_media,reviewer,sample,lat,lng,public_location_approved,location_review,context_review_required,media_approved,published_at,updated_at,revision,advisory_revision,result_revision,verification_status,verified_at,auto_generated,severity_detail,advisory_sources,place").is("archived_at", null).order("created_at", { ascending: false }).limit(500),
         db.from("rg_contacts").select("id,name,phone,location,consent,verified").limit(100),
         db.from("rg_farms").select("id,contact_id,geometry"),
         db.rpc("rg_sms_campaign_stats"),
@@ -606,8 +616,11 @@ Deno.serve(async (req) => {
         }
         return { ...job, review_urls: reviewUrls, finding_reviews: findingReviews.filter(row => row.job_id === job.id) };
       }));
+      const steps = requireResult(await db.from("rg_pipeline_steps").select("id,survey_id,step,status,detail,attempt,created_at")
+        .order("created_at", { ascending: false }).limit(400));
       return reply({
         surveys: surveys.data || [],
+        pipeline_steps: steps || [],
         bulletins: bulletins.data || [],
         contacts: (contacts.data || []).map((contact) => ({
           ...contact,
@@ -655,10 +668,14 @@ Deno.serve(async (req) => {
       const rawFieldConditions: unknown[] = Array.isArray(p.field_conditions) ? p.field_conditions : [];
       const fieldConditions = [...new Set(rawFieldConditions.map(String))];
       if (fieldConditions.some((item) => !allowedConditions.includes(item))) throw new Error("Unsupported field condition");
+      const locationSource = ["exif_median", "manual_pin"].includes(String(p.location_source)) ? String(p.location_source) : lat == null ? "none" : "manual_pin";
+      const place = lat == null ? null : check(await db.rpc("rg_reverse_geocode", { p_lat: lat, p_lng: lng }));
       const inserted = requireResult(await db.from("rg_surveys").insert({
         id: surveyId,
         name: requiredText(p.name, 160),
-        location: optionalText(p.location, 240) || "Location pending review",
+        location: place?.label || optionalText(p.location, 240) || "Location pending review",
+        place,
+        location_source: locationSource,
         captured_at: new Date(requiredText(p.captured_at, 64)).toISOString(),
         camera: requiredText(p.camera, 120),
         photos: count,
@@ -666,7 +683,7 @@ Deno.serve(async (req) => {
         severity: "not_calibrated",
         lat,
         lng,
-        location_status: p.location_status || (lat == null ? "missing" : "needs_review"),
+        location_status: lat == null ? "missing" : "verified",
         created_by: user.id,
         inference_provider: provider,
         crop_stage: cropStage,
@@ -885,6 +902,39 @@ Deno.serve(async (req) => {
       check(await db.from("rg_upload_sessions").update({ state: "complete", offset_bytes: asset.bytes, updated_at: new Date().toISOString() }).eq("asset_id", assetId));
       const job = await createJobIfReady(asset.survey_id);
       return reply({ verified: true, job });
+    }
+
+    if (action === "verify-findings") {
+      const surveyId = uuid(p.id);
+      const job = requireResult(await db.from("rg_processing_jobs").select("id")
+        .eq("survey_id", surveyId).eq("provider", "kaggle_yolo26").in("status", ["Needs review", "Reviewed"])
+        .order("created_at", { ascending: false }).limit(1).single());
+      if (!Array.isArray(p.reviews)) return failure("Choose Tama or Mali for every finding", 400);
+      const reviews = p.reviews.map((item: Record<string, unknown>) => ({
+        source_asset_id: uuid(item.source_asset_id), disease: requiredText(item.disease, 20),
+        decision: item.decision === "accepted" ? "accepted" : "rejected",
+        ...(item.decision === "accepted" ? {} : { reason: requiredText(item.reason, 20), note: optionalText(item.note, 500) }),
+      }));
+      const result = check(await db.rpc("rg_verify_findings", { p_job: job.id, p_actor: user.id, p_reviews: reviews }));
+      startAutoPipeline(surveyId);
+      return reply({ ...result, automation: "queued" });
+    }
+    if (action === "confirm-no-disease") {
+      const surveyId = uuid(p.id);
+      const survey = requireResult(await db.from("rg_surveys").select("status,active_result_revision").eq("id", surveyId).single());
+      if (survey.status !== "Needs review") return failure("This survey is not waiting for review", 409);
+      check(await db.from("rg_surveys").update({ status: "Reviewed", approved_result_revision: survey.active_result_revision,
+        reviewed_by: user.id, reviewed_at: new Date().toISOString(), stage_updated_at: new Date().toISOString() }).eq("id", surveyId));
+      check(await db.from("rg_processing_jobs").update({ status: "Reviewed", updated_at: new Date().toISOString() })
+        .eq("survey_id", surveyId).eq("status", "Needs review"));
+      return reply({ confirmed: true });
+    }
+    if (action === "retry-automation") {
+      const surveyId = uuid(p.id);
+      check(await db.from("rg_surveys").update({ auto_status: "pending", auto_attempts: 0, auto_next_at: new Date().toISOString(),
+        auto_error: null }).eq("id", surveyId).in("auto_status", ["failed", "retry", "done"]));
+      startAutoPipeline(surveyId);
+      return reply({ queued: true });
     }
 
     if (action === "review-readiness") {

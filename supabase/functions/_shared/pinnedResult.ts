@@ -2,13 +2,31 @@ import { validateResultV2, type ModelBundle, type ResultV2 } from "../../../shar
 
 // This hash includes every packaged Kaggle worker/adapter source and the
 // private two-specialist bundle. Changing any source requires a new pin.
-export const PINNED_KAGGLE_WORKFLOW_SHA256 = "df3d156e64d778ea818fdb34005a340570661d40e0d9a306ec891087f68a35de";
-export const PREVIOUS_KAGGLE_WORKFLOW_SHA256 = "09533f998a7e51ad8f44703aef1d7dee8eb91b4251681a538cabe881b5bec5b0";
-export const LEGACY_KAGGLE_WORKFLOW_SHA256 = "7695ca57f8d093c05fe73c916bb9c13315b615b6210ef76343dae0423a84ab62";
+// New jobs use the lesion bundle (b10 UNet ConvNeXt-B for BLB, YOLO26l for Brown Spot).
+export const PINNED_KAGGLE_WORKFLOW_SHA256 = "310e867809b5fd495b37f9468782ddd3a4920e15a4f49fc69d909f0d35c64589";
+const YOLO26M_WORKFLOWS = [
+  "df3d156e64d778ea818fdb34005a340570661d40e0d9a306ec891087f68a35de",
+  "09533f998a7e51ad8f44703aef1d7dee8eb91b4251681a538cabe881b5bec5b0",
+  "7695ca57f8d093c05fe73c916bb9c13315b615b6210ef76343dae0423a84ab62",
+];
 export const isSupportedPinnedWorkflow = (hash: unknown): hash is string =>
-  hash === PINNED_KAGGLE_WORKFLOW_SHA256 || hash === PREVIOUS_KAGGLE_WORKFLOW_SHA256 || hash === LEGACY_KAGGLE_WORKFLOW_SHA256;
-const BLB_SHA256 = "aa10d1f6c03baf189c56484db99e96ba55c646be1668d102bdaed78a43315bc6";
-const BROWN_SPOT_SHA256 = "58a1f4600887577749a22f7a8b43b81174bb082d68afd5f09f1079b79a18bca5";
+  hash === PINNED_KAGGLE_WORKFLOW_SHA256 || YOLO26M_WORKFLOWS.includes(hash as string);
+export const LESION_BUNDLE = {
+  id: "riceguard-b10unet-yolo26l-20261023",
+  models: {
+    BLB: "7006f33bf08cdfe291a2e3907b28e9e71107289ad6ea81299c9c9b17e98bdf17",
+    "Brown Spot": "b311478a6c47e353c353b9ec060a3e885ad431394d7dade04b6972fd59060b33",
+  },
+} as const;
+const YOLO26M_BUNDLE = {
+  id: "riceguard-yolo26m-semantic-20260928",
+  models: {
+    BLB: "aa10d1f6c03baf189c56484db99e96ba55c646be1668d102bdaed78a43315bc6",
+    "Brown Spot": "58a1f4600887577749a22f7a8b43b81174bb082d68afd5f09f1079b79a18bca5",
+  },
+} as const;
+export const expectedBundle = (workflow: unknown) =>
+  workflow === PINNED_KAGGLE_WORKFLOW_SHA256 ? LESION_BUNDLE : YOLO26M_BUNDLE;
 
 export interface PinnedJob {
   provider: string;
@@ -54,11 +72,12 @@ export function validatePinnedResult(manifest: unknown, job: PinnedJob): ResultV
   }
   const result = manifest as ResultV2;
   const bundle = result?.model_bundle as ModelBundle | undefined;
-  if (bundle?.id !== "riceguard-yolo26m-semantic-20260928" ||
+  const pinned = expectedBundle(job.manifest.pinned_workflow_sha256);
+  if (bundle?.id !== pinned.id ||
     bundle.workflow_id !== "kaggle-private-two-specialist-media-v1" ||
     bundle.workflow_sha256 !== job.manifest.pinned_workflow_sha256 ||
-    bundle.models?.BLB?.artifact_sha256 !== BLB_SHA256 ||
-    bundle.models?.["Brown Spot"]?.artifact_sha256 !== BROWN_SPOT_SHA256 ||
+    bundle.models?.BLB?.artifact_sha256 !== pinned.models.BLB ||
+    bundle.models?.["Brown Spot"]?.artifact_sha256 !== pinned.models["Brown Spot"] ||
     [bundle.models.BLB, bundle.models["Brown Spot"]].some((model) =>
       model.foreground_class_id !== 1 || model.input_size !== 1024 || model.overlap !== 0.25))
     throw new Error("Unpinned Kaggle specialist bundle");
@@ -66,7 +85,7 @@ export function validatePinnedResult(manifest: unknown, job: PinnedJob): ResultV
     run_id: job.run_id, manifest_hash: job.manifest_hash,
     asset_ids: submitted.map((asset) => asset.id),
     path_prefix: `website-inference/v2/jobs/${job.run_id}/outputs/`,
-    model_bundle: bundle, video_clips: clips,
+    model_bundle: bundle, video_clips: clips, lesion_contract: pinned === LESION_BUNDLE,
   });
   for (const asset of checked.assets) {
     const source = submitted.find((item) => item.id === asset.source_asset_id)!;

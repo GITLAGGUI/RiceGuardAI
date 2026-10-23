@@ -1,4 +1,4 @@
-"""Private 30 FPS video inference with the two pinned YOLO26m semantic models.
+"""Private 30 FPS video inference with the two pinned lesion specialists.
 
 The input is a verified, sanitized frame set from prepare_clip.py plus the two
 private checkpoint files. This module performs no network calls or publication.
@@ -19,23 +19,7 @@ from PIL import Image
 
 from .prepare_clip import FPS, digest
 from workers.aws.inference_core import overlay
-
-
-TILE = 1024
-STRIDE = 768
-PINNED = {
-    "BLB": ("blb.pt", "aa10d1f6c03baf189c56484db99e96ba55c646be1668d102bdaed78a43315bc6", "Bacterial Leaf Blight"),
-    "Brown Spot": ("brownspot.pt", "58a1f4600887577749a22f7a8b43b81174bb082d68afd5f09f1079b79a18bca5", "Brown Spot"),
-}
-
-
-def axis_starts(length: int) -> list[int]:
-    if length <= TILE:
-        return [0]
-    starts = list(range(0, length - TILE + 1, STRIDE))
-    if starts[-1] != length - TILE:
-        starts.append(length - TILE)
-    return starts
+from .specialists import PINNED, load_specialists, stitch
 
 
 def validate_input(input_dir: Path) -> dict:
@@ -62,58 +46,11 @@ def validate_input(input_dir: Path) -> dict:
 
 
 def load_models(input_dir: Path):
-    import torch
-    import ultralytics
-    from ultralytics import YOLO
-
-    if not torch.cuda.is_available():
-        raise RuntimeError("A Kaggle GPU is required; CPU fallback is disabled")
-    if ultralytics.__version__ != "8.4.115":
-        raise RuntimeError("The verified Ultralytics runtime is required")
-    models = {}
-    for disease, (filename, expected_hash, class_name) in PINNED.items():
-        path = input_dir / filename
-        if digest(path) != expected_hash:
-            raise ValueError(f"Pinned checkpoint hash mismatch: {disease}")
-        model = YOLO(str(path))
-        if model.task != "semantic" or model.names.get(1) != class_name:
-            raise ValueError(f"Semantic class mapping mismatch: {disease}")
-        models[disease] = model
-    return models, {"gpu": torch.cuda.get_device_name(0), "torch": torch.__version__,
-                    "ultralytics": ultralytics.__version__,
-                    "model_hashes": {disease: spec[1] for disease, spec in PINNED.items()}}
+    return load_specialists(input_dir)
 
 
-def stitch(image: Image.Image, model, device=0) -> np.ndarray:
-    width, height = image.size
-    tiles = [(x, y, min(x + TILE, width), min(y + TILE, height))
-             for y in axis_starts(height) for x in axis_starts(width)]
-    votes = np.zeros((height, width), dtype=np.uint8)
-    coverage = np.zeros_like(votes)
-    for start in range(0, len(tiles), 4):
-        chunk = tiles[start:start + 4]
-        predictions = model.predict([image.crop(box) for box in chunk], imgsz=TILE, device=device,
-                                    half=device != "cpu", batch=len(chunk), verbose=False)
-        if len(predictions) != len(chunk):
-            raise RuntimeError("A specialist skipped an inference tile")
-        for (x1, y1, x2, y2), result in zip(chunk, predictions):
-            if result.semantic_mask is None:
-                raise RuntimeError("Missing semantic prediction")
-            labels = np.asarray(result.semantic_mask.data.detach().cpu().numpy())
-            if labels.ndim != 2 or not np.isin(labels, (0, 1)).all():
-                raise RuntimeError("Invalid foreground class map")
-            if labels.shape != (y2 - y1, x2 - x1):
-                labels = cv2.resize(labels.astype(np.uint8), (x2 - x1, y2 - y1),
-                                    interpolation=cv2.INTER_NEAREST)
-            votes[y1:y2, x1:x2] += (labels == 1).astype(np.uint8)
-            coverage[y1:y2, x1:x2] += 1
-    if not np.all(coverage):
-        raise RuntimeError("Tiled inference left uncovered pixels")
-    return votes * 2 >= coverage
-
-
-def render(image: Image.Image, masks: dict[str, np.ndarray], *, show_boxes=True) -> np.ndarray:
-    return np.asarray(overlay(image, masks, show_boxes=show_boxes))
+def render(image: Image.Image, masks: dict[str, np.ndarray]) -> np.ndarray:
+    return np.asarray(overlay(image, masks))
 
 
 def pack_private_masks(output_dir: Path, receipts: list[dict]) -> tuple[str, str]:
@@ -218,7 +155,6 @@ def run(input_dir: Path, output_dir: Path) -> dict:
                "publication_candidate_sha256": digest(publication),
                "mask_archive": archive_name, "mask_archive_sha256": archive_hash,
                "severity_status": "not_calibrated",
-               "box_meaning": "significant connected mask regions, not leaf instances",
                "runtime_seconds": round(time.monotonic() - started, 2)}
     (output_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     return summary
