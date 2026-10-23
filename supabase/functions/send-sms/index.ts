@@ -35,11 +35,20 @@ Deno.serve(async (req) => {
     checked(await db.from("rg_recipients").update(update).eq("id",row.id).in("status",["unknown","accepted","sent"]));report.reconciled++;
    } catch { /* Keep ambiguous state for a future status read. */ }
   }
-  if(isManilaQuietHour()) {
-   const resume=nextManilaSixAm();checked(await db.from("rg_recipients").update({not_before:resume}).eq("status","queued").lt("not_before",resume));
-   return json({...report,status:"quiet_hours",resume_at:resume});
+  // Quiet hours hold farmer messages until 6 AM. Owner test contacts listed in
+  // SMS_QUIET_HOURS_TEST_CONTACT_IDS may still be sent so the pipeline can be checked at night.
+  const quietBypass=(Deno.env.get("SMS_QUIET_HOURS_TEST_CONTACT_IDS")||"").split(",").map(s=>s.trim()).filter(s=>/^[0-9a-f-]{36}$/i.test(s));
+  const quiet=isManilaQuietHour();
+  if(quiet) {
+   const resume=nextManilaSixAm();
+   let hold=db.from("rg_recipients").update({not_before:resume}).eq("status","queued").lt("not_before",resume);
+   if(quietBypass.length)hold=hold.not("contact_id","in",`(${quietBypass.join(",")})`);
+   checked(await hold);
+   if(!quietBypass.length)return json({...report,status:"quiet_hours",resume_at:resume});
   }
-  const recipients=checked(await db.from("rg_recipients").select("id,campaign_id,contact_id,phone,client_message_id,rg_campaigns!inner(id,bulletin_id,revision,message_text,device_id,sim_number,rg_bulletins!inner(status,advisory_revision,archived_at))").eq("status","queued").lte("not_before",new Date().toISOString()).order("created_at").limit(10));
+  let pick=db.from("rg_recipients").select("id,campaign_id,contact_id,phone,client_message_id,rg_campaigns!inner(id,bulletin_id,revision,message_text,device_id,sim_number,rg_bulletins!inner(status,advisory_revision,archived_at))").eq("status","queued").lte("not_before",new Date().toISOString());
+  if(quiet)pick=pick.in("contact_id",quietBypass);
+  const recipients=checked(await pick.order("created_at").limit(10));
   for(const recipient of recipients || []) {
    const campaign=recipient.rg_campaigns;const bulletin=campaign.rg_bulletins;
    const contact=checked(await db.from("rg_contacts").select("consent,verified,phone").eq("id",recipient.contact_id).single());
