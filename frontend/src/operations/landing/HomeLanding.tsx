@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { Component, lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, ArrowUpRight, Check, MapPin, Menu, MessageSquareText, Play, ScanLine, ShieldCheck, X } from "lucide-react";
 import { AssistantWidget } from "../Assistant";
@@ -6,8 +6,7 @@ import { useSmsRegistrationStatus } from "../registrationStatus";
 import { bulletinMapPoint, usePublicPosts } from "../publicPosts";
 import { FieldMap } from "../LazyMap";
 import { VerificationBadge } from "../VerificationBadge";
-import { reviewedDiseaseLabel, smsAdvisoryMessage } from "../advisoryPresentation";
-import { smsSegments } from "../domain";
+import { reviewedDiseaseLabel } from "../advisoryPresentation";
 import type { Bulletin } from "../domain";
 import { useSmoothScroll } from "@/components/motion/useSmoothScroll";
 import { heroInput } from "./heroInput";
@@ -247,7 +246,6 @@ function Hero({ latest, smsPath, smsLabel }: { latest?: Bulletin; smsPath: strin
       <div className="lp-hero-scrim" aria-hidden="true" />
       <HeroMascot paused={!visible || reduced} narrow={narrow} />
       <div className="lp-hero-copy" ref={copy}>
-        <p className="lp-hero-tag"><span><i /> Live in Region II</span> AI rice disease monitoring</p>
         <h1 id="lp-hero-title">
           {headline.map((line, lineIndex) => (
             <span key={lineIndex} className="lp-line">
@@ -268,7 +266,6 @@ function Hero({ latest, smsPath, smsLabel }: { latest?: Bulletin; smsPath: strin
         </div>
       </div>
       <div className="lp-hero-bottom">
-        <p className="lp-hero-status"><i /> Two disease models · advice in minutes · checked by specialists</p>
         <a className="lp-scroll-cue" href="#problem" aria-label="Scroll to learn more"><i /></a>
         <Link to={latest ? `/advisories/${latest.slug}` : "/bulletin"} className="lp-hero-card">
           <img src={latestImage || "/images/field/compare-detected-960.webp"} alt="" width="96" height="72" loading="lazy" />
@@ -471,10 +468,7 @@ function FilmSection() {
   };
   return (
     <section className="lp-section lp-film" id="film" aria-labelledby="lp-film-title">
-      <div className="lp-section-head is-center" data-reveal>
-        <h2 id="lp-film-title">RiceGuardAI in one minute</h2>
-        <p>The problem in the paddy, how the drone and the two models work, and a walk through the website.</p>
-      </div>
+      <h2 id="lp-film-title" className="sr-only">RiceGuardAI in one minute</h2>
       <div className="lp-film-frame" data-reveal>
         {hasFilm === null ? null : (
           <video ref={video} key={src} controls={playing} playsInline preload="none" poster={poster} aria-label="RiceGuardAI explainer film">
@@ -500,91 +494,6 @@ const PROVINCES = [
   { name: "Nueva Vizcaya", lat: 16.48, lng: 121.15 },
   { name: "Quirino", lat: 16.49, lng: 121.54 },
 ] as const;
-
-const SAMPLE_ACTIONS = {
-  BLB: "Walk the marked area and look for yellow-to-white streaks running down from the leaf tips.\nDrain standing water where the field allows and hold back extra nitrogen for now.\nAsk your municipal agriculturist to confirm before you spray anything.",
-  "Brown Spot": "Check the lower leaves for small oval brown spots with grey centres.\nReview your fertiliser plan, especially potassium, with your technician.\nAsk your municipal agriculturist to confirm before you apply any fungicide.",
-} as const;
-
-function SmsSection({ smsPath, smsLabel }: { smsPath: string; smsLabel: string }) {
-  const [province, setProvince] = useState<(typeof PROVINCES)[number]["name"]>("Cagayan");
-  const [disease, setDisease] = useState<"BLB" | "Brown Spot">("BLB");
-  const [withMap, setWithMap] = useState(true);
-  const [typing, setTyping] = useState(false);
-  const place = PROVINCES.find((item) => item.name === province)!;
-  const message = useMemo(() => smsAdvisoryMessage(
-    { disease, action: SAMPLE_ACTIONS[disease], slug: "sample", lat: place.lat, lng: place.lng, public_location_approved: withMap },
-    `https://riceguardai.dev/advisories/${disease === "BLB" ? "blb" : "brown-spot"}-${province.toLowerCase().replace(/\s+/g, "-")}`,
-    false,
-  ), [disease, place, province, withMap]);
-  const segments = smsSegments(message);
-  const typingTimer = useRef(0);
-  useEffect(() => () => window.clearTimeout(typingTimer.current), []);
-  // Each change shows the typing dots briefly before the new message lands.
-  const update = (apply: () => void) => {
-    apply();
-    setTyping(true);
-    window.clearTimeout(typingTimer.current);
-    typingTimer.current = window.setTimeout(() => setTyping(false), 650);
-  };
-  return (
-    <section className="lp-section lp-sms" aria-labelledby="lp-sms-title">
-      <div className="lp-sms-panel" data-reveal>
-        <div className="lp-sms-device">
-          <div className="lp-phone" data-ui data-parallax="0.05">
-            <div className="lp-phone-island" />
-            <div className="lp-phone-status"><span>9:41</span><span className="lp-phone-signal"><i /><i /><i /><i /></span></div>
-            <div className="lp-phone-app">
-              <img src="/images/mascot/field-companion.png" alt="" width="34" height="34" />
-              <div><strong>RiceGuardAI</strong><small>Field alerts · {province}</small></div>
-            </div>
-            <div className="lp-phone-thread">
-              <small className="lp-phone-day">Today</small>
-              {typing ? (
-                <div className="lp-typing"><i /><i /><i /></div>
-              ) : (
-                <p key={message} className="lp-bubble">{message}</p>
-              )}
-            </div>
-            <div className="lp-phone-compose"><span>Text message</span></div>
-          </div>
-        </div>
-        <div className="lp-sms-copy">
-                    <h2 id="lp-sms-title">An alert built for a basic phone</h2>
-          <p>No app, no data plan. Try the options and watch the real message format update.</p>
-          <div className="lp-control">
-            <span className="lp-control-label">Province</span>
-            <div className="lp-chips" role="radiogroup" aria-label="Province">
-              {PROVINCES.map((item) => (
-                <button key={item.name} type="button" role="radio" aria-checked={province === item.name} onClick={() => update(() => setProvince(item.name))}>{item.name}</button>
-              ))}
-            </div>
-          </div>
-          <div className="lp-control">
-            <span className="lp-control-label">Disease found</span>
-            <div className="lp-segment" role="radiogroup" aria-label="Disease" style={vars({ "--pos": disease === "BLB" ? 0 : 1 })}>
-              <span className="lp-segment-thumb" aria-hidden="true" />
-              {(["BLB", "Brown Spot"] as const).map((item) => (
-                <button key={item} type="button" role="radio" aria-checked={disease === item} onClick={() => update(() => setDisease(item))}>{item}</button>
-              ))}
-            </div>
-          </div>
-          <label className="lp-switch">
-            <input type="checkbox" checked={withMap} onChange={(event) => { const checked = event.target.checked; update(() => setWithMap(checked)); }} />
-            <span aria-hidden="true" />
-            Include an approximate map link, never the exact farm
-          </label>
-          <div className="lp-sms-meter" aria-live="polite">
-            <span>{segments.units} characters</span>
-            <span className="lp-sms-parts">{Array.from({ length: Math.max(1, segments.segments) }, (_, index) => <i key={index} />)}</span>
-            <span>{segments.segments} SMS part{segments.segments === 1 ? "" : "s"}</span>
-          </div>
-          <Link className="lp-button lp-button-lg" to={smsPath}>{smsLabel} <ArrowRight size={17} /></Link>
-        </div>
-      </div>
-    </section>
-  );
-}
 
 function formatDay(value: string) {
   const date = new Date(value);
@@ -705,7 +614,6 @@ export function HomePage() {
         <SeeSection />
         <HowSection />
         <FilmSection />
-        <SmsSection smsPath={smsPath} smsLabel={smsLabel} />
         <AdvisoriesSection items={items} loading={loading} error={error} />
         <MapSection items={items} />
         <CloseSection smsPath={smsPath} smsLabel={smsLabel} />

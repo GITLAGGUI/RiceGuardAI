@@ -249,14 +249,16 @@ export function FieldMap({
         <FocusReviewPoint point={points.find(point=>point.id===focusId)} />
         {regionBoundary ? (
           <GeoJSON
+            key={`boundary-${layer}`}
             data={regionBoundary}
             interactive={false}
             style={{
-              color: "#146b43",
+              // White reads on dark satellite imagery; green on the light street map.
+              color: layer === "satellite" ? "#ffffff" : "#146b43",
               weight: 2.5,
-              opacity: 0.88,
-              fillColor: "#65a85c",
-              fillOpacity: 0.06,
+              opacity: layer === "satellite" ? 0.95 : 0.88,
+              fillColor: layer === "satellite" ? "#ffffff" : "#65a85c",
+              fillOpacity: layer === "satellite" ? 0.04 : 0.06,
               lineCap: "round",
               lineJoin: "round",
             }}
