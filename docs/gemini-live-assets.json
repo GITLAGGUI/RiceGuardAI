@@ -1,0 +1,242 @@
+[
+  {
+    "path": "frontend/public/data/region-ii-boundary.geojson",
+    "expected": "283fdbb55e9e95a6f153417bbda704b6d8158d8a",
+    "actual": "283fdbb55e9e95a6f153417bbda704b6d8158d8a",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/design-preview/brown-spot-leaves-01.jpg",
+    "expected": "48e2791a5ed689f23bacd3b187a6d61f3e2d1c03",
+    "actual": "48e2791a5ed689f23bacd3b187a6d61f3e2d1c03",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/design-preview/brown-spot-leaves-02.jpg",
+    "expected": "a9df5a764364335aa7d7a885ec4765ecf0bc0294",
+    "actual": "a9df5a764364335aa7d7a885ec4765ecf0bc0294",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/evidence/aws-confusion-matrix.png",
+    "expected": "dfd6ada98570d77fa523622157a738f4a964ac34",
+    "actual": "dfd6ada98570d77fa523622157a738f4a964ac34",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/evidence/aws-training-curves.png",
+    "expected": "e3d653ba99a9842db5d6d3f7c29c50d8ec5eb12c",
+    "actual": "e3d653ba99a9842db5d6d3f7c29c50d8ec5eb12c",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/evidence/aws-validation-predictions.jpg",
+    "expected": "fe84e53572905c4d5f325b92a130e75ba67d5911",
+    "actual": "fe84e53572905c4d5f325b92a130e75ba67d5911",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/evidence/tiled-4k-smoke-preview.jpg",
+    "expected": "94dd5d12d5d46c798b0dd93102912fadeebdd396",
+    "actual": "94dd5d12d5d46c798b0dd93102912fadeebdd396",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/blb.png",
+    "expected": "a28f3785235e6db2748b28e39b1cab8e94a2c308",
+    "actual": "a28f3785235e6db2748b28e39b1cab8e94a2c308",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/blb.webp",
+    "expected": "dbed1fd24e8951d456f8c20f535a005c16ad33f0",
+    "actual": "dbed1fd24e8951d456f8c20f535a005c16ad33f0",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/capture-to-sms.png",
+    "expected": "d88ec0ec902852e9fe6138423f0079c67215eff5",
+    "actual": "d88ec0ec902852e9fe6138423f0079c67215eff5",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/dji_mini_3.webp",
+    "expected": "179d8a2b1fb620ccfd021a4f2424842cb9145e04",
+    "actual": "179d8a2b1fb620ccfd021a4f2424842cb9145e04",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/drone-shot.png",
+    "expected": "fe0a2157f6cb99557334c79475c13316c51924ee",
+    "actual": "fe0a2157f6cb99557334c79475c13316c51924ee",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/drone.webp",
+    "expected": "23f82f967763f90ae370dd319363600d93280ead",
+    "actual": "23f82f967763f90ae370dd319363600d93280ead",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/field-hero-1600.avif",
+    "expected": "39dd5743b126135709d0c13d6a74446322822b9d",
+    "actual": "39dd5743b126135709d0c13d6a74446322822b9d",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/field-hero-1600.webp",
+    "expected": "dcdad4644a6d40d931d2071793d92a34784698b9",
+    "actual": "dcdad4644a6d40d931d2071793d92a34784698b9",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/field-hero-2560.jpg",
+    "expected": "8c9c06f8a00c1820a4d43cae1dbf770639008bc1",
+    "actual": "8c9c06f8a00c1820a4d43cae1dbf770639008bc1",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/field-hero-2560.webp",
+    "expected": "6a5b8760504de368c0359faddfa25ad18d12cb91",
+    "actual": "6a5b8760504de368c0359faddfa25ad18d12cb91",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/field-hero-960.avif",
+    "expected": "c7e532ecea36ad92565ad8d852b22d17c203b9b5",
+    "actual": "c7e532ecea36ad92565ad8d852b22d17c203b9b5",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/field-hero-960.webp",
+    "expected": "0169927e0fbbdd8171a0f0e0e50f941fb8b5421e",
+    "actual": "0169927e0fbbdd8171a0f0e0e50f941fb8b5421e",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/mascot/assistant-glasses-v1.png",
+    "expected": "df9ebfcaba71e604d81928476494f87f1293e59e",
+    "actual": "df9ebfcaba71e604d81928476494f87f1293e59e",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/mascot/bulletin-reader-v2.png",
+    "expected": "1c8e323dd949ff7c3ff782f0d97ce670a879d56f",
+    "actual": "1c8e323dd949ff7c3ff782f0d97ce670a879d56f",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/mascot/field-companion.png",
+    "expected": "cb993157ba223a14178cbd1bcaa7d5b39448d4cd",
+    "actual": "cb993157ba223a14178cbd1bcaa7d5b39448d4cd",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/mascot/field-drone.png",
+    "expected": "e5c64b2e7e648f20470a9ce8b95f55d5b52f0076",
+    "actual": "e5c64b2e7e648f20470a9ce8b95f55d5b52f0076",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/mascot/field-map.png",
+    "expected": "a7f67c702bc2d203b54b3e9d6af9e5998185881c",
+    "actual": "a7f67c702bc2d203b54b3e9d6af9e5998185881c",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/mascot/hero-body-no-wave-v1.png",
+    "expected": "1433744c5f317fdd69f63b1d40f483a04a987aae",
+    "actual": "1433744c5f317fdd69f63b1d40f483a04a987aae",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/mascot/hero-wave-arm-v1.png",
+    "expected": "5f4d706e46534652d42b1b95755dc71eeda2dd7a",
+    "actual": "5f4d706e46534652d42b1b95755dc71eeda2dd7a",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/mascot/hero-wave-open-v2.png",
+    "expected": "e084b26e7e01d01baa043e3af9c7b39d62fbc292",
+    "actual": "e084b26e7e01d01baa043e3af9c7b39d62fbc292",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/mascot/hero-wave-tilt-v2.png",
+    "expected": "1e6737e8e6b48e8309dc593ede0e57c4fdd9ba5a",
+    "actual": "1e6737e8e6b48e8309dc593ede0e57c4fdd9ba5a",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/mascot/leaf-review-v2.png",
+    "expected": "a5f7ac91fdc749f546af5042b7902eb2a7d2ab64",
+    "actual": "a5f7ac91fdc749f546af5042b7902eb2a7d2ab64",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/mascot/map-focused-v2.png",
+    "expected": "47098f5bb73428cdf0096fa7a81013efd1c88fb8",
+    "actual": "47098f5bb73428cdf0096fa7a81013efd1c88fb8",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/mascot/sms-alert.png",
+    "expected": "ee181cf1aeac128e26d8258466b0a4416807d7db",
+    "actual": "ee181cf1aeac128e26d8258466b0a4416807d7db",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/mascot/sms-focused-v2.png",
+    "expected": "70e2f81635c9f0eae596cfe5c02bf868d5c8a5f2",
+    "actual": "70e2f81635c9f0eae596cfe5c02bf868d5c8a5f2",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/rice-blast.png",
+    "expected": "de290cc828698275aefa67f362ea2a86de115a77",
+    "actual": "de290cc828698275aefa67f362ea2a86de115a77",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/rice-blast.webp",
+    "expected": "89946d52429aead9ae8f57a4b64bfa005223280e",
+    "actual": "89946d52429aead9ae8f57a4b64bfa005223280e",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/tungro.png",
+    "expected": "b16193736addf9796a25cd1ecdf21c7a10dcfb02",
+    "actual": "b16193736addf9796a25cd1ecdf21c7a10dcfb02",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/images/tungro.webp",
+    "expected": "10b2f98198e67b082eef5a8c58001ef9e31bd8ac",
+    "actual": "10b2f98198e67b082eef5a8c58001ef9e31bd8ac",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/logo.png",
+    "expected": "94038c5b6facf929680aa075594d42ca5407fcd4",
+    "actual": "94038c5b6facf929680aa075594d42ca5407fcd4",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/models/cesium-drone.glb",
+    "expected": "846949609d2767291027de0bcc1b263dbb4d328a",
+    "actual": "846949609d2767291027de0bcc1b263dbb4d328a",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/video/blb-prototype-poster.jpg",
+    "expected": "c375cb1d07a5a2d4a4966cb84265ccd7132945f9",
+    "actual": "c375cb1d07a5a2d4a4966cb84265ccd7132945f9",
+    "matches": true
+  },
+  {
+    "path": "frontend/public/video/blb-prototype-preview.mp4",
+    "expected": "8a114b772dc39abe4d2e9372f0c845bd5942739e",
+    "actual": "8a114b772dc39abe4d2e9372f0c845bd5942739e",
+    "matches": true
+  }
+]

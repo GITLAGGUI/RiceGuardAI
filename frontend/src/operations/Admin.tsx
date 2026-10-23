@@ -1,10 +1,12 @@
 import { useEffect, useState, type ReactNode, type FormEvent } from "react";
+import { inferenceConfigurationLabel, type InferenceConfiguration } from "../../../supabase/functions/_shared/systemReadiness";
 import {
   Link,
   NavLink,
   Outlet,
   useLocation,
   useNavigate,
+  useSearchParams,
 } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -20,7 +22,6 @@ import {
   ArrowRight,
   Search,
   MapPin,
-  Check,
   Clock,
   CircleAlert,
   ChevronRight,
@@ -35,16 +36,18 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Brand } from "./Public";
+import { fieldSeverityForSurvey, fieldSeverityLabel } from "./severityPresentation";
 import { FieldMap } from "./Map";
-import { OperationsProvider, useOperations } from "./store";
+import { OperationsProvider, operation, useOperations } from "./store";
 import { useAuth } from "@/context/AuthContext";
 import {
-  eligibleContacts,
   normalizePhone,
-  smsSegments,
   type Survey,
 } from "./domain";
 import { UploadWorkspace, ReviewWorkspace } from "./Upload";
+import { reviewedDiseaseLabel, advisoryActionSteps } from "./advisoryPresentation";
+import { reviewHref } from "./ReviewJourney";
+import { SmsDelivery } from "./SmsDelivery";
 import "./operations.css";
 
 const nav = [
@@ -282,6 +285,9 @@ function SurveyList({
   compact?: boolean;
 }) {
   const base = useBase();
+  const { data } = useOperations();
+  const verifiedUploads = (surveyId: string) =>
+    data.assets.filter((asset) => asset.survey_id === surveyId && asset.status === "Verified").length;
   return (
     <div className={compact ? "rg-queue-list" : "rg-survey-table"}>
       {!compact && (
@@ -293,7 +299,7 @@ function SurveyList({
           <span />
         </div>
       )}
-      {surveys.map((s) => (
+      {surveys.map(s => ({ ...s, severity: fieldSeverityForSurvey(s, data.bulletins) })).map((s) => (
         <Link
           key={s.id}
           to={`${base}/review?survey=${s.id}`}
@@ -318,10 +324,13 @@ function SurveyList({
           )}
           <span className="rg-survey-progress-cell">
             <Status value={s.status} />
+            {!compact && s.status === "Awaiting upload" ? (
+              <small className="rg-upload-count">{verifiedUploads(s.id)} / {s.expected_assets || s.photos} originals verified</small>
+            ) : null}
             {!compact && <SurveyTimeline status={s.status} progress={s.progress || 0} />}
           </span>
           {!compact && (
-            <span className={`rg-severity ${s.severity}`}>{s.severity}</span>
+            <span className={`rg-severity ${s.severity}`}>{fieldSeverityLabel(s.severity)}</span>
           )}
           <ChevronRight size={16} />
         </Link>
@@ -445,7 +454,7 @@ export function OverviewPage() {
           <FieldMap
             points={data.surveys
               .filter((s) => s.lat != null && s.lng != null)
-              .map((s) => ({ ...s, lat: s.lat!, lng: s.lng! }))}
+              .map((s) => ({ ...s, severity: fieldSeverityForSurvey(s, data.bulletins), lat: s.lat!, lng: s.lng! }))}
             onSelect={(id) => {
               window.location.hash = id;
             }}
@@ -594,7 +603,7 @@ export function MapPage() {
         title="The operations map"
         text="Private survey locations. Lesion polygons remain in image coordinates."
       />
-      <div className="rg-filter-bar">
+      <div className="rg-filter-bar rg-map-filter">
         <SlidersHorizontal size={18} />
         <select
           aria-label="Reviewed severity filter"
@@ -602,8 +611,8 @@ export function MapPage() {
           onChange={(e) => setFilter(e.target.value)}
         >
           <option value="all">All reviewed severities</option>
-          {["low", "moderate", "high", "not_calibrated", "unknown"].map((x) => (
-            <option key={x}>{x}</option>
+          {["low", "moderate", "high", "not_calibrated"].map((x) => (
+            <option key={x} value={x}>{fieldSeverityLabel(x as Survey["severity"])}</option>
           ))}
         </select>
         <span className="rg-muted">
@@ -612,16 +621,22 @@ export function MapPage() {
       </div>
       <FieldMap
         large
-        points={data.surveys
+        points={data.surveys.map(s => ({ ...s, severity: fieldSeverityForSurvey(s, data.bulletins) }))
           .filter(
             (s) =>
               s.lat != null &&
               s.lng != null &&
-              (filter === "all" || s.severity === filter),
+              (filter === "all" || s.severity === filter || (filter === "not_calibrated" && s.severity === "unknown")),
           )
           .map((s) => ({ ...s, lat: s.lat!, lng: s.lng! }))}
         onSelect={setSelected}
+        focusId={selected || undefined}
       />
+      <section className="rg-panel rg-map-posts"><h2>Survey pins and publication</h2><p>A private pin does not create a public post. Review the location and publish separately.</p>
+        <ul className="rg-map-post-list">{data.surveys.map(item => { const advisory=data.bulletins.find(b=>b.survey_id===item.id && b.result_revision===item.active_result_revision); return <li key={item.id} className={selected===item.id?"selected":""}>
+          <div><strong>{item.name}</strong><small>Survey {item.id.slice(0,8)} · {item.location}</small><div className="rg-map-statuses"><span>{item.lat==null || item.lng==null ? "No private GPS pin" : "Private pin saved"}</span><span>{advisory?.status==="published" ? "Published" : "Not published"}</span><span>{advisory?.public_location_approved ? "Public area approved" : "No public map approval"}</span></div></div>
+          <div className="rg-map-record-actions">{item.lat!=null && item.lng!=null?<button type="button" className="rg-button rg-secondary" onClick={()=>setSelected(item.id)}><MapPin size={16}/> Locate</button>:null}<Link className="rg-button rg-secondary" to={reviewHref(item.id,advisory?.id)}>Open review <ArrowRight size={16}/></Link></div></li>; })}</ul>
+      </section>
       {s && (
         <div className="rg-map-selection">
           <div>
@@ -643,202 +658,145 @@ export function MapPage() {
   );
 }
 export function AdvisoryDesk() {
-  const { data, demo, saveDraft, publish, generateAdvisory } = useOperations();
-  const [selected, setSelected] = useState(data.bulletins[0]?.id || "");
-  useEffect(() => { if (!selected && data.bulletins[0]) setSelected(data.bulletins[0].id); }, [data.bulletins, selected]);
-  const [editing, setEditing] = useState(false);
-  const [body, setBody] = useState("");
-  const [action, setAction] = useState("");
+  const {data,demo,refresh}=useOperations();
+  const [params,setParams]=useSearchParams();
+  const [deleting,setDeleting]=useState(false);
+  const [busy,setBusy]=useState(false);
+  const requested=params.get("advisory");
+  const surveyId=params.get("survey");
+  const b=requested ? data.bulletins.find(item=>item.id===requested && (!surveyId || item.survey_id===surveyId))
+    : surveyId ? data.bulletins.find(item=>item.survey_id===surveyId) : data.bulletins[0];
+  return <><PageHeading title="The advisory desk" text="Find an advisory, then continue its guided review. Pinning, publishing and SMS are separate steps."/>
+    <div className="rg-desk-grid rg-desk-guided">
+      <aside className="rg-panel rg-draft-list"><h2>Drafts & publications</h2>{data.bulletins.map(item=><button key={item.id} className={b?.id===item.id ? "selected" : ""} onClick={()=>{setParams({advisory:item.id,...(item.survey_id ? {survey:item.survey_id} : {})});setDeleting(false);}}>
+        <span className="rg-badge">{reviewedDiseaseLabel(item)}</span><strong>{item.title}</strong><small>{item.location} · {item.id.slice(0,8)} · {item.date}</small><Status value={item.status}/></button>)}</aside>
+      {b ? <section className="rg-panel rg-editor"><div className="rg-panel-heading"><h2>{b.title}</h2><Status value={b.status}/></div><img className="rg-editor-image" src={b.image} alt="Advisory preview"/>
+        <div className="rg-editor-content"><p>{b.location} · {b.id.slice(0,8)}</p><p>{b.body}</p><h3>Recommended actions</h3><ul>{advisoryActionSteps(b.action).map((text,i)=><li key={i}>{text}</li>)}</ul>
+          <p>{b.status==="published" ? "Published. A reviewed correction is required for changes." : "Draft. No public post or SMS is created by a private map pin."}</p>
+          {b.survey_id ? <Link className="rg-button rg-primary" to={reviewHref(b.survey_id,b.id,b.status==="published" ? "publish" : "images")}>{b.status==="published" ? "View review / create correction" : "Continue guided review"}</Link> : <p role="alert">This advisory has no bound survey. Publication is unavailable.</p>}
+          {b.status==="published" ? <Link className="rg-button rg-secondary" to={"/advisories/"+b.slug}>View public post</Link> : null}
+          {!demo ? <><button type="button" className="rg-button rg-secondary" onClick={()=>setDeleting(true)}>Delete advisory</button>
+            {deleting ? <div role="alert" className="rg-delete-confirm"><strong>Withdraw “{b.title}”?</strong><p>This recoverably archives the advisory, withdraws its public post and suppresses queued SMS. Original survey media remain unchanged.</p>
+              <button type="button" className="rg-button rg-secondary" disabled={busy} onClick={()=>setDeleting(false)}>Cancel</button><button type="button" className="rg-button rg-primary" disabled={busy} onClick={async()=>{
+                setBusy(true);try{await operation("archive-advisory",{id:b.id,advisory_revision:b.advisory_revision,confirmed:true});setDeleting(false);await refresh();toast.success("Advisory archived; original media preserved.");}catch(e){toast.error((e as Error).message);}finally{setBusy(false);}
+              }}>Confirm withdrawal</button></div> : null}</> : null}
+        </div></section> : <div role="alert" className="rg-empty">{requested || surveyId ? "The requested advisory is unavailable. Another record has not been substituted." : "No drafts yet. Complete image review first."}</div>}
+    </div><section id="guidance-library"><GuidanceSourceReview demo={demo} selectedSourceIds={b?.advisory_source_ids || []}/></section></>;
+}
+type GuidanceCandidate = {
+  id: string;
+  disease: string;
+  title: string;
+  publisher: string;
+  version: string;
+  reference: string;
+  guidance: {
+    summary: string;
+    recommended_actions: string[];
+    limitations: string[];
+  };
+};
+type ApprovedGuidance = {
+  id: string;
+  disease: string;
+  title: string;
+  version: string;
+  source_reference: string;
+  active: boolean;
+  approved_at: string;
+};
+
+function GuidanceSourceReview({ demo, selectedSourceIds }: { demo: boolean; selectedSourceIds: string[] }) {
+  const [candidates, setCandidates] = useState<GuidanceCandidate[]>([]);
+  const [approved, setApproved] = useState<ApprovedGuidance[]>([]);
+  const [sourcesLoaded, setSourcesLoaded] = useState(false);
+  const [specialistName, setSpecialistName] = useState("");
+  const [reviewNote, setReviewNote] = useState("");
+  const [reviewingId, setReviewingId] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
-  const b = data.bulletins.find((b) => b.id === selected);
-  const recipients =
-    b?.lat != null && b.lng != null
-      ? eligibleContacts(data.contacts, { lat: b.lat, lng: b.lng })
-      : [];
-  const sms = b
-    ? `RiceGuardAI: Posibleng ${b.disease} sa ${b.location}. ${b.action} Mapa: [approved area link] Detalye: [public advisory link] Reply STOP para ihinto.`
-    : "";
-  const segments = smsSegments(sms);
-  const act = async (fn: () => Promise<void>) => {
+  const [error, setError] = useState("");
+  const load = async () => {
+    setSourcesLoaded(false);
+    const result = await operation("advisory-guidance") as {
+      candidates: GuidanceCandidate[];
+      approved: ApprovedGuidance[];
+    };
+    setCandidates(result.candidates);
+    setApproved(result.approved);
+    setSourcesLoaded(true);
+  };
+  useEffect(() => {
+    if (demo) return;
+    void load().catch((e: Error) => setError(e.message));
+  }, [demo]);
+  const approve = async (candidate: GuidanceCandidate) => {
     setBusy(true);
+    setError("");
     try {
-      await fn();
-      toast.success(demo ? "Demo updated. No message was sent." : "Saved.");
+      await operation("approve-advisory-source", {
+        candidate_id: candidate.id,
+        specialist_name: specialistName.trim(),
+        review_note: reviewNote.trim(),
+        confirmed,
+      });
+      await load();
+      setConfirmed(false);
+      setReviewNote("");
+      setReviewingId("");
+      toast.success("Specialist-reviewed guidance recorded with an audit event.");
     } catch (e) {
-      toast.error((e as Error).message);
+      setError((e as Error).message);
     } finally {
       setBusy(false);
     }
   };
   return (
-    <>
-      <PageHeading
-        title="The advisory desk"
-        text="Review the finding, public location, message, and audience before approval."
-      />
-      <div className="rg-desk-grid">
-        <aside className="rg-panel rg-draft-list">
-          <h2>Drafts & publications</h2>
-          {data.bulletins.map((item) => (
-            <button
-              key={item.id}
-              className={selected === item.id ? "selected" : ""}
-              onClick={() => {
-                setSelected(item.id);
-                setConfirmed(false);
-                setEditing(false);
-              }}
-            >
-              <span className="rg-badge">{item.disease}</span>
-              <strong>{item.title}</strong>
-              <small>{item.location}</small>
-              <Status value={item.status} />
-            </button>
-          ))}
-        </aside>
-        {b ? (
-          <section className="rg-panel rg-editor">
-            <div className="rg-panel-heading">
-              <h2>Advisory preview</h2>
-              <Status value={b.status} />
-            </div>
-            <img
-              className="rg-editor-image"
-              src={b.image}
-              alt="Advisory evidence preview"
-            />
-            <div className="rg-editor-content">
-              <span className="rg-eyebrow">
-                {b.sample
-                  ? "SAMPLE EVIDENCE · NOT A LIVE DIAGNOSIS"
-                  : "FIELD REVIEW"}
-              </span>
-              <h2>{b.title}</h2>
-              <p className="rg-location">
-                <MapPin size={15} />
-                {b.location}
-              </p>
-              {editing ? (
-                <>
-                  <label>
-                    Technical summary
-                    <textarea
-                      value={body}
-                      onChange={(e) => setBody(e.target.value)}
-                    />
-                  </label>
-                  <label>
-                    Recommended action
-                    <textarea
-                      value={action}
-                      onChange={(e) => setAction(e.target.value)}
-                    />
-                  </label>
-                  <button
-                    className="rg-button rg-primary"
-                    disabled={busy || !body.trim() || !action.trim()}
-                    onClick={() =>
-                      void act(async () => {
-                        await saveDraft(b.id, body, action);
-                        setEditing(false);
-                        setConfirmed(false);
-                      })
-                    }
-                  >
-                    Save new draft
-                  </button>
-                </>
-              ) : (
-                <>
-                  <p>{b.body}</p>
-                  <h3>Recommended action</h3>
-                  <p>{b.action}</p>
-                  <button
-                    className="rg-button rg-secondary"
-                    disabled={b.status === "published"}
-                    title={b.status === "published" ? "Published content requires an explicit correction version" : undefined}
-                    onClick={() => {
-                      setBody(b.body);
-                      setAction(b.action);
-                      setEditing(true);
-                    }}
-                  >
-                    Edit draft
-                  </button>
-                  {!demo && b.status !== "published" && (
-                    <button
-                      className="rg-button rg-secondary"
-                      disabled={busy || !b.result_revision}
-                      onClick={() =>
-                        void act(async () => {
-                          const mode = await generateAdvisory(b.id);
-                          toast.success(
-                            mode === "ollama"
-                              ? "Structured LLM draft created from approved specialist guidance."
-                              : "Approved expert template draft created.",
-                          );
-                          setConfirmed(false);
-                        })
-                      }
-                    >
-                      Generate reviewed-source draft
-                    </button>
-                  )}
-                </>
-              )}
-              <div className="rg-notice">
-                <CircleAlert size={18} />
-                Edits invalidate approval. Public location must be an approved
-                approximate area.
-              </div>
-            </div>
-          </section>
-        ) : (
-          <div className="rg-empty">
-            No advisory drafts yet. Complete a detection review first.
-          </div>
-        )}
-        <aside className="rg-panel rg-delivery-preview">
-          <h2>SMS & audience</h2>
-          <p className="rg-muted">
-            Opted-in, verified contacts with a registered farm within 3 km.
-          </p>
-          <div className="rg-sms-bubble">
-            <p>{sms || "Select an advisory."}</p>
-          </div>
-          <div className="rg-preview-stat">
-            <span>{recipients.length} eligible contacts</span>
-            <span>{segments.segments} estimated segments / recipient</span>
-            <span>
-              {segments.encoding} · final URLs may change segment count
-            </span>
-          </div>
-          <label className="rg-check">
-            <input
-              type="checkbox"
-              checked={confirmed}
-              onChange={(e) => setConfirmed(e.target.checked)}
-            />
-            I reviewed the content, location, and recipient scope.
-          </label>
-          <button
-            className="rg-button rg-primary"
-            disabled={
-              !b || !confirmed || editing || busy || b.status === "published"
-            }
-            onClick={() => b && void act(() => publish(b.id))}
-          >
-            <Check size={17} />
-            {demo ? "Approve in demo" : "Approve & publish"}
-          </button>
-          <small>
-            Publication and delivery are tracked separately. Quiet hours: 8 pm–6
-            am, Manila.
-          </small>
-        </aside>
+    <section className="rg-panel rg-guidance-review">
+      <div className="rg-panel-heading">
+        <h2>Agricultural guidance review</h2>
       </div>
-    </>
+      <p>AI drafts require active, specialist-reviewed guidance for every accepted disease. These references are candidates, not approved advice. Review the original source and wording before approval.</p>
+      {!demo && <div className="rg-guidance-candidate"><h3>Sources attached to the selected draft</h3>
+        {!sourcesLoaded && !error && <p role="status">Loading agricultural references…</p>}
+        {selectedSourceIds.length ? <ul>{approved.filter((source) => selectedSourceIds.includes(source.id) && source.active && source.source_reference.startsWith("https://")).map((source) => <li key={source.id}><a href={source.source_reference} target="_blank" rel="noopener noreferrer">{source.title}</a> ({source.disease}, {source.version})</li>)}</ul> : <p>None attached. A new dual-disease result cannot be published without approved guidance for each accepted disease.</p>}
+        {sourcesLoaded && selectedSourceIds.some((id) => !approved.some((source) => source.id === id && source.active)) && <p role="alert" className="rg-guidance-error">A cited source is missing or inactive. Regenerate and review the draft before publication.</p>}
+      </div>}
+      {demo && <p>Source approval is unavailable in the demo.</p>}
+      {error && <p role="alert" className="rg-guidance-error">{error}</p>}
+      {!demo && candidates.map((candidate) => {
+        const isApproved = approved.some((source) => source.active && source.version === candidate.version && source.disease === candidate.disease);
+        return (
+          <article key={candidate.id} className="rg-guidance-candidate">
+            <h3>{candidate.disease}: {candidate.title}</h3>
+            <p>{candidate.publisher} · {isApproved ? "Approved for draft grounding" : "Awaiting specialist review"}</p>
+            <p><a href={candidate.reference} target="_blank" rel="noopener noreferrer">Read original agricultural source</a></p>
+            <p>{candidate.guidance.summary}</p>
+            <ul>{candidate.guidance.recommended_actions.map((item) => <li key={item}>{item}</li>)}</ul>
+            <ul>{candidate.guidance.limitations.map((item) => <li key={item}>{item}</li>)}</ul>
+            {!isApproved && reviewingId !== candidate.id && (
+              <button className="rg-button rg-secondary" onClick={() => {
+                setReviewingId(candidate.id);
+                setReviewNote("");
+                setConfirmed(false);
+              }}>Review this candidate</button>
+            )}
+            {!isApproved && reviewingId === candidate.id && (
+              <div className="rg-guidance-approval">
+                <label>Reviewing agricultural specialist
+                  <input value={specialistName} onChange={(e) => setSpecialistName(e.target.value)} maxLength={120} />
+                </label>
+                <label>Specific review note
+                  <textarea value={reviewNote} onChange={(e) => setReviewNote(e.target.value)} maxLength={500} />
+                </label>
+                <label className="rg-check"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} /> I checked the source and wording with the named specialist.</label>
+                <button className="rg-button rg-primary" disabled={busy || !confirmed || specialistName.trim().length < 2 || reviewNote.trim().length < 10} onClick={() => void approve(candidate)}>Record reviewed guidance</button>
+              </div>
+            )}
+          </article>
+        );
+      })}
+    </section>
   );
 }
 export function FarmersPage() {
@@ -978,66 +936,28 @@ export function FarmersPage() {
   );
 }
 export function SmsPage() {
-  const { data, demo } = useOperations();
   return (
     <>
       <PageHeading
         title="SMS delivery"
         text="Gateway acceptance is not the same as a delivered message."
       />
-      <div className="rg-notice">
-        <Radio size={18} />
-        {demo
-          ? "Demo campaigns are stored locally. No gateway calls or real sends occur."
-          : "Device health must be verified before dispatch. Unknown sends require reconciliation, not blind retry."}
-      </div>
-      <div className="rg-stat-grid">
-        {["queued", "delivered", "failed", "unknown"].map((s) => (
-          <article className="rg-stat" key={s}>
-            <span>{s}</span>
-            <strong>
-              {data.campaigns
-                .filter((c) => c.status === s)
-                .reduce((n, c) => n + c.recipients, 0)}
-            </strong>
-            <small>Recipient count</small>
-          </article>
-        ))}
-      </div>
-      <section className="rg-panel">
-        <div className="rg-panel-heading">
-          <h2>Notification campaigns</h2>
-          <MessageSquare size={19} />
-        </div>
-        {data.campaigns.length ? (
-          data.campaigns.map((c) => (
-            <div className="rg-campaign-row" key={c.id}>
-              <div>
-                <strong>
-                  {data.bulletins.find((b) => b.id === c.bulletin_id)?.title}
-                </strong>
-                <small>{c.sample ? "SIMULATION ONLY" : c.created_at}</small>
-              </div>
-              <span>{c.recipients} contacts</span>
-              <Status value={c.status} />
-            </div>
-          ))
-        ) : (
-          <div className="rg-empty">
-            <MessageSquare size={32} />
-            <h3>No campaigns yet</h3>
-            <p>
-              Approve an advisory to create a campaign. Messages are not sent
-              from the browser.
-            </p>
-          </div>
-        )}
-      </section>
+      <SmsDelivery />
     </>
   );
 }
 export function SystemPage() {
-  const { data } = useOperations();
+  const { data, operation } = useOperations();
+  const [configuration,setConfiguration]=useState<InferenceConfiguration|null>(null);
+  const [configurationError,setConfigurationError]=useState("");
+  useEffect(()=>{
+    let active=true;
+    operation("system-readiness").then(result=>{if(active)setConfiguration(result.inference);})
+      .catch(()=>{if(active)setConfigurationError("Server configuration could not be checked. Do not assume that a new upload can process.");});
+    return()=>{active=false;};
+  },[operation]);
+  const activeModels=data.models.filter(model=>model.active);
+  const registryPair=["BLB","Brown Spot"].every(disease=>activeModels.filter(model=>model.disease===disease).length===1);
   return (
     <>
       <PageHeading
@@ -1050,7 +970,7 @@ export function SystemPage() {
             title: "Disease inference",
             icon: Cpu,
             body: "Independent BLB and Brown Spot semantic adapters with overlapping native-resolution reconstruction. Empty detections are valid only after a completed, verified job.",
-            status: data.providers.kaggle.replaceAll("_", " "),
+            status: inferenceConfigurationLabel(configuration),
           },
           {
             title: "Android SMS Gate",
@@ -1062,13 +982,13 @@ export function SystemPage() {
             title: "Advisory generation",
             icon: FileImage,
             body: "Server-side Ollama Cloud adapter reads only approved specialist guidance. Human approval remains mandatory.",
-            status: data.providers.advisory.replaceAll("_", " "),
+            status: data.providers.advisory === "connected" ? "Credentials configured" : data.providers.advisory.replaceAll("_", " "),
           },
           {
-            title: "Database & privacy",
+            title: "Private original-media storage",
             icon: Users,
-            body: "Private farm geometry and contacts. Public readers only receive approved advisory projections.",
-            status: data.providers.drive.replaceAll("_", " "),
+            body: "Google Drive stores private originals. Contact records and private farm geometry remain in the protected database.",
+            status: data.providers.drive === "connected" ? "Credentials configured" : data.providers.drive.replaceAll("_", " "),
           },
         ].map((s) => (
           <article className="rg-panel rg-system-card" key={s.title}>
@@ -1079,13 +999,21 @@ export function SystemPage() {
           </article>
         ))}
       </div>
+      <section className="rg-panel rg-system-card" aria-label="Pinned inference configuration">
+        <h2>Pinned photo and video workflow</h2>
+        <p>BLB and Brown Spot are processed by the hash-pinned dual-model pathway, not the optional adapter registry below.</p>
+        {configuration ? <><p>Uploads: {configuration.upload_enabled ? "enabled" : "disabled"}. Dispatch: {configuration.dispatch_enabled ? "enabled" : "disabled"}. Callback: {configuration.callback_enabled ? "enabled" : "disabled"}.</p>
+          <p className="rg-muted">Workflow SHA-256: <code style={{overflowWrap:"anywhere"}}>{configuration.workflow_sha256}</code></p></> : null}
+        {configurationError ? <p role="alert">{configurationError}</p> : null}
+        <p>These checks report configuration only. A completed, validated job is required to prove execution. GPU availability and SMS delivery are checked separately.</p>
+      </section>
       <section className="rg-panel">
         <div className="rg-panel-heading">
           <div>
-            <h2>Active semantic checkpoints</h2>
-            <p>Pinned preprocessing and calibrated inference settings</p>
+            <h2>Optional adapter registry</h2>
+            <p>Separate registry entries do not replace the pinned workflow</p>
           </div>
-          <Status value={data.models.filter((model) => model.active).length === 2 ? "Ready" : "Configuration required"} />
+          <Status value={registryPair ? "Both disease entries registered" : "No complete registry pair"} />
         </div>
         <div className="rg-model-registry">
           {data.models.filter((model) => model.active).map((model) => (
@@ -1101,7 +1029,7 @@ export function SystemPage() {
               </dl>
             </article>
           ))}
-          {!data.models.some((model) => model.active) && <div className="rg-empty">No active model adapters. Inference is blocked until both specialist checkpoints are registered.</div>}
+          {!activeModels.length && <div className="rg-empty">No optional adapter entries are registered. This does not disable the separately pinned photo and video workflow.</div>}
         </div>
       </section>
       <div className="rg-panel rg-evidence-banner">

@@ -39,15 +39,17 @@ template = "RiceGuard: Iyong code ay {{ .Code }}. Wag ibahagi."
 max_frequency = "60s"
 
 [auth.sms.test_otp]
-# In local dev, any phone matches OTP `123456`.
+# Only this synthetic local test number matches OTP `123456`.
 "+639000000000" = "123456"
 
-# Configure the custom SMS hook. For LOCAL: points at docker host edge function.
-# For REMOTE: managed via Supabase Management API (Auth → Hooks) in this same script.
+# Local SMS delivery is opt-in. Enable this hook only after loading the signing
+# secret into the local environment and setting secrets = "env(SEND_SMS_HOOK_SECRETS)".
+# Keep it disabled for read-only linked CLI commands; no placeholder secret is used.
+# Remote Auth hooks are managed separately and are NOT changed by this file.
 [auth.hook.send_sms]
-enabled = true
+enabled = false
 uri = "http://host.docker.internal:54321/functions/v1/auth-sms-hook"
-secrets = "env(SEND_SMS_HOOK_SECRETS)"
+secrets = ""
 
 [functions.auth-sms-hook]
 verify_jwt = false
@@ -71,10 +73,24 @@ verify_jwt = false
 [functions.job-reconciler]
 verify_jwt = false
 
-# Kaggle workers use short-lived, per-job bearer tokens validated by the
+[functions.aws-dispatcher]
+verify_jwt = false
+
+[functions.aws-reconciler]
+verify_jwt = false
+
+# Workers use short-lived, per-job bearer tokens validated by the
 # function against the stored token hash and expiry.
 [functions.worker-callback]
 verify_jwt = false
 
 [functions.public-assistant]
+verify_jwt = false
+
+# This isolated endpoint validates opaque OAuth grants itself. Default disabled
+# unless RG_GEMINI_CONNECTOR_ENABLED and the owner UUID are configured privately.
+[functions.advisory-mcp]
+verify_jwt = false
+
+[functions.advisory-notifier]
 verify_jwt = false

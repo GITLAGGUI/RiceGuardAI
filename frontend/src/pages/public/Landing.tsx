@@ -190,7 +190,7 @@ function GlassNav() {
             aria-label={t("homeLabel")}
           >
             <img
-              src="/logo.png"
+              src="/images/mascot/field-companion.png"
               alt=""
               aria-hidden
               className="w-7 h-7 rounded-md transition-transform duration-300 group-hover:rotate-6"
@@ -1444,7 +1444,7 @@ function Footer() {
       <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-10">
         <div>
           <div className="flex items-center gap-2 font-display text-xl font-bold text-white">
-            <img src="/logo.png" alt="" aria-hidden className="w-7 h-7 rounded-md" />
+            <img src="/images/mascot/field-companion.png" alt="" aria-hidden className="w-7 h-7 object-contain" />
             RiceGuard<span className="text-rice-300">.</span>
           </div>
           <p className="text-stone-400 text-sm mt-3 leading-relaxed max-w-xs">

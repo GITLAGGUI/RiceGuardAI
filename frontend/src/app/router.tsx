@@ -21,6 +21,9 @@ const OperationsRoot = lazy(() =>
 const OperationsPage = lazy(() =>
   import("@/operations/Admin").then((m) => ({ default: m.OperationsPage })),
 );
+const GeminiConnectionPage = lazy(() =>
+  import("@/operations/GeminiConnection").then((m) => ({ default: m.GeminiConnectionPage })),
+);
 const deferred = (children: ReactNode) => (
   <Suspense
     fallback={
@@ -66,6 +69,7 @@ const router = createBrowserRouter([
         children: [
           { index: true, element: <Navigate to="overview" replace /> },
           ...operations,
+          { path: "connect/gemini", element: deferred(<GeminiConnectionPage />) },
           { path: "scans", element: <Navigate to="/admin/surveys" replace /> },
           {
             path: "scans/new",

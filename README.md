@@ -19,8 +19,8 @@ Photo / MP4 / telemetry upload to private Google Drive
   -> native-coordinate result reconstruction and verified callback
   -> staff review of the exact result, media and approximate location
   -> approved specialist-grounded advisory draft
-  -> one final approval
-  -> public bulletin + approximate map + consent-checked SMS outbox
+  -> approval of public bulletin and approximate map
+  -> separate SMS preview and approval for consent-checked recipients
   -> accepted / delivered / failed receipt tracking
 ```
 
@@ -106,11 +106,16 @@ The dispatcher does not load checkpoints or process images. The generated
 private Kaggle run obtains a short-lived, run-scoped worker token and receives
 only its authorized manifest.
 
-## Model registry and scientific limits
+## Pinned workflow and scientific limits
 
-Two active model registry entries are required: `BLB` and `Brown Spot`. Each
-entry pins its architecture, encoder, preprocessing, input size, overlap,
-threshold, component filter, Drive artifact ID and SHA-256 checksum.
+The current `kaggle_yolo26` pathway uses the immutable two-specialist model
+bundle and worker SHA-256 in `_shared/pinnedResult.ts`. It does not select
+its checkpoints from `rg_model_registry`. That optional adapter registry must
+not be used as a readiness gate for the separately pinned pathway.
+
+The Model and system page reads the upload, dispatch and callback flags from
+the protected `system-readiness` action. Configured flags and credentials do
+not prove current GPU availability or successful execution.
 
 - BLB reports predicted disease-region coverage only after a visible-rice-leaf
   denominator is reviewed.
@@ -125,6 +130,13 @@ threshold, component filter, Drive artifact ID and SHA-256 checksum.
   a field-area estimate.
 
 ## Release verification
+
+The local SMS hook is disabled by default so linked read-only CLI checks do
+not require a local signing secret. Production Auth hook configuration is
+unchanged. To test a local SMS hook, load the real signing secret securely,
+set `auth.hook.send_sms.enabled = true` and use
+`secrets = "env(SEND_SMS_HOOK_SECRETS)"`. Never use a production phone number
+or a placeholder secret for an uncontrolled test.
 
 ```powershell
 cd frontend

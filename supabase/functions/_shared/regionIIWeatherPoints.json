@@ -1,0 +1,586 @@
+{
+  "method": "point_on_surface_of_2023_NAMRIA_PSA_derived_municipality_boundary",
+  "scope": "representative_nearby_point_not_entire_municipality",
+  "sources": [
+    {
+      "url": "https://raw.githubusercontent.com/faeldon/philippines-json-maps/master/2023/geojson/provdists/medres/municities-provdist-200900000.0.01.json",
+      "sha256": "7f55d9e33607b9c90ba9dfc2608593ffa290dedaf62041d167385bdd5547f081"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/faeldon/philippines-json-maps/master/2023/geojson/provdists/medres/municities-provdist-201500000.0.01.json",
+      "sha256": "f7c390cf1de362078904320524d9d4f951d877e9c43340d37d3eb7b9c174eaf8"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/faeldon/philippines-json-maps/master/2023/geojson/provdists/medres/municities-provdist-203100000.0.01.json",
+      "sha256": "d04e78674f3bc8dc964dc1847e0e34b59d0b7dd64cbd0dcae0fbf2485c2aa908"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/faeldon/philippines-json-maps/master/2023/geojson/provdists/medres/municities-provdist-205000000.0.01.json",
+      "sha256": "e0c3f12a2b9c4e695a531aab0ced839ccc9a07950075b2b1d467193972a24a7d"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/faeldon/philippines-json-maps/master/2023/geojson/provdists/medres/municities-provdist-205700000.0.01.json",
+      "sha256": "52385c439bb76d4ecfd4d8ac675ae03f873b6c7dee7451f51af80ba859bd4ed9"
+    }
+  ],
+  "points": {
+    "0200901000": {
+      "name": "Basco",
+      "province_code": "0200900000",
+      "lat": 20.454383,
+      "lng": 121.991928
+    },
+    "0200902000": {
+      "name": "Itbayat",
+      "province_code": "0200900000",
+      "lat": 20.762543,
+      "lng": 121.845944
+    },
+    "0200903000": {
+      "name": "Ivana",
+      "province_code": "0200900000",
+      "lat": 20.379183,
+      "lng": 121.93239
+    },
+    "0200904000": {
+      "name": "Mahatao",
+      "province_code": "0200900000",
+      "lat": 20.404501,
+      "lng": 121.950829
+    },
+    "0200905000": {
+      "name": "Sabtang",
+      "province_code": "0200900000",
+      "lat": 20.308423,
+      "lng": 121.864823
+    },
+    "0200906000": {
+      "name": "Uyugan",
+      "province_code": "0200900000",
+      "lat": 20.368342,
+      "lng": 121.954162
+    },
+    "0201501000": {
+      "name": "Abulug",
+      "province_code": "0201500000",
+      "lat": 18.393391,
+      "lng": 121.430531
+    },
+    "0201502000": {
+      "name": "Alcala",
+      "province_code": "0201500000",
+      "lat": 17.918628,
+      "lng": 121.676768
+    },
+    "0201503000": {
+      "name": "Allacapan",
+      "province_code": "0201500000",
+      "lat": 18.199194,
+      "lng": 121.548248
+    },
+    "0201504000": {
+      "name": "Amulung",
+      "province_code": "0201500000",
+      "lat": 17.804692,
+      "lng": 121.714117
+    },
+    "0201505000": {
+      "name": "Aparri",
+      "province_code": "0201500000",
+      "lat": 18.872446,
+      "lng": 121.380542
+    },
+    "0201506000": {
+      "name": "Baggao",
+      "province_code": "0201500000",
+      "lat": 17.934526,
+      "lng": 121.959635
+    },
+    "0201507000": {
+      "name": "Ballesteros",
+      "province_code": "0201500000",
+      "lat": 18.353512,
+      "lng": 121.514446
+    },
+    "0201508000": {
+      "name": "Buguey",
+      "province_code": "0201500000",
+      "lat": 18.242265,
+      "lng": 121.803631
+    },
+    "0201509000": {
+      "name": "Calayan",
+      "province_code": "0201500000",
+      "lat": 19.319362,
+      "lng": 121.456647
+    },
+    "0201510000": {
+      "name": "Camalaniugan",
+      "province_code": "0201500000",
+      "lat": 18.271706,
+      "lng": 121.687883
+    },
+    "0201511000": {
+      "name": "Claveria",
+      "province_code": "0201500000",
+      "lat": 18.570578,
+      "lng": 121.09169
+    },
+    "0201512000": {
+      "name": "Enrile",
+      "province_code": "0201500000",
+      "lat": 17.547515,
+      "lng": 121.701506
+    },
+    "0201513000": {
+      "name": "Gattaran",
+      "province_code": "0201500000",
+      "lat": 18.038804,
+      "lng": 121.779466
+    },
+    "0201514000": {
+      "name": "Gonzaga",
+      "province_code": "0201500000",
+      "lat": 18.273233,
+      "lng": 122.10832
+    },
+    "0201515000": {
+      "name": "Iguig",
+      "province_code": "0201500000",
+      "lat": 17.736343,
+      "lng": 121.757392
+    },
+    "0201516000": {
+      "name": "Lal-Lo",
+      "province_code": "0201500000",
+      "lat": 18.177752,
+      "lng": 122.041701
+    },
+    "0201517000": {
+      "name": "Lasam",
+      "province_code": "0201500000",
+      "lat": 18.056424,
+      "lng": 121.549286
+    },
+    "0201518000": {
+      "name": "Pamplona",
+      "province_code": "0201500000",
+      "lat": 18.449132,
+      "lng": 121.315678
+    },
+    "0201519000": {
+      "name": "Peñablanca",
+      "province_code": "0201500000",
+      "lat": 17.674515,
+      "lng": 121.969794
+    },
+    "0201520000": {
+      "name": "Piat",
+      "province_code": "0201500000",
+      "lat": 17.777767,
+      "lng": 121.508467
+    },
+    "0201521000": {
+      "name": "Rizal",
+      "province_code": "0201500000",
+      "lat": 17.908192,
+      "lng": 121.394105
+    },
+    "0201522000": {
+      "name": "Sanchez-Mira",
+      "province_code": "0201500000",
+      "lat": 18.528382,
+      "lng": 121.222238
+    },
+    "0201523000": {
+      "name": "Santa Ana",
+      "province_code": "0201500000",
+      "lat": 18.380356,
+      "lng": 122.219367
+    },
+    "0201524000": {
+      "name": "Santa Praxedes",
+      "province_code": "0201500000",
+      "lat": 18.544674,
+      "lng": 120.995325
+    },
+    "0201525000": {
+      "name": "Santa Teresita",
+      "province_code": "0201500000",
+      "lat": 18.220047,
+      "lng": 121.907082
+    },
+    "0201526000": {
+      "name": "Santo Niño",
+      "province_code": "0201500000",
+      "lat": 17.907866,
+      "lng": 121.522223
+    },
+    "0201527000": {
+      "name": "Solana",
+      "province_code": "0201500000",
+      "lat": 17.662043,
+      "lng": 121.6392
+    },
+    "0201528000": {
+      "name": "Tuao",
+      "province_code": "0201500000",
+      "lat": 17.679091,
+      "lng": 121.505432
+    },
+    "0201529000": {
+      "name": "Tuguegarao City",
+      "province_code": "0201500000",
+      "lat": 17.607192,
+      "lng": 121.730921
+    },
+    "0203101000": {
+      "name": "Alicia",
+      "province_code": "0203100000",
+      "lat": 16.809857,
+      "lng": 121.669057
+    },
+    "0203102000": {
+      "name": "Angadanan",
+      "province_code": "0203100000",
+      "lat": 16.780541,
+      "lng": 121.820392
+    },
+    "0203103000": {
+      "name": "Aurora",
+      "province_code": "0203100000",
+      "lat": 16.986915,
+      "lng": 121.651092
+    },
+    "0203104000": {
+      "name": "Benito Soliven",
+      "province_code": "0203100000",
+      "lat": 16.910684,
+      "lng": 121.958746
+    },
+    "0203105000": {
+      "name": "Burgos",
+      "province_code": "0203100000",
+      "lat": 17.072318,
+      "lng": 121.717846
+    },
+    "0203106000": {
+      "name": "Cabagan",
+      "province_code": "0203100000",
+      "lat": 17.391406,
+      "lng": 121.97835
+    },
+    "0203107000": {
+      "name": "Cabatuan",
+      "province_code": "0203100000",
+      "lat": 16.938818,
+      "lng": 121.653011
+    },
+    "0203108000": {
+      "name": "City of Cauayan",
+      "province_code": "0203100000",
+      "lat": 16.861625,
+      "lng": 121.820955
+    },
+    "0203109000": {
+      "name": "Cordon",
+      "province_code": "0203100000",
+      "lat": 16.729627,
+      "lng": 121.43827
+    },
+    "0203110000": {
+      "name": "Dinapigue",
+      "province_code": "0203100000",
+      "lat": 16.703353,
+      "lng": 122.282468
+    },
+    "0203111000": {
+      "name": "Divilacan",
+      "province_code": "0203100000",
+      "lat": 17.232439,
+      "lng": 122.309968
+    },
+    "0203112000": {
+      "name": "Echague",
+      "province_code": "0203100000",
+      "lat": 16.64256,
+      "lng": 121.777761
+    },
+    "0203113000": {
+      "name": "Gamu",
+      "province_code": "0203100000",
+      "lat": 17.076504,
+      "lng": 121.815265
+    },
+    "0203114000": {
+      "name": "City of Ilagan",
+      "province_code": "0203100000",
+      "lat": 17.154476,
+      "lng": 122.033435
+    },
+    "0203115000": {
+      "name": "Jones",
+      "province_code": "0203100000",
+      "lat": 16.533229,
+      "lng": 121.865479
+    },
+    "0203116000": {
+      "name": "Luna",
+      "province_code": "0203100000",
+      "lat": 16.97033,
+      "lng": 121.723886
+    },
+    "0203117000": {
+      "name": "Maconacon",
+      "province_code": "0203100000",
+      "lat": 17.435445,
+      "lng": 122.157244
+    },
+    "0203118000": {
+      "name": "Delfin Albano",
+      "province_code": "0203100000",
+      "lat": 17.272864,
+      "lng": 121.741979
+    },
+    "0203119000": {
+      "name": "Mallig",
+      "province_code": "0203100000",
+      "lat": 17.20253,
+      "lng": 121.625279
+    },
+    "0203120000": {
+      "name": "Naguilian",
+      "province_code": "0203100000",
+      "lat": 16.96493,
+      "lng": 121.890996
+    },
+    "0203121000": {
+      "name": "Palanan",
+      "province_code": "0203100000",
+      "lat": 17.016345,
+      "lng": 122.425086
+    },
+    "0203122000": {
+      "name": "Quezon",
+      "province_code": "0203100000",
+      "lat": 17.32914,
+      "lng": 121.608756
+    },
+    "0203123000": {
+      "name": "Quirino",
+      "province_code": "0203100000",
+      "lat": 17.150435,
+      "lng": 121.733764
+    },
+    "0203124000": {
+      "name": "Ramon",
+      "province_code": "0203100000",
+      "lat": 16.784838,
+      "lng": 121.520829
+    },
+    "0203125000": {
+      "name": "Reina Mercedes",
+      "province_code": "0203100000",
+      "lat": 17.000903,
+      "lng": 121.771742
+    },
+    "0203126000": {
+      "name": "Roxas",
+      "province_code": "0203100000",
+      "lat": 17.118691,
+      "lng": 121.611493
+    },
+    "0203127000": {
+      "name": "San Agustin",
+      "province_code": "0203100000",
+      "lat": 16.466892,
+      "lng": 121.768072
+    },
+    "0203128000": {
+      "name": "San Guillermo",
+      "province_code": "0203100000",
+      "lat": 16.666509,
+      "lng": 121.972838
+    },
+    "0203129000": {
+      "name": "San Isidro",
+      "province_code": "0203100000",
+      "lat": 16.735417,
+      "lng": 121.627248
+    },
+    "0203130000": {
+      "name": "San Manuel",
+      "province_code": "0203100000",
+      "lat": 17.031495,
+      "lng": 121.622801
+    },
+    "0203131000": {
+      "name": "San Mariano",
+      "province_code": "0203100000",
+      "lat": 16.876684,
+      "lng": 122.13082
+    },
+    "0203132000": {
+      "name": "San Mateo",
+      "province_code": "0203100000",
+      "lat": 16.885003,
+      "lng": 121.603267
+    },
+    "0203133000": {
+      "name": "San Pablo",
+      "province_code": "0203100000",
+      "lat": 17.477469,
+      "lng": 121.930572
+    },
+    "0203134000": {
+      "name": "Santa Maria",
+      "province_code": "0203100000",
+      "lat": 17.47023,
+      "lng": 121.712569
+    },
+    "0203135000": {
+      "name": "City of Santiago",
+      "province_code": "0203100000",
+      "lat": 16.665577,
+      "lng": 121.557924
+    },
+    "0203136000": {
+      "name": "Santo Tomas",
+      "province_code": "0203100000",
+      "lat": 17.375693,
+      "lng": 121.72718
+    },
+    "0203137000": {
+      "name": "Tumauini",
+      "province_code": "0203100000",
+      "lat": 17.284362,
+      "lng": 121.945879
+    },
+    "0205001000": {
+      "name": "Ambaguio",
+      "province_code": "0205000000",
+      "lat": 16.544786,
+      "lng": 121.047871
+    },
+    "0205002000": {
+      "name": "Aritao",
+      "province_code": "0205000000",
+      "lat": 16.244216,
+      "lng": 121.00936
+    },
+    "0205003000": {
+      "name": "Bagabag",
+      "province_code": "0205000000",
+      "lat": 16.609369,
+      "lng": 121.24607
+    },
+    "0205004000": {
+      "name": "Bambang",
+      "province_code": "0205000000",
+      "lat": 16.388404,
+      "lng": 121.085436
+    },
+    "0205005000": {
+      "name": "Bayombong",
+      "province_code": "0205000000",
+      "lat": 16.51282,
+      "lng": 121.127949
+    },
+    "0205006000": {
+      "name": "Diadi",
+      "province_code": "0205000000",
+      "lat": 16.595614,
+      "lng": 121.351161
+    },
+    "0205007000": {
+      "name": "Dupax del Norte",
+      "province_code": "0205000000",
+      "lat": 16.165528,
+      "lng": 121.257603
+    },
+    "0205008000": {
+      "name": "Dupax del Sur",
+      "province_code": "0205000000",
+      "lat": 16.102732,
+      "lng": 121.207852
+    },
+    "0205009000": {
+      "name": "Kasibu",
+      "province_code": "0205000000",
+      "lat": 16.302026,
+      "lng": 121.347336
+    },
+    "0205010000": {
+      "name": "Kayapa",
+      "province_code": "0205000000",
+      "lat": 16.412579,
+      "lng": 120.944044
+    },
+    "0205011000": {
+      "name": "Quezon",
+      "province_code": "0205000000",
+      "lat": 16.469774,
+      "lng": 121.291843
+    },
+    "0205012000": {
+      "name": "Santa Fe",
+      "province_code": "0205000000",
+      "lat": 16.183323,
+      "lng": 120.90489
+    },
+    "0205013000": {
+      "name": "Solano",
+      "province_code": "0205000000",
+      "lat": 16.545869,
+      "lng": 121.185757
+    },
+    "0205014000": {
+      "name": "Villaverde",
+      "province_code": "0205000000",
+      "lat": 16.612548,
+      "lng": 121.147552
+    },
+    "0205015000": {
+      "name": "Alfonso Castaneda",
+      "province_code": "0205000000",
+      "lat": 15.911726,
+      "lng": 121.343497
+    },
+    "0205701000": {
+      "name": "Aglipay",
+      "province_code": "0205700000",
+      "lat": 16.373378,
+      "lng": 121.570676
+    },
+    "0205702000": {
+      "name": "Cabarroguis",
+      "province_code": "0205700000",
+      "lat": 16.459225,
+      "lng": 121.494744
+    },
+    "0205703000": {
+      "name": "Diffun",
+      "province_code": "0205700000",
+      "lat": 16.535376,
+      "lng": 121.448608
+    },
+    "0205704000": {
+      "name": "Maddela",
+      "province_code": "0205700000",
+      "lat": 16.370731,
+      "lng": 121.777259
+    },
+    "0205705000": {
+      "name": "Saguday",
+      "province_code": "0205700000",
+      "lat": 16.573379,
+      "lng": 121.577299
+    },
+    "0205706000": {
+      "name": "Nagtipunan",
+      "province_code": "0205700000",
+      "lat": 16.121098,
+      "lng": 121.500557
+    }
+  }
+}

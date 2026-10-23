@@ -11,6 +11,7 @@ export type JobState =
   | "Queued"
   | "Submitting"
   | "Waiting for GPU"
+  | "Waiting for allowance"
   | "Running"
   | "Validating results"
   | "Needs review"
@@ -49,12 +50,14 @@ export interface Prediction {
 }
 export interface Survey {
   id: string;
+  inference_provider?: "kaggle" | "aws" | "kaggle_yolo26";
   name: string;
   location: string;
   captured_at: string;
   camera: string;
   status: JobState;
   photos: number;
+  expected_assets?: number;
   severity: Severity;
   lat: number | null;
   lng: number | null;
@@ -64,15 +67,24 @@ export interface Survey {
   active_result_revision?: number | null;
   approved_result_revision?: number | null;
   note?: string;
+  crop_stage?: "unknown" | "seedling" | "vegetative" | "reproductive" | "ripening" | "post_harvest";
+  field_conditions?: ("standing_water" | "lodging" | "dry_or_cracked_soil" | "nutrient_stress_suspected" | "pest_damage_suspected")[];
+  field_assessment?: { basis: "manual_field_assessment" | "reviewed_severity_assessment"; model_calibrated: false; result_revision: number; bulletin_id?: string; evidence_key?: string; diseases: Record<string, { category: string; basis?: string; leaf_area_affected_pct?: number; sampled_leaves?: number; specialist: string; notes: string }> };
 }
 export interface Bulletin {
+  location_review?: { mode: "approximate_pin" | "no_pin"; lat: number | null; lng: number | null; evidence_key: string } | null;
+  context_review_required?: boolean;
+  media_approved?: boolean;
+  severity_recommendation?: { basis: string; model_calibrated: false; scope: string; result_revision: number; advisory_revision: number; image_count: number; diseases: { disease: Disease; category: Severity; reason: string }[] } | null;
   id: string;
+  survey_id?: string;
   slug: string;
   title: string;
   location: string;
   disease: Disease;
   severity: Severity;
   body: string;
+  diseases?: Disease[];
   action: string;
   date: string;
   status: "draft" | "published";
@@ -84,10 +96,15 @@ export interface Bulletin {
   published_at?: string;
   updated_at?: string;
   approximate_location?: boolean;
-  media?: { url: string; alt: string; type: "image" | "video" }[];
+  public_location_approved?: boolean;
+  media?: { url: string; alt: string; type: "image" | "video"; width?: number; height?: number; source_asset_id?: string }[];
+  public_media?: { url: string; alt: string; type: "image" | "video"; width?: number; height?: number; source_asset_id?: string }[];
   revision?: number;
   advisory_revision?: number;
   result_revision?: number | null;
+  advisory_sources?: { disease: string; title: string; version: string; reference: string }[];
+  advisory_source_ids?: string[];
+  limitations?: string;
 }
 export interface Contact {
   id: string;
@@ -110,8 +127,12 @@ export interface Campaign {
     | "delivered"
     | "failed"
     | "unknown"
-    | "suppressed";
+    | "suppressed"
+    | "mixed";
   sample: boolean;
+  counts?: Partial<Record<"queued" | "accepted" | "sent" | "delivered" | "failed" | "unknown" | "suppressed", number>>;
+  accepted_at?: string | null;
+  delivered_at?: string | null;
 }
 export interface Asset {
   id: string;
@@ -136,11 +157,16 @@ export interface ProcessingJob {
   run_id: string;
   error: string | null;
   result_manifest?: Record<string, unknown> | null;
+  provider?: "kaggle" | "kaggle_yolo26" | "aws" | "roboflow_azure";
+  stage?: string;
+  estimated_credits?: number;
   review_urls?: Record<string, Record<string, string>>;
+  finding_reviews?: { source_asset_id: string; disease: Disease; decision: "accepted" | "rejected" | "uncertain" }[];
   created_at: string;
   updated_at: string;
 }
 export interface ProviderStatus {
+  inference?: "ready" | "configuration_required" | "waiting_for_allowance";
   drive: "connected" | "configuration_required" | "error";
   kaggle: "connected" | "configuration_required" | "waiting_for_quota" | "error";
   sms: "connected" | "offline" | "credentials_present" | "configuration_required" | "error";

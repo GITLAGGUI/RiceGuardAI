@@ -26,3 +26,15 @@ export const supabase = createClient(url, anonKey, {
     detectSessionInUrl: true,
   },
 });
+
+// Farmer SMS verification must not replace an administrator's email/MFA
+// session in the same browser. This client intentionally has a separate auth
+// storage namespace and never consumes email-login callbacks from the URL.
+export const subscriberSupabase = createClient(url, anonKey, {
+  auth: {
+    storageKey: "riceguard-subscriber-auth-v1",
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: false,
+  },
+});

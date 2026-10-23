@@ -1,15 +1,163 @@
 <!doctype html>
-<html lang="tl">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/logo.png" />
-    <link rel="apple-touch-icon" href="/logo.png" />
+    <link rel="icon" type="image/png" href="/images/mascot/field-companion.png" />
+    <link rel="apple-touch-icon" href="/images/mascot/field-companion.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#064e3b" />
-    <meta name="description" content="RiceGuardAI — Drone-assisted rice disease review, public field advisories, at SMS alerts para sa mga magsasaka ng Region II: Batanes, Cagayan, Isabela, Nueva Vizcaya at Quirino." />
-    <title>RiceGuard AI — Proteksyon para sa bawat palayan</title>
+    <meta name="theme-color" content="#0b2d22" />
+    <meta name="description" content="RiceGuardAI reads drone photos of Region II rice paddies for Bacterial Leaf Blight and Brown Spot. Every finding is reviewed before it reaches the public bulletin, the monitoring map and farmers' phones by SMS." />
+    <meta property="og:title" content="RiceGuardAI — Catch rice disease before it spreads" />
+    <meta property="og:description" content="Drone photos, two disease models and human review, delivered to Region II farmers as reviewed advisories and SMS alerts." />
+    <meta property="og:image" content="/video/riceguardai-film-poster.jpg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@450;500;600;650;700&display=swap" rel="stylesheet" />
+    <title>RiceGuardAI — Catch rice disease before it spreads</title>
+    <style>
+      html.rg-booting,
+      html.rg-booting body {
+        overflow: hidden;
+        background: #0b2d22;
+      }
+      #rg-boot-loader {
+        --rg-progress: 6;
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        background: #0b2d22;
+        color: #f3f6ee;
+        font-family: "Space Grotesk", system-ui, sans-serif;
+        transition: opacity .55s ease .3s, visibility .55s ease .3s;
+      }
+      .rg-loader-inner { display: grid; justify-items: center; }
+      .rg-loader-flight {
+        position: relative;
+        width: 300px;
+        height: 190px;
+      }
+      .rg-loader-mascot {
+        position: absolute;
+        left: 50%;
+        top: 0;
+        width: 118px;
+        height: 118px;
+        margin-left: -59px;
+        animation: rg-hover 2.4s ease-in-out infinite alternate, rg-arrive .9s cubic-bezier(.22, 1, .36, 1) both;
+      }
+      .rg-loader-mascot img { width: 100%; height: 100%; object-fit: contain; }
+      .rg-loader-beam {
+        position: absolute;
+        left: 50%;
+        top: 92px;
+        width: 220px;
+        height: 76px;
+        margin-left: -110px;
+        background: rgba(168, 212, 92, .16);
+        clip-path: polygon(44% 0, 56% 0, 100% 100%, 0 100%);
+        transform-origin: 50% 0;
+        animation: rg-sweep 2.4s ease-in-out infinite alternate, rg-fade-in .6s ease .5s both;
+      }
+      .rg-loader-field {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 44px;
+      }
+      .rg-loader-field svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+      .rg-loader-field .base { stroke: #24543f; }
+      .rg-loader-field .lit {
+        stroke: #a8d45c;
+        clip-path: inset(0 calc(100% - var(--rg-progress) * 1%) 0 0);
+        transition: clip-path .45s cubic-bezier(.22, 1, .36, 1);
+      }
+      .rg-loader-word {
+        margin-top: 26px;
+        font-size: 26px;
+        font-weight: 700;
+        letter-spacing: -.04em;
+        animation: rg-fade-up .8s cubic-bezier(.22, 1, .36, 1) .2s both;
+      }
+      .rg-loader-word b { font-weight: 500; color: #a8d45c; }
+      .rg-loader-status {
+        margin-top: 6px;
+        font: 500 14px/1.4 Inter, system-ui, sans-serif;
+        color: #c2cfc6;
+        animation: rg-fade-up .8s cubic-bezier(.22, 1, .36, 1) .35s both;
+      }
+      @keyframes rg-hover {
+        from { transform: translateY(2px) rotate(-2deg); }
+        to { transform: translateY(-8px) rotate(2deg); }
+      }
+      @keyframes rg-arrive {
+        from { opacity: 0; translate: -60px -40px; }
+        to { opacity: 1; translate: 0 0; }
+      }
+      @keyframes rg-sweep {
+        from { transform: rotate(-9deg); }
+        to { transform: rotate(9deg); }
+      }
+      @keyframes rg-fade-in { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes rg-fade-up {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: none; }
+      }
+      /* Leaving: the companion lifts off toward the top right and the field shows through. */
+      #rg-boot-loader.rg-boot-loader--leaving {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      #rg-boot-loader.rg-boot-loader--leaving .rg-loader-mascot {
+        translate: 46vw -60vh;
+        scale: .6;
+        transition: translate .8s cubic-bezier(.6, 0, .84, .2), scale .8s ease;
+      }
+      #rg-boot-loader.rg-boot-loader--leaving .rg-loader-beam,
+      #rg-boot-loader.rg-boot-loader--leaving .rg-loader-word,
+      #rg-boot-loader.rg-boot-loader--leaving .rg-loader-status,
+      #rg-boot-loader.rg-boot-loader--leaving .rg-loader-field {
+        opacity: 0;
+        transition: opacity .25s ease;
+      }
+      #root { opacity: 0; }
+      html.rg-app-ready #root { opacity: 1; transition: opacity .4s ease; }
+      html:not(.rg-booting) #rg-boot-loader:not(.rg-boot-loader--leaving) { display: none; }
+      @media (prefers-reduced-motion: reduce) {
+        .rg-loader-mascot, .rg-loader-beam, .rg-loader-word, .rg-loader-status { animation: none !important; }
+        #rg-boot-loader.rg-boot-loader--leaving .rg-loader-mascot { translate: none; scale: none; }
+      }
+    </style>
+    <script>
+      if (window.location.pathname === "/") {
+        document.documentElement.classList.add("rg-booting");
+      } else {
+        document.documentElement.classList.add("rg-app-ready");
+      }
+    </script>
   </head>
   <body class="bg-stone-50 antialiased">
+    <div id="rg-boot-loader" aria-hidden="true">
+      <div class="rg-loader-inner">
+        <div class="rg-loader-flight">
+          <div class="rg-loader-beam"></div>
+          <div class="rg-loader-mascot"><img src="/images/mascot/field-companion.png" alt="" /></div>
+          <div class="rg-loader-field">
+            <svg viewBox="0 0 300 44" fill="none" stroke-width="3" stroke-linecap="round">
+              <defs><path id="rg-stalk" d="M6 44C6 30 4 18 0 6M6 44C7 30 10 20 15 10M6 44C6 32 7 22 7 2" /></defs>
+              <g class="base"><use href="#rg-stalk" x="8" /><use href="#rg-stalk" x="29" /><use href="#rg-stalk" x="50" /><use href="#rg-stalk" x="71" /><use href="#rg-stalk" x="92" /><use href="#rg-stalk" x="113" /><use href="#rg-stalk" x="134" /><use href="#rg-stalk" x="155" /><use href="#rg-stalk" x="176" /><use href="#rg-stalk" x="197" /><use href="#rg-stalk" x="218" /><use href="#rg-stalk" x="239" /><use href="#rg-stalk" x="260" /><use href="#rg-stalk" x="281" /></g>
+              <g class="lit"><use href="#rg-stalk" x="8" /><use href="#rg-stalk" x="29" /><use href="#rg-stalk" x="50" /><use href="#rg-stalk" x="71" /><use href="#rg-stalk" x="92" /><use href="#rg-stalk" x="113" /><use href="#rg-stalk" x="134" /><use href="#rg-stalk" x="155" /><use href="#rg-stalk" x="176" /><use href="#rg-stalk" x="197" /><use href="#rg-stalk" x="218" /><use href="#rg-stalk" x="239" /><use href="#rg-stalk" x="260" /><use href="#rg-stalk" x="281" /></g>
+            </svg>
+          </div>
+        </div>
+        <div class="rg-loader-word">RiceGuard<b>AI</b></div>
+        <div class="rg-loader-status">Scanning the field…</div>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -1,0 +1,40 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {createGeminiDatabase,ids,hash} from './gemini-connector-database.mjs';
+const db=await createGeminiDatabase(),{pg}=db;
+await pg.exec(`alter table rg_processing_jobs add column run_id text;create schema cron;create schema private;
+create table cron.job(jobname text,schedule text,command text);
+create function cron.schedule(text,text,text) returns bigint language sql as $$insert into cron.job values($1,$2,$3) returning 1::bigint$$;
+create function private.rg_invoke_edge(text) returns bigint language sql as $$select 1::bigint$$;`);
+for(const name of ['20261023010946_gemini_visual_media.sql','20261023012434_gemini_advisory_ready_events.sql','20261023053748_gemini_notice_retry_consumer.sql'])await pg.exec(await readFile(new URL(`../../supabase/migrations/${name}`,import.meta.url),'utf8'));
+const rpc=(op,input)=>pg.transaction(async tx=>{await tx.exec('set local role service_role');return(await tx.query('select rg_mcp_event_store($1,$2::jsonb) x',[op,JSON.stringify(input)])).rows[0].x;});
+const candidates=()=>pg.transaction(async tx=>{await tx.exec('set local role service_role');return(await tx.query('select rg_mcp_notice_candidates() x')).rows[0].x;});
+let checks=0;const eq=(a,b)=>{assert.deepEqual(a,b);checks++;};
+try{
+ await db.reset();
+ const paths={original:'private/original.jpg',combined:'private/combined.jpg'};
+ const manifest={schema_version:'riceguard.result.v2',assets:[{kind:'image',source_asset_id:ids.source,review_paths:paths,diseases:[]}],artifacts:Object.fromEntries(Object.values(paths).map(p=>[p,{sha256:hash('a')}]))};
+ await pg.query("update rg_processing_jobs set run_id='rg-synthetic1234',manifest=$1,result_manifest=$1 where id=$2",[manifest,ids.job]);
+ await pg.query('update rg_result_revisions set manifest=$1 where job_id=$2',[manifest,ids.job]);
+ const connection=await db.connect({allow_images:true});
+ const key={survey_id:ids.survey,job_id:ids.job,result_revision:1,policy_version:'visual-v1'};
+ const catalogue={...key,schema_version:'riceguard.advisory.catalogue.v1',entries:Object.keys(paths).map(variant=>({source_asset_id:ids.source,image_index:1,variant,source_sha256:hash('a'),path:`website-inference/v2/jobs/rg-synthetic1234/outputs/advisory-media/visual-v1/${ids.source}/${variant}.jpg`,sha256:hash('b'),bytes:123,width:10,height:10,quality:85}))};
+ await pg.transaction(async tx=>{await tx.exec('set local role service_role');await tx.query("select rg_mcp_visual_store('save_catalogue',$1)",[{catalogue}]);});
+ const event=await rpc('enqueue_ready',key),id=event.event_id;
+ eq(await candidates(),[{event_id:id}]);
+ const lease_id=crypto.randomUUID();await rpc('claim_notice',{event_id:id,lease_id});eq(await candidates(),[]);
+ await rpc('record_failed',{event_id:id,lease_id,failure_code:'transport_timeout'});eq(await candidates(),[]);
+ await pg.query("update rg_mcp.ready_events set lease_expires_at=now()-interval '1 second' where id=$1",[id]);eq(await candidates(),[{event_id:id}]);
+ const lease2=crypto.randomUUID();await rpc('claim_notice',{event_id:id,lease_id:lease2});
+ await rpc('record_failed',{event_id:id,lease_id:lease2,failure_code:'manual_reconciliation'});
+ await pg.query("update rg_mcp.ready_events set lease_expires_at=now()-interval '1 second' where id=$1",[id]);eq(await candidates(),[]);
+ await pg.query("update rg_mcp.ready_events set failure_code='transport_unavailable' where id=$1",[id]);
+ await pg.query('update rg_mcp.grants set revoked_at=now() where id=$1',[connection.grant_id]);eq(await candidates(),[]);
+ await pg.query('update rg_mcp.grants set revoked_at=null where id=$1',[connection.grant_id]);eq(await candidates(),[{event_id:id}]);
+ await pg.query('update rg_surveys set active_result_revision=2 where id=$1',[ids.survey]);eq(await candidates(),[]);
+ await pg.query('update rg_surveys set active_result_revision=1 where id=$1',[ids.survey]);
+ await pg.query('update rg_mcp.ready_events set notice_attempts=5 where id=$1',[id]);eq(await candidates(),[]);
+ for(const role of ['anon','authenticated']){await assert.rejects(pg.transaction(async tx=>{await tx.exec(`set local role ${role}`);await tx.query('select rg_mcp_notice_candidates()');}),/permission denied/);checks++;}
+ eq((await pg.query("select jobname,schedule from cron.job")).rows,[{jobname:'riceguard-advisory-notices',schedule:'*/2 * * * *'}]);
+ console.log(`PASS: ${checks} retry SQL checks (durable candidates, cooldown, manual reconciliation, consent/revision, cron, ACL).`);
+}finally{await pg.close();}

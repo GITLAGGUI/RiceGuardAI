@@ -204,9 +204,13 @@ export function AdminLayout() {
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               All systems normal
             </div>
-            <button className="relative text-slate-500 hover:text-slate-900 transition">
+            <NavLink
+              to="/admin/review"
+              aria-label="Open review backlog"
+              className="relative text-slate-500 hover:text-slate-900 transition"
+            >
               <Bell size={18} />
-            </button>
+            </NavLink>
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-slate-950 grid place-items-center text-xs font-bold">
               {initials}
             </div>

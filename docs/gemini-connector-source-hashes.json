@@ -1,0 +1,113 @@
+{
+  "note": "Local QA checkpoint, not approved deployment manifest. Existing modified files include source-only dirty baseline. Exclude graphify-out, dependencies and all credentials.",
+  "files": [
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\supabase\\functions\\_shared\\geminiConnector\\advisory.ts",
+      "sha256": "f2f60d2b16854ecb7e4c860a2ab8f25fbeea13f3237f65810b2986a44798b426"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\supabase\\functions\\_shared\\geminiConnector\\contracts.ts",
+      "sha256": "527184e688cbd52d095c774b44549428358729dcf3ea5f7799a6bca6e7de3ec9"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\supabase\\functions\\_shared\\geminiConnector\\evidence.ts",
+      "sha256": "140294846505759aac01f62c831509f32aff1528e1739200c351234f973892bd"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\supabase\\functions\\_shared\\geminiConnector\\media.ts",
+      "sha256": "872c96ac77c26e60468ab01f04e1d2f4260e9acff2f2450d5c8d1e18c7c46846"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\supabase\\functions\\_shared\\geminiConnector\\oauth.ts",
+      "sha256": "0b8b2828803458cf42cfa852f648caf558f9f2f6eaa367e8f7d1a7b922e853f4"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\supabase\\functions\\_shared\\geminiConnector\\policy.ts",
+      "sha256": "dd774cfd6c12656102f69546d5d481058998f1001d4d99beeb015ecd9cb8183b"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\supabase\\functions\\_shared\\geminiConnector\\server.ts",
+      "sha256": "4ce3d07863a712394aca230c86494bed604d38cca3c2274a9e91b7b258cc7437"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\supabase\\functions\\_shared\\geminiConnector\\store.ts",
+      "sha256": "34c44e8010fbbb5b54e33e546d40285995b9312e82e18638d7d04bf3677b499f"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\supabase\\functions\\advisory-mcp\\index.ts",
+      "sha256": "465a682ac4e02aaf1e397d0aed838122b4089b50c30a2ccf0c0c42ca1d55de7d"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\supabase\\functions\\advisory-mcp\\deno.json",
+      "sha256": "f61dcc7127b1f76972d18bd1a9bfdd0b2a93a0945339de0e6eb98bec4e2f1de2"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\supabase\\functions\\advisory-mcp\\deno.lock",
+      "sha256": "848185f836355c5f15707fb91a6a72a9eff765f271f82c10b916791390fd2d63"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\supabase\\functions\\advisory-mcp\\tests\\advisory.test.ts",
+      "sha256": "228aeda818fafa00ffcfdad97ed30ea7e68a1ed930bbb461301dc941d2957d1b"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\supabase\\functions\\advisory-mcp\\tests\\contracts.test.ts",
+      "sha256": "ab92b61760ef661daf5176b62ec02b94f36d2d0bbd6172870f7189ed64486be8"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\supabase\\functions\\advisory-mcp\\tests\\evidence.test.ts",
+      "sha256": "e2fa8d385bffabbe0cd1bef003bd566065679279b38408d27bed78e0e2cb414d"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\supabase\\functions\\advisory-mcp\\tests\\integration.test.ts",
+      "sha256": "813af6c24134d8eb6259213121a20f1c985c8fbb25cd9e0a0a8ae78c5b230384"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\supabase\\functions\\advisory-mcp\\tests\\media.test.ts",
+      "sha256": "97e658b90400d9ca5dde12b203d8a89d0e93084c14d226ac6fec4c0bc8a52235"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\supabase\\functions\\advisory-mcp\\tests\\oauth.test.ts",
+      "sha256": "2e5b57f0019db26bedffe198494f0fb433de9cc90aadb42d60892b9326883bea"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\supabase\\functions\\advisory-mcp\\tests\\server.test.ts",
+      "sha256": "88013b81c51961f76df65d938c62da09f44092fd33cdbb3fdafe811362ac096a"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\supabase\\migrations\\20261022185322_gemini_advisory_connector.sql",
+      "sha256": "a2d99ffa2075889f8cf4f753e2ddd26fd7381ccdffa27e92bfd2e51027bd47ad"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\frontend\\src\\operations\\GeminiConnection.tsx",
+      "sha256": "2f4057a4feb71c30720955cb7861df0d89e6f58bff07a58d4a071aa1b7cc7954"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\frontend\\src\\operations\\geminiConnector.ts",
+      "sha256": "2817745491f22fe0b361b7fb1777fce1a214c8c77f02d62c059c6bef0c6770dd"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\frontend\\src\\operations\\geminiConnector.ui.test.tsx",
+      "sha256": "d2f1df5be3e5d713853e41ebc859ab7b50836bfec8c37c062e15e2b55eccb2a9"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\frontend\\src\\operations\\geminiConnector.database.test.ts",
+      "sha256": "9bfd688270fcbeedf81bb965702deff78beb4ef7c93e28c88b741fd8f9f8e0fc"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\frontend\\qa\\gemini-connector-database.mjs",
+      "sha256": "0af4f06fcb32dc3b9c776232a6e9b3748f4742d2c90ea300f12b35b21ea03849"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\frontend\\qa\\gemini-connector-smoke-server.mjs",
+      "sha256": "aec60ffe3e5610920908e6615c18c3f902da31239a8c4b02354ad250071bf791"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\vercel.json",
+      "sha256": "6350f78c793c471d5f73720336b650df6bf29f3b5cf482844af7c065a8e66d08"
+    },
+    {
+      "path": "C:\\Users\\jenal\\Dev\\riceguard-gemini-mcp-20261023\\supabase\\config.toml",
+      "sha256": "a00b5e444ea5e17cd633f53a3e0e8f3e190eeeb70eaac9ba69457fe5156c99ca"
+    }
+  ]
+}

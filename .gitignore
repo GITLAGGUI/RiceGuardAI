@@ -27,6 +27,8 @@ supabase/.env
 
 # Vercel
 .vercel
+qa/production_backup_*.json
+qa/cleanup_backup_*.json
 
 # Legacy PHP/JS code — kept locally for reference, NOT in repo
 # (contains hardcoded keys from the old deployment)
@@ -60,3 +62,4 @@ chekthis.png
 
 # Netlify (legacy hosting, not used anymore)
 .netlify
+.env*

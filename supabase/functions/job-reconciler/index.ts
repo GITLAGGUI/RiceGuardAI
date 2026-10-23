@@ -13,7 +13,8 @@ Deno.serve(async (req) => {
   const dispatchUrl = Deno.env.get("KAGGLE_DISPATCH_URL");
   const dispatchSecret = Deno.env.get("KAGGLE_DISPATCH_SECRET");
   if (!dispatchUrl || !dispatchSecret) return json({ error: "Kaggle dispatcher is not configured" }, 503);
-  const jobs = await db.from("rg_processing_jobs").select("id,survey_id,status,kaggle_kernel_ref,updated_at,result_manifest").in("status", ["Submitting", "Running", "Validating results"]).order("updated_at").limit(10);
+  const jobs = await db.from("rg_processing_jobs").select("id,survey_id,status,kaggle_kernel_ref,updated_at,result_manifest")
+    .eq("provider", "kaggle_yolo26").in("status", ["Submitting", "Running", "Validating results"]).order("updated_at").limit(10);
   if (jobs.error) return json({ error: jobs.error.message }, 500);
   const report = [];
   for (const job of jobs.data || []) {
@@ -24,7 +25,9 @@ Deno.serve(async (req) => {
       if (!response.ok) continue;
       const provider = await response.json();
       const state = String(provider.status || provider.state || "").toLowerCase();
-      if (["error", "failed", "cancelled"].includes(state)) {
+      const providerStateIsStale = Date.now() - new Date(job.updated_at).getTime() > 20 * 60_000;
+      if (["error", "failed", "canceled", "cancelled"].includes(state) ||
+        (state === "cancel_acknowledged" && providerStateIsStale)) {
         await db.from("rg_processing_jobs").update({ status: "Failed", error: `Kaggle run ended with status ${state}`, completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", job.id);
         await db.from("rg_surveys").update({ status: "Failed", stage_updated_at: new Date().toISOString() }).eq("id", job.survey_id);
       } else if (["complete", "completed"].includes(state) && !job.result_manifest) {

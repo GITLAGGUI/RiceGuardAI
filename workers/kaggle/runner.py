@@ -354,12 +354,12 @@ def main():
         for disease in ("BLB", "Brown Spot"):
             preview_path = work / f"preview-{disease.lower().replace(' ', '-')}.webp"
             Image.fromarray(overlay(first_image, {disease: first_masks[disease]})).save(preview_path, "WEBP", quality=82, method=5)
-            preview_paths[disease] = upload_signed(preview_path, context["preview_uploads"][disease], "image/webp", supabase_base, "rg-public-previews")
+            preview_paths[disease] = upload_signed(preview_path, context["preview_uploads"][disease], "image/webp", supabase_base, "rg-review-previews")
         combined_path = work / "preview-combined.webp"
         Image.fromarray(overlay(first_image, first_masks)).save(combined_path, "WEBP", quality=82, method=5)
-        preview_paths["combined"] = upload_signed(combined_path, context["preview_uploads"]["combined"], "image/webp", supabase_base, "rg-public-previews")
+        preview_paths["combined"] = upload_signed(combined_path, context["preview_uploads"]["combined"], "image/webp", supabase_base, "rg-review-previews")
     if video_preview:
-        preview_paths["video"] = upload_signed(video_preview, context["preview_uploads"]["video"], "video/mp4", supabase_base, "rg-public-previews")
+        preview_paths["video"] = upload_signed(video_preview, context["preview_uploads"]["video"], "video/mp4", supabase_base, "rg-review-previews")
 
     image_results = [item for item in results if item["kind"] == "image"]
     numerator = {

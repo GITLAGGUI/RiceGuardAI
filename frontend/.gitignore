@@ -5,3 +5,8 @@ dist
 .env.*.local
 *.tsbuildinfo
 .vite
+.vercel
+.env*
+
+# Design QA output
+.taste-skill/

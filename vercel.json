@@ -7,6 +7,10 @@
     "api/kaggle.py": { "maxDuration": 60 }
   },
   "rewrites": [
+    { "source": "/.well-known/oauth-protected-resource/api/advisory-mcp", "destination": "https://pekowozxnyyeskymjxyx.supabase.co/functions/v1/advisory-mcp/metadata/resource" },
+    { "source": "/.well-known/oauth-authorization-server", "destination": "https://pekowozxnyyeskymjxyx.supabase.co/functions/v1/advisory-mcp/metadata/authorization" },
+    { "source": "/api/advisory-oauth/:path*", "destination": "https://pekowozxnyyeskymjxyx.supabase.co/functions/v1/advisory-mcp/oauth/:path*" },
+    { "source": "/api/advisory-mcp", "destination": "https://pekowozxnyyeskymjxyx.supabase.co/functions/v1/advisory-mcp/mcp" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

@@ -1,0 +1,532 @@
+{
+  "deployment": "dpl_3dj2Q56wcLmd8cLde8p9UTX88Ah7",
+  "source": "cli",
+  "git_dirty": true,
+  "stage": "C:\\Users\\jenal\\OneDrive\\Documents\\RiceGuardAI\\website_repo\\qa\\releases\\readiness-20261013\\stage",
+  "source_files": 159,
+  "checked": [
+    {
+      "path": ".vercelignore",
+      "expected": "c1e9ffb4a5323766f5dbddc25f5f91cf9e0ec498",
+      "actual": "c1e9ffb4a5323766f5dbddc25f5f91cf9e0ec498",
+      "matches": true
+    },
+    {
+      "path": "api/kaggle.py",
+      "expected": "dde02bb95f482bcdbd2045fba4fe4ff4089eaa38",
+      "actual": "dde02bb95f482bcdbd2045fba4fe4ff4089eaa38",
+      "matches": true
+    },
+    {
+      "path": "frontend/eslint.config.js",
+      "expected": "0719421e1fb59799ddbe9c009bba75d084f570a0",
+      "actual": "0719421e1fb59799ddbe9c009bba75d084f570a0",
+      "matches": true
+    },
+    {
+      "path": "frontend/index.html",
+      "expected": "52412cd275fa4a93ed82c43727022fee1d846b6e",
+      "actual": "52412cd275fa4a93ed82c43727022fee1d846b6e",
+      "matches": true
+    },
+    {
+      "path": "frontend/package-lock.json",
+      "expected": "53c28cdc9316d9e774ddbd5c7e9056c52dc82768",
+      "actual": "53c28cdc9316d9e774ddbd5c7e9056c52dc82768",
+      "matches": true
+    },
+    {
+      "path": "frontend/package.json",
+      "expected": "1acac3e9a2cb38a14ebed7cd4922bca96e3a78ca",
+      "actual": "1acac3e9a2cb38a14ebed7cd4922bca96e3a78ca",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/app/providers.tsx",
+      "expected": "f18ed3c7918471b62a4fc694faefa4bfabf9209a",
+      "actual": "f18ed3c7918471b62a4fc694faefa4bfabf9209a",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/app/router.legacy.tsx",
+      "expected": "4ab3666cf42349dca8d36572f2bc15c2452f4854",
+      "actual": "4ab3666cf42349dca8d36572f2bc15c2452f4854",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/app/router.tsx",
+      "expected": "a1d4b826d65a40ad4bc24d3b8e1d6bab02c1712e",
+      "actual": "a1d4b826d65a40ad4bc24d3b8e1d6bab02c1712e",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/components/LanguagePicker.tsx",
+      "expected": "0f5bcb866e2960063f744c51e8477798c9c8b2cb",
+      "actual": "0f5bcb866e2960063f744c51e8477798c9c8b2cb",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/components/guards/ProtectedRoute.tsx",
+      "expected": "f837f2b3604630712815d776c45b5e29a1bbb1c6",
+      "actual": "f837f2b3604630712815d776c45b5e29a1bbb1c6",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/components/layout/AdminLayout.tsx",
+      "expected": "8d490b7a46c0ab50e8af9d15f4bd53fb35add3f1",
+      "actual": "8d490b7a46c0ab50e8af9d15f4bd53fb35add3f1",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/components/layout/FarmerLayout.tsx",
+      "expected": "93ac84456d838ce0fe261a60699cbe9015590de0",
+      "actual": "93ac84456d838ce0fe261a60699cbe9015590de0",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/components/layout/PublicLayout.tsx",
+      "expected": "a4e4579cda53c80f395941291eeda37f600a9be3",
+      "actual": "a4e4579cda53c80f395941291eeda37f600a9be3",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/components/map/LeafletMap.tsx",
+      "expected": "851b85741363bd9a2c4266c4e8dfda676145ccf7",
+      "actual": "851b85741363bd9a2c4266c4e8dfda676145ccf7",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/components/motion/useParallax.ts",
+      "expected": "70b97b3c5b2c912737ed917cbefe532aec508533",
+      "actual": "70b97b3c5b2c912737ed917cbefe532aec508533",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/components/motion/useSmoothScroll.ts",
+      "expected": "288e3a0341082d47d998fbc07a3dccfc2334a179",
+      "actual": "288e3a0341082d47d998fbc07a3dccfc2334a179",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/context/AuthContext.tsx",
+      "expected": "0aa0b766b2175339b73e43f06f2c21484175c38b",
+      "actual": "0aa0b766b2175339b73e43f06f2c21484175c38b",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/context/LangContext.tsx",
+      "expected": "36d075c2ddf87df7098e99be4da6701eed2684b0",
+      "actual": "36d075c2ddf87df7098e99be4da6701eed2684b0",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/lib/supabase.ts",
+      "expected": "405852ce8e084ec23464e32ab9bba50498677197",
+      "actual": "405852ce8e084ec23464e32ab9bba50498677197",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/main.tsx",
+      "expected": "e6e35aa5ad3946b1387c7948fe7cb734df17de96",
+      "actual": "e6e35aa5ad3946b1387c7948fe7cb734df17de96",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/Admin.tsx",
+      "expected": "371a539470c49e98bdbf015e0bfb060547b91bf8",
+      "actual": "371a539470c49e98bdbf015e0bfb060547b91bf8",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/Assistant.tsx",
+      "expected": "8943a2b781d5b3f9383a43dbb8912e357c206e6d",
+      "actual": "8943a2b781d5b3f9383a43dbb8912e357c206e6d",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/HeroScene.tsx",
+      "expected": "b5e756e5f1dbc05f151afcaaa810f988f1d732a9",
+      "actual": "b5e756e5f1dbc05f151afcaaa810f988f1d732a9",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/LazyMap.tsx",
+      "expected": "a2f25f80528d50da7fa0f638388144f671e86062",
+      "actual": "a2f25f80528d50da7fa0f638388144f671e86062",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/Map.tsx",
+      "expected": "0ee702ac183e91000cd6f744743d6f01ef0c7623",
+      "actual": "0ee702ac183e91000cd6f744743d6f01ef0c7623",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/Public.tsx",
+      "expected": "9b1cfdec2dd29bebad5f404148262e42c8c3d0ab",
+      "actual": "9b1cfdec2dd29bebad5f404148262e42c8c3d0ab",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/Registration.tsx",
+      "expected": "b119213d3e5cf8d20577eb7f2626f59ac46943da",
+      "actual": "b119213d3e5cf8d20577eb7f2626f59ac46943da",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/ReviewJourney.tsx",
+      "expected": "f7d8bc8366b5de4df959512408c86e356681dc7b",
+      "actual": "f7d8bc8366b5de4df959512408c86e356681dc7b",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/SeverityAssessment.tsx",
+      "expected": "dcbcf5aa860433bb2f693e2b3cdbaaed7e54b3ac",
+      "actual": "dcbcf5aa860433bb2f693e2b3cdbaaed7e54b3ac",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/SmsDelivery.tsx",
+      "expected": "d3f74dc726f8d266dda50ac6aad48e0ee902b766",
+      "actual": "d3f74dc726f8d266dda50ac6aad48e0ee902b766",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/SmsSystemTest.tsx",
+      "expected": "d240710a22bad12e9c55a31e36b118e2528cb1f9",
+      "actual": "d240710a22bad12e9c55a31e36b118e2528cb1f9",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/Upload.tsx",
+      "expected": "8aca1c9ab2dece758e13f3efdddf6c74a0a2552d",
+      "actual": "8aca1c9ab2dece758e13f3efdddf6c74a0a2552d",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/WeatherLocation.tsx",
+      "expected": "9afb2192a11f6d7c41770a09035f922b6fd53de7",
+      "actual": "9afb2192a11f6d7c41770a09035f922b6fd53de7",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/accessibility.css",
+      "expected": "cd1712dcb7955e7fa0f7145f66d1635f0e8b4a91",
+      "actual": "cd1712dcb7955e7fa0f7145f66d1635f0e8b4a91",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/advisoryContent.ts",
+      "expected": "b6389b26699f7fa2f48e6c871c2c1f912f63958f",
+      "actual": "b6389b26699f7fa2f48e6c871c2c1f912f63958f",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/advisoryPresentation.ts",
+      "expected": "fa86d402b57dfa6724b443085ec54e099f79fd69",
+      "actual": "fa86d402b57dfa6724b443085ec54e099f79fd69",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/bulletinMedia.ts",
+      "expected": "f9ef4b9e46a5073791b370314c12d855165fa924",
+      "actual": "f9ef4b9e46a5073791b370314c12d855165fa924",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/data.ts",
+      "expected": "33e82126729cf6c2ae78e054e25abd5d57287830",
+      "actual": "33e82126729cf6c2ae78e054e25abd5d57287830",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/domain.ts",
+      "expected": "82bcd55997fe2a06887015b4b88e083cb541767c",
+      "actual": "82bcd55997fe2a06887015b4b88e083cb541767c",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/fieldOperations.ts",
+      "expected": "9554394b8f07932cf9f7c1f95e225181f944c2ee",
+      "actual": "9554394b8f07932cf9f7c1f95e225181f944c2ee",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/mapPoints.ts",
+      "expected": "e56eedec6ed20559dfcb3880fa56136db5048937",
+      "actual": "e56eedec6ed20559dfcb3880fa56136db5048937",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/operations.css",
+      "expected": "9e8d375eead45ffa9c7b6c5a2dd15e495ce51e84",
+      "actual": "9e8d375eead45ffa9c7b6c5a2dd15e495ce51e84",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/photoLocation.ts",
+      "expected": "7097f90ae42d747624420a6296d666abb8e88b36",
+      "actual": "7097f90ae42d747624420a6296d666abb8e88b36",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/processingStatus.ts",
+      "expected": "dd70273199d2434fcde89ca0be31550c61ea4ea8",
+      "actual": "dd70273199d2434fcde89ca0be31550c61ea4ea8",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/registrationStatus.ts",
+      "expected": "64b6543047c5d9e9b606cd0bfc4ce6fef0ee0b6b",
+      "actual": "64b6543047c5d9e9b606cd0bfc4ce6fef0ee0b6b",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/severityPresentation.ts",
+      "expected": "7829976bb01042cc10136e6b32304b22a72bacf1",
+      "actual": "7829976bb01042cc10136e6b32304b22a72bacf1",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/store.tsx",
+      "expected": "722d256ca021ed59a0e7a9aff4dae6b36d9b01de",
+      "actual": "722d256ca021ed59a0e7a9aff4dae6b36d9b01de",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/uploadRecovery.ts",
+      "expected": "513587cca2e19837bcad6f9477db8460944cbe72",
+      "actual": "513587cca2e19837bcad6f9477db8460944cbe72",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/operations/weatherPresentation.ts",
+      "expected": "5d3b19c408a4b1340358b8ab63e507225f1c6d81",
+      "actual": "5d3b19c408a4b1340358b8ab63e507225f1c6d81",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/pages/admin/Advisories.tsx",
+      "expected": "fa99d723f2758429916c82b8863b11f263ea5456",
+      "actual": "fa99d723f2758429916c82b8863b11f263ea5456",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/pages/admin/AdvisoryCompose.tsx",
+      "expected": "de170fc25087d2980a2f481eccbd2618f835782e",
+      "actual": "de170fc25087d2980a2f481eccbd2618f835782e",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/pages/admin/Farmers.tsx",
+      "expected": "952d5ade83b921814620c81bd3d7d403bcb6b743",
+      "actual": "952d5ade83b921814620c81bd3d7d403bcb6b743",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/pages/admin/Map.tsx",
+      "expected": "c1e15b93ed3d62c4334d1c311dcb07bbf912598c",
+      "actual": "c1e15b93ed3d62c4334d1c311dcb07bbf912598c",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/pages/admin/ModelStatus.tsx",
+      "expected": "401d5ae6e927455101c7cd8e4f4c62bdd4d72404",
+      "actual": "401d5ae6e927455101c7cd8e4f4c62bdd4d72404",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/pages/admin/Overview.tsx",
+      "expected": "97d84354e56d8c55bbc93da3f4c17da4f4c09b46",
+      "actual": "97d84354e56d8c55bbc93da3f4c17da4f4c09b46",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/pages/admin/ScanUpload.tsx",
+      "expected": "6802e458233ccbbd6542c0e2f9b84b179ec46ed5",
+      "actual": "6802e458233ccbbd6542c0e2f9b84b179ec46ed5",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/pages/admin/Scans.tsx",
+      "expected": "cb1cad85976844118c38e0ed486b4ae7b6cd5516",
+      "actual": "cb1cad85976844118c38e0ed486b4ae7b6cd5516",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/pages/admin/Settings.tsx",
+      "expected": "7019088846d5f0ffe2b84190c17f370850090fa2",
+      "actual": "7019088846d5f0ffe2b84190c17f370850090fa2",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/pages/farmer/Alerts.tsx",
+      "expected": "53e4e7842ee8b9ab9c23cf2d8f6c2feefe28ecff",
+      "actual": "53e4e7842ee8b9ab9c23cf2d8f6c2feefe28ecff",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/pages/farmer/Home.tsx",
+      "expected": "2611ce3ae6c1bdbad9f4c9e6ce4f98ca7af6b5a6",
+      "actual": "2611ce3ae6c1bdbad9f4c9e6ce4f98ca7af6b5a6",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/pages/farmer/Map.tsx",
+      "expected": "b2917b34da43ac9f197f5e4128fdf21cf5726a1d",
+      "actual": "b2917b34da43ac9f197f5e4128fdf21cf5726a1d",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/pages/farmer/Notifications.tsx",
+      "expected": "b754ff60956c96d840a0fc43216eb6181f31f2be",
+      "actual": "b754ff60956c96d840a0fc43216eb6181f31f2be",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/pages/farmer/Profile.tsx",
+      "expected": "25f63c8d48eaa4c611e7784cc47da8d0b3404d92",
+      "actual": "25f63c8d48eaa4c611e7784cc47da8d0b3404d92",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/pages/public/Landing.tsx",
+      "expected": "e46f51ad2ea800adcd9f5e2987d93d3651ae7eca",
+      "actual": "e46f51ad2ea800adcd9f5e2987d93d3651ae7eca",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/pages/public/Login.tsx",
+      "expected": "26cb9354e8b7b83a09bd0f06b673ec0c407e2d09",
+      "actual": "26cb9354e8b7b83a09bd0f06b673ec0c407e2d09",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/pages/public/Register.tsx",
+      "expected": "4edcc2ae41d71aed31a180ff22fbf5eeac016919",
+      "actual": "4edcc2ae41d71aed31a180ff22fbf5eeac016919",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/pages/public/SystemEvidence.tsx",
+      "expected": "f2e65c4ff84bb29cd15f54bed35d46c33ce5a0ec",
+      "actual": "f2e65c4ff84bb29cd15f54bed35d46c33ce5a0ec",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/services/advisories.ts",
+      "expected": "6c5488331d327a792acd652b688f06181bfcd35e",
+      "actual": "6c5488331d327a792acd652b688f06181bfcd35e",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/services/detections.ts",
+      "expected": "5cf05a5533098bb12aa843fad3fd5c1328222422",
+      "actual": "5cf05a5533098bb12aa843fad3fd5c1328222422",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/services/scans.ts",
+      "expected": "27e4566e30f8158e0906878a4480a6ce1d8c25be",
+      "actual": "27e4566e30f8158e0906878a4480a6ce1d8c25be",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/styles/index.css",
+      "expected": "26c27fbf67bdbddb28244f0c610581129d77b90d",
+      "actual": "26c27fbf67bdbddb28244f0c610581129d77b90d",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/types/database.ts",
+      "expected": "b857fbeb26265964a214e3ea984df0bcfc24bee2",
+      "actual": "b857fbeb26265964a214e3ea984df0bcfc24bee2",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/types/domain.ts",
+      "expected": "f26e034efeb81850c0eb24f39efbcf8d47a8e92a",
+      "actual": "f26e034efeb81850c0eb24f39efbcf8d47a8e92a",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/utils/authErrors.ts",
+      "expected": "6282b9fccc7d83fcd9523813585d80697b71623c",
+      "actual": "6282b9fccc7d83fcd9523813585d80697b71623c",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/utils/phone.ts",
+      "expected": "946e6ff3ad09b67f7d9330b76eecbc60ef6359b4",
+      "actual": "946e6ff3ad09b67f7d9330b76eecbc60ef6359b4",
+      "matches": true
+    },
+    {
+      "path": "frontend/src/vite-env.d.ts",
+      "expected": "9d2e5e874b29f1787986359d999150078973ab29",
+      "actual": "9d2e5e874b29f1787986359d999150078973ab29",
+      "matches": true
+    },
+    {
+      "path": "frontend/tsconfig.app.json",
+      "expected": "bffad90c88f049ba508ef025c63ce522f563399e",
+      "actual": "bffad90c88f049ba508ef025c63ce522f563399e",
+      "matches": true
+    },
+    {
+      "path": "frontend/tsconfig.json",
+      "expected": "945257b05ccd2182aa39152be4d66ed32b5d343c",
+      "actual": "945257b05ccd2182aa39152be4d66ed32b5d343c",
+      "matches": true
+    },
+    {
+      "path": "frontend/tsconfig.node.json",
+      "expected": "1e662bdc8bbb96c533f048888275857a9a2c8c1c",
+      "actual": "1e662bdc8bbb96c533f048888275857a9a2c8c1c",
+      "matches": true
+    },
+    {
+      "path": "frontend/vite.config.ts",
+      "expected": "9597eec6b665d86ab711bb27f5cc5870d7460775",
+      "actual": "9597eec6b665d86ab711bb27f5cc5870d7460775",
+      "matches": true
+    },
+    {
+      "path": "requirements.txt",
+      "expected": "6e115077cb0f9dd7fca49a87ac9548af74d95907",
+      "actual": "6e115077cb0f9dd7fca49a87ac9548af74d95907",
+      "matches": true
+    },
+    {
+      "path": "vercel.json",
+      "expected": "92b5084fe31af0490844fa64cacd88d6bfcc4962",
+      "actual": "92b5084fe31af0490844fa64cacd88d6bfcc4962",
+      "matches": true
+    },
+    {
+      "path": "supabase/functions/_shared/advisoryPresentation.ts",
+      "expected": "dc42337f86081f9fc793372c5bf81786ab5dde68",
+      "actual": "dc42337f86081f9fc793372c5bf81786ab5dde68",
+      "matches": true
+    },
+    {
+      "path": "supabase/functions/_shared/fieldSeverity.ts",
+      "expected": "a5840bd930c8c95bdb6e84766f8a9c13cb782d76",
+      "actual": "a5840bd930c8c95bdb6e84766f8a9c13cb782d76",
+      "matches": true
+    },
+    {
+      "path": "supabase/functions/_shared/reviewWorkflow.ts",
+      "expected": "8b32fdb30495b262401a15ccd14b6ef0213fa864",
+      "actual": "8b32fdb30495b262401a15ccd14b6ef0213fa864",
+      "matches": true
+    },
+    {
+      "path": "supabase/functions/_shared/systemReadiness.ts",
+      "expected": "d19e2b7632829465e04495bbd5681c25d7fcf85b",
+      "actual": "d19e2b7632829465e04495bbd5681c25d7fcf85b",
+      "matches": true
+    }
+  ],
+  "all_checked_match": true
+}

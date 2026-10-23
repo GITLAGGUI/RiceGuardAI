@@ -1,5 +1,5 @@
 /* Final readability and keyboard-access overrides, shared across route chunks. */
-.rg-image-viewer { height: clamp(220px, 32vw, 460px); }
+.rg-image-viewer { height: clamp(340px, 58vw, 640px); }
 @media (max-width: 640px) {
   .rg-viewer-toolbar { flex-wrap: wrap; }
   .rg-viewer-toolbar > .rg-segment { flex-basis: 100%; }

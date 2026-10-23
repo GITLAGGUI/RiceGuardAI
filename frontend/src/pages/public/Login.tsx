@@ -4,6 +4,7 @@ import { ArrowLeft, KeyRound, LockKeyhole, Mail, ShieldCheck } from "lucide-reac
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
+import { safeAdminReturnPath } from "@/operations/geminiConnector";
 
 type Step = "password" | "recovery" | "setup" | "mfa" | "enroll";
 
@@ -20,26 +21,26 @@ export function Login() {
   const [recoverySent, setRecoverySent] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const destination = safeAdminReturnPath((location.state as { from?: unknown } | null)?.from);
   const { session, profile, loading, profileLoading, aal, refreshAal } = useAuth();
   const authError = new URLSearchParams(location.hash.slice(1)).get("error_code");
 
   useEffect(() => {
     if (loading || profileLoading || !session || !profile) return;
     if (profile.role === "admin" && profile.is_active && aal === "aal2") {
-      const destination = (location.state as { from?: string } | null)?.from || "/admin/overview";
       navigate(destination, { replace: true });
     } else if (profile.role === "admin" && profile.is_active && step === "password") {
       // An invitation or recovery link signs in without providing a password.
       // Let the administrator set one before enrolling an authenticator.
       setStep("setup");
     }
-  }, [loading, profileLoading, session, profile, aal, step, location.state, navigate]);
+  }, [loading, profileLoading, session, profile, aal, step, destination, navigate]);
 
   const prepareMfa = async () => {
     const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     if (aalData?.currentLevel === "aal2") {
       await refreshAal();
-      navigate("/admin/overview", { replace: true });
+      navigate(destination, { replace: true });
       return;
     }
     const factors = await supabase.auth.mfa.listFactors();
@@ -130,7 +131,7 @@ export function Login() {
       }
       await refreshAal();
       toast.success("Administrator identity verified.");
-      navigate("/admin/overview", { replace: true });
+      navigate(destination, { replace: true });
     } catch (error) {
       toast.error((error as Error).message || "Invalid authenticator code");
     } finally {

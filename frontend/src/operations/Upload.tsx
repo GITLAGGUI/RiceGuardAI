@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   UploadCloud,
   CheckCircle2,
@@ -9,14 +9,21 @@ import {
   ZoomOut,
   Eye,
   FileImage,
-  Info,
+  ChevronLeft,
+  ChevronRight,
+  Play,
 } from "lucide-react";
 import * as exifr from "exifr";
 import { createMD5, createSHA256 } from "hash-wasm";
 import { toast } from "sonner";
 import { FieldMap } from "./Map";
 import { useOperations, operation } from "./store";
+import { ReviewJourney } from "./ReviewJourney";
+import { currentSeverityBulletin } from "./severityPresentation";
+import { fieldSeverityForSurvey, fieldSeverityLabel } from "./severityPresentation";
 import { validatePrediction, type Prediction } from "./domain";
+import { findInterruptedSurveyMatch, findResumableSurvey } from "./uploadRecovery";
+import { photoMetadataTags, validPhotoCoordinates, surveyPhotoLocation } from "./photoLocation";
 interface UploadFile {
   id: string;
   file: File;
@@ -29,6 +36,10 @@ interface UploadFile {
   mime: string;
   kind: "image" | "video" | "sidecar";
   gps?: { latitude: number; longitude: number };
+  gpsSource?: "exif" | "dji_xmp";
+  clipStart: number;
+  clipDuration: number;
+  linkedPhotoLocalId: string;
   status: string;
   progress: number;
 }
@@ -57,6 +68,24 @@ async function videoMetadata(file: File) {
     video.src = url;
   });
 }
+
+function normalizeExifOrientation(value: unknown) {
+  const numeric = Number(value);
+  if (Number.isInteger(numeric) && numeric >= 1 && numeric <= 8) return numeric;
+  const label = String(value || "").trim().toLowerCase();
+  const labels: Record<string, number> = {
+    "horizontal (normal)": 1,
+    "mirror horizontal": 2,
+    "rotate 180": 3,
+    "mirror vertical": 4,
+    "mirror horizontal and rotate 270 cw": 5,
+    "rotate 90 cw": 6,
+    "mirror horizontal and rotate 90 cw": 7,
+    "rotate 270 cw": 8,
+  };
+  return labels[label] || 1;
+}
+
 async function inspect(file: File): Promise<UploadFile> {
   if (file.size > 5 * 1024 * 1024 * 1024)
     throw new Error(`${file.name}: exceeds the 5 GB application limit.`);
@@ -72,7 +101,9 @@ async function inspect(file: File): Promise<UploadFile> {
   let width: number | null = null;
   let height: number | null = null;
   let duration: number | null = null;
-  let meta: Record<string, number> | null = null;
+  let meta: Record<string, unknown> | null = null;
+  let gps: UploadFile["gps"];
+  let gpsSource: UploadFile["gpsSource"];
   if (kind === "image") {
     const bitmap = await createImageBitmap(file);
     width = bitmap.width;
@@ -80,7 +111,26 @@ async function inspect(file: File): Promise<UploadFile> {
     bitmap.close();
     if (width < 512 || height < 512 || width > 30000 || height > 30000)
       throw new Error(`${file.name}: unsupported image dimensions.`);
-    meta = await exifr.parse(file, ["Orientation", "latitude", "longitude", "DateTimeOriginal"]).catch(() => null);
+    meta = await exifr.parse(file, photoMetadataTags).catch(() => null);
+    const exifPoint = validPhotoCoordinates(meta?.latitude, meta?.longitude);
+    if (exifPoint) {
+      gps = exifPoint;
+      gpsSource = "exif";
+    }
+    if (jpeg) {
+      const xmp = await exifr.parse(file, { tiff: false, xmp: true }).catch(() => null) as Record<string, unknown> | null;
+      const xmpPoint = validPhotoCoordinates(xmp?.GpsLatitude, xmp?.GpsLongitude);
+      const xmpLat = xmpPoint?.latitude || 0, xmpLng = xmpPoint?.longitude || 0;
+      const validDjiGps = String(xmp?.Make || meta?.Make || "").trim().toUpperCase() === "DJI" && xmp?.GpsStatus === "Normal" && Boolean(xmpPoint);
+      if (validDjiGps && gps &&
+        (Math.abs(gps.latitude - xmpLat) > 0.0005 || Math.abs(gps.longitude - xmpLng) > 0.0005)) {
+        gps = undefined;
+        gpsSource = undefined;
+      } else if (validDjiGps && !gps) {
+        gps = { latitude: xmpLat, longitude: xmpLng };
+        gpsSource = "dji_xmp";
+      }
+    }
   } else if (kind === "video") {
     const video = await videoMetadata(file);
     width = video.width;
@@ -97,29 +147,114 @@ async function inspect(file: File): Promise<UploadFile> {
     width,
     height,
     duration,
-    orientation: meta?.Orientation || 1,
+    orientation: normalizeExifOrientation(meta?.Orientation),
     mime,
     kind,
-    gps:
-      Number.isFinite(meta?.latitude) && Number.isFinite(meta?.longitude)
-        ? { latitude: meta!.latitude, longitude: meta!.longitude }
-        : undefined,
+    gps,
+    gpsSource,
+    clipStart: 0,
+    clipDuration: kind === "video" ? Math.min(30, Math.floor((duration || 0) * 30) / 30) : 0,
+    linkedPhotoLocalId: "",
     status: "Validated locally",
     progress: 0,
   };
 }
+
+type UploadIntent = {
+  asset_id: string;
+  upload_url?: string;
+  required_headers?: Record<string, string>;
+  already_verified?: boolean;
+};
+
+type UploadRecovery = {
+  recovered?: boolean;
+};
+
+const pause = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+
+function uploadToDrive(file: File, intent: UploadIntent, onProgress: (percent: number) => void) {
+  if (!intent.upload_url) return Promise.reject(new Error("Upload session is unavailable"));
+  return new Promise<string>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", intent.upload_url!);
+    xhr.timeout = 30 * 60 * 1000;
+    Object.entries(intent.required_headers || {}).forEach(([key, value]) =>
+      xhr.setRequestHeader(key, String(value)),
+    );
+    xhr.upload.onprogress = (progress) => {
+      if (progress.lengthComputable) onProgress(Math.round((progress.loaded / progress.total) * 100));
+    };
+    xhr.onload = () => {
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new Error(`Drive upload failed with HTTP ${xhr.status}`));
+        return;
+      }
+      try {
+        const result = JSON.parse(xhr.responseText);
+        if (!result.id) throw new Error("Drive did not return a file identifier");
+        resolve(result.id);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    xhr.onerror = () => reject(new Error("Network interrupted the Drive upload"));
+    xhr.ontimeout = () => reject(new Error("Drive upload timed out"));
+    xhr.send(file);
+  });
+}
+
 export function UploadWorkspace() {
-  const { demo, addSurvey } = useOperations();
+  const { demo, data, addSurvey, refresh } = useOperations();
+  const navigate = useNavigate();
+  const awsPhotoEnabled = import.meta.env.VITE_AWS_PHOTO_PILOT_ENABLED === "true";
+  const pinnedMediaEnabled = import.meta.env.VITE_PINNED_KAGGLE_UPLOAD_ENABLED === "true";
   const [files, setFiles] = useState<UploadFile[]>([]);
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null);
+  const [pinSource, setPinSource] = useState<"photo_average" | "manual" | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  const photoLocation = useMemo(() => surveyPhotoLocation(files), [files]);
+  const previousPhotoSelection = useRef("");
+  useEffect(() => {
+    const selection = files.map(file => file.hash).join(":");
+    if (previousPhotoSelection.current === selection) return;
+    previousPhotoSelection.current = selection;
+    setConfirmed(false);
+    if (pinSource !== "manual") {
+      setPin(photoLocation.center);
+      setPinSource(photoLocation.center ? "photo_average" : null);
+    }
+  }, [files, photoLocation, pinSource]);
   const base = demo ? "/demo" : "/admin";
+  const resumableSurvey = useMemo(() => findResumableSurvey(
+    data.surveys,
+    data.assets,
+    files.map((file) => file.hash),
+  ), [data.assets, data.surveys, files]);
+  const resumableAssets = useMemo(() => resumableSurvey
+    ? data.assets.filter((asset) => asset.survey_id === resumableSurvey.id)
+    : [], [data.assets, resumableSurvey]);
+  const interruptedMatch = useMemo(() => findInterruptedSurveyMatch(
+    data.surveys,
+    data.assets,
+    files.map((file) => file.hash),
+  ), [data.assets, data.surveys, files]);
+  useEffect(() => {
+    if (!busy || demo) return;
+    const protectUpload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", protectUpload);
+    return () => window.removeEventListener("beforeunload", protectUpload);
+  }, [busy, demo]);
   const choose = async (selected: FileList | File[]) => {
     if (busy) return;
-    if (files.length + selected.length > 250) {
-      toast.error("Maximum 250 files per batch.");
+    const maximum = demo ? 250 : pinnedMediaEnabled ? 11 : 4;
+    if (files.length + selected.length > maximum) {
+      toast.error(`Maximum ${maximum} files per batch.`);
       return;
     }
     setBusy(true);
@@ -129,20 +264,32 @@ export function UploadWorkspace() {
       for (const f of Array.from(selected)) {
         try {
           const record = await inspect(f);
+          const invalidPhoto = record.kind === "image" && (record.file.size > 200_000_000 ||
+            record.width == null || record.height == null || record.width * record.height > 60_000_000);
+          const invalidVideo = record.kind === "video" && (!pinnedMediaEnabled || record.width == null ||
+            record.height == null || record.width * record.height > 60_000_000 || record.duration == null || record.duration <= 0);
+          if (!demo && (record.kind === "sidecar" || invalidPhoto || invalidVideo)) {
+            failures.push(`${f.name}: live processing accepts 1–10 JPEG/PNG photos and, when enabled, one MP4 clip linked to a photo.`);
+            continue;
+          }
+          if (!demo && record.kind === "video" && next.some((item) => item.kind === "video")) {
+            failures.push(`${f.name}: only one presentation video is allowed per survey.`);
+            continue;
+          }
           if (next.some((x) => x.hash === record.hash)) {
             failures.push(`${f.name}: exact duplicate skipped.`);
             continue;
           }
           next.push(record);
-          if (!pin && record.gps) {
-            setPin({ lat: record.gps.latitude, lng: record.gps.longitude });
-            setConfirmed(false);
-          }
         } catch (e) {
           failures.push((e as Error).message);
         }
       }
-      setFiles(next);
+      const firstPhoto = next.find((item) => item.kind === "image");
+      const prepared = next.map((item) => item.kind === "video" && !item.linkedPhotoLocalId && firstPhoto
+        ? { ...item, linkedPhotoLocalId: firstPhoto.id }
+        : item);
+      setFiles(prepared);
       setErrors(failures);
     } finally {
       setBusy(false);
@@ -150,97 +297,178 @@ export function UploadWorkspace() {
   };
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!files.length || (pin && !confirmed)) return;
+    if (!files.length || (!resumableSurvey && (!pin || !confirmed))) return;
+    const photos = files.filter((item) => item.kind === "image");
+    const videos = files.filter((item) => item.kind === "video");
+    const eligiblePhotos = photos.length >= 1 && photos.length <= 4 && files.length === photos.length && files.every((item) =>
+      item.kind === "image" && item.file.size <= 200_000_000 &&
+      item.width != null && item.height != null && item.width * item.height <= 60_000_000);
+    const eligiblePinned = photos.length >= 1 && photos.length <= 10 && videos.length <= 1 &&
+      photos.length + videos.length === files.length && photos.every((item) => item.file.size <= 200_000_000 &&
+        item.width != null && item.height != null && item.width * item.height <= 60_000_000) &&
+      videos.every((item) => item.duration != null && item.clipStart >= 0 && item.clipDuration > 0 &&
+        item.clipDuration <= 30 && item.clipStart + item.clipDuration <= item.duration + 0.01 &&
+        Math.abs(item.clipDuration * 30 - Math.round(item.clipDuration * 30)) <= 0.01 &&
+        photos.some((photo) => photo.id === item.linkedPhotoLocalId));
+    if (!demo && !awsPhotoEnabled && !pinnedMediaEnabled) {
+      toast.error("Private dual-model website processing is not active yet. Your files remain on this device.");
+      return;
+    }
+    if (!demo && pinnedMediaEnabled && !eligiblePinned) {
+      toast.error("Add 1–10 valid photos. An optional video needs a 30 FPS-aligned clip up to 30 seconds and a linked GPS-reference photo.");
+      return;
+    }
+    if (!demo && !pinnedMediaEnabled && awsPhotoEnabled && !eligiblePhotos) {
+      toast.error("Private dual-model photo processing accepts 1–4 JPEG/PNG photos up to 60 MP and 200 MB each.");
+      return;
+    }
     const form = new FormData(e.currentTarget);
-    const id = crypto.randomUUID();
+    if (!resumableSurvey && interruptedMatch) {
+      const expected = interruptedMatch.expected_assets || interruptedMatch.photos;
+      toast.error(`These files belong to interrupted survey “${interruptedMatch.name}”. Select all ${expected} original files together to resume it without a duplicate.`);
+      return;
+    }
+    const id = resumableSurvey?.id || crypto.randomUUID();
+    const capturedAt = resumableSurvey?.captured_at || new Date(String(form.get("captured_at"))).toISOString();
+    const camera = resumableSurvey?.camera || String(form.get("camera"));
     setBusy(true);
     try {
-      await addSurvey({
-        id,
-        name: String(form.get("name")),
-        location: String(form.get("location")),
-        captured_at: new Date(String(form.get("captured_at"))).toISOString(),
-        camera: String(form.get("camera")),
-        status: "Awaiting upload",
-        photos: files.length,
-        severity: "not_calibrated",
-        lat: pin?.lat ?? null,
-        lng: pin?.lng ?? null,
-        location_status: pin ? "needs_review" : "missing",
-      });
+      if (!resumableSurvey) {
+        await addSurvey({
+          id,
+          ...(!demo ? { inference_provider: pinnedMediaEnabled ? "kaggle_yolo26" as const : "aws" as const } : {}),
+          name: String(form.get("name")),
+          location: String(form.get("location")),
+          captured_at: capturedAt,
+          camera,
+          status: "Awaiting upload",
+          photos: files.length,
+          expected_assets: files.length,
+          severity: "not_calibrated",
+          lat: pin?.lat ?? null,
+          lng: pin?.lng ?? null,
+          location_status: pin ? pinSource === "manual" ? "needs_review" : "extracted" : "missing",
+          crop_stage: String(form.get("crop_stage") || "unknown") as "unknown" | "seedling" | "vegetative" | "reproductive" | "ripening" | "post_harvest",
+          field_conditions: form.getAll("field_conditions").map(String) as ("standing_water" | "lodging" | "dry_or_cracked_soil" | "nutrient_stress_suspected" | "pest_damage_suspected")[],
+        });
+      }
       if (demo) {
         toast.success(
           "Demo survey created. Original files stayed on this device; no inference ran.",
         );
         return;
       }
-      for (const f of files) {
-        try {
-          const intent = await operation("upload-intent", {
-            flight_id: id,
-            captured_at: new Date(
-              String(form.get("captured_at")),
-            ).toISOString(),
-            camera_id: String(form.get("camera")),
-            width: f.width,
-            height: f.height,
-            checksum: f.hash,
-            md5_checksum: f.md5,
-            bytes: f.file.size,
-            content_type: f.mime,
-            orientation: f.orientation,
-            filename: f.file.name,
-            duration_seconds: f.duration,
-            exif_lat: f.gps?.latitude,
-            exif_lng: f.gps?.longitude,
-          });
-          const driveFileId = await new Promise<string>((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open("PUT", intent.upload_url);
-            Object.entries(intent.required_headers || {}).forEach(([k, v]) =>
-              xhr.setRequestHeader(k, String(v)),
-            );
-            xhr.upload.onprogress = (p) => {
-              if (p.lengthComputable)
-                setFiles((fs) =>
-                  fs.map((x) =>
-                    x.id === f.id
-                      ? {
-                          ...x,
-                          progress: Math.round((p.loaded / p.total) * 100),
-                          status: "Uploading",
-                        }
-                      : x,
-                  ),
-                );
-            };
-            xhr.onload = () => {
-              if (xhr.status < 200 || xhr.status >= 300) return reject(new Error(`Upload failed: ${xhr.status}`));
-              try {
-                const result = JSON.parse(xhr.responseText);
-                if (!result.id) throw new Error("Drive did not return a file identifier");
-                resolve(result.id);
-              } catch (error) { reject(error); }
-            };
-            xhr.onerror = () =>
-              reject(new Error("Upload interrupted; retry this photo."));
-            xhr.send(f.file);
-          });
-          await operation("upload-complete", { asset_id: intent.asset_id, drive_file_id: driveFileId });
-          setFiles((fs) =>
-            fs.map((x) =>
-              x.id === f.id
-                ? { ...x, progress: 100, status: "Verified and queued when batch is complete" }
-                : x,
-            ),
-          );
-        } catch (e) {
-          setFiles((fs) =>
-            fs.map((x) =>
-              x.id === f.id ? { ...x, status: (e as Error).message } : x,
-            ),
-          );
+      const serverAssetIds = new Map<string, string>();
+      const uploadOrder = [...photos, ...videos];
+      const existingByChecksum = new Map(resumableAssets.map((asset) => [asset.checksum, asset]));
+      for (const photo of photos) {
+        const existing = existingByChecksum.get(photo.hash);
+        if (existing?.status === "Verified") serverAssetIds.set(photo.id, existing.id);
+      }
+      const failures: string[] = [];
+      for (const f of uploadOrder) {
+        const existing = existingByChecksum.get(f.hash);
+        if (existing?.status === "Verified") {
+          serverAssetIds.set(f.id, existing.id);
+          setFiles((current) => current.map((item) => item.id === f.id
+            ? { ...item, progress: 100, status: "Already verified" } : item));
+          continue;
         }
+        let assetId = existing?.id || "";
+        let lastError = "Upload failed";
+        let complete = false;
+        for (let attempt = 1; attempt <= 3 && !complete; attempt += 1) {
+          try {
+            if (assetId) {
+              const recovery = await operation("recover-upload", { asset_id: assetId }) as UploadRecovery;
+              if (recovery.recovered) {
+                complete = true;
+                break;
+              }
+            }
+            setFiles((current) => current.map((item) => item.id === f.id
+              ? { ...item, status: `${existing || assetId ? "Resuming" : "Uploading"} · attempt ${attempt}/3` }
+              : item));
+            const payload = {
+              flight_id: id,
+              captured_at: capturedAt,
+              camera_id: camera,
+              width: f.width,
+              height: f.height,
+              checksum: f.hash,
+              md5_checksum: f.md5,
+              bytes: f.file.size,
+              content_type: f.mime,
+              orientation: f.orientation,
+              filename: f.file.name,
+              duration_seconds: f.duration,
+              ...(f.kind === "video" ? {
+                clip_start_seconds: f.clipStart,
+                clip_duration_seconds: f.clipDuration,
+                clip_target_fps: 30,
+                linked_photo_asset_id: serverAssetIds.get(f.linkedPhotoLocalId),
+              } : {}),
+              exif_lat: f.gpsSource === "exif" ? f.gps?.latitude : undefined,
+              exif_lng: f.gpsSource === "exif" ? f.gps?.longitude : undefined,
+            };
+            const intent = await operation(existing || assetId ? "resume-upload-intent" : "upload-intent", payload) as UploadIntent;
+            assetId = intent.asset_id;
+            if (intent.already_verified) {
+              complete = true;
+            } else {
+              const driveFileId = await uploadToDrive(f.file, intent, (percent) =>
+                setFiles((current) => current.map((item) => item.id === f.id
+                  ? { ...item, progress: percent, status: `Uploading · ${percent}%` } : item)),
+              );
+              let verified = false;
+              for (let verificationAttempt = 1; verificationAttempt <= 3 && !verified; verificationAttempt += 1) {
+                try {
+                  await operation("upload-complete", { asset_id: assetId, drive_file_id: driveFileId });
+                  verified = true;
+                } catch (error) {
+                  if (verificationAttempt === 3) throw error;
+                  await pause(verificationAttempt * 1500);
+                }
+              }
+              complete = verified;
+            }
+          } catch (error) {
+            lastError = (error as Error).message;
+            if (assetId) {
+              try {
+                const recovery = await operation("recover-upload", { asset_id: assetId }) as UploadRecovery;
+                if (recovery.recovered) {
+                  complete = true;
+                  break;
+                }
+              } catch {
+                // The ordinary retry path remains available when Drive has no complete file yet.
+              }
+            }
+            if (attempt < 3) await pause(attempt * 2000);
+          }
+        }
+        if (complete) {
+          serverAssetIds.set(f.id, assetId);
+          setFiles((current) => current.map((item) => item.id === f.id
+            ? { ...item, progress: 100, status: "Verified" } : item));
+        } else {
+          failures.push(`${f.file.name}: ${lastError}`);
+          setFiles((current) => current.map((item) => item.id === f.id
+            ? { ...item, status: `${lastError}. Reselect this exact batch to resume.` } : item));
+          if (assetId) {
+            await operation("upload-failed", { asset_id: assetId, error: lastError }).catch(() => undefined);
+          }
+        }
+      }
+      await refresh();
+      if (failures.length) {
+        setErrors(failures);
+        toast.error(`${failures.length} file${failures.length === 1 ? "" : "s"} paused. Reselect the exact batch to resume without duplicating the survey.`);
+      } else {
+        setErrors([]);
+        toast.success(`All ${files.length} originals are verified. The private processing job is now queued.`);
+        navigate(`${base}/surveys`, { replace: true });
       }
     } catch (e) {
       toast.error((e as Error).message);
@@ -255,21 +483,51 @@ export function UploadWorkspace() {
           <div className="rg-eyebrow">CAPTURE → UPLOAD → REVIEW</div>
           <h1>Create a drone survey</h1>
           <p>
-            Upload original photos, MP4 videos and optional DJI telemetry. Missing GPS does not block image analysis.
+            {demo
+              ? "Explore photo, video, and DJI telemetry validation with local demo files. No model inference runs in demo mode."
+              : pinnedMediaEnabled
+                ? "Upload 1–10 original photos and one optional MP4. Select a clip up to 30 seconds at 30 FPS and link it to a survey photo."
+              : awsPhotoEnabled
+                ? "Upload 1–4 original JPEG/PNG photos. Missing GPS does not block image analysis; staff must confirm location before publication."
+                : "Private survey processing is not enabled on this website yet. Files selected here stay on this device."}
           </p>
         </div>
-        <Link to={`${base}/surveys`} className="rg-button rg-secondary">
+        <Link to={`${base}/surveys`} className="rg-button rg-secondary" aria-disabled={busy}
+          onClick={(event) => {
+            if (!busy) return;
+            event.preventDefault();
+            toast.error("Keep this page open while originals are uploading. The batch can be resumed after an interruption.");
+          }}>
           All surveys
         </Link>
       </div>
       <form className="rg-upload-grid" onSubmit={submit}>
         <section className="rg-panel rg-form">
+          <div className="rg-upload-guide" aria-label="Manual upload guide">
+            <strong>Manual upload — four quick steps</strong>
+            <ol>
+              <li>Select all field photos together, plus one optional video.</li>
+              <li>RiceGuardAI reads valid DJI/EXIF coordinates and suggests one average camera location for the photo batch.</li>
+              <li>Confirm that the images belong to one field. Check the suggested pin, or choose a manual pin when GPS is missing or conflicting.</li>
+              <li>Submit once. Detection, weather context, source-backed advisory drafting, and the review record continue automatically.</li>
+            </ol>
+            <small>The verified production batch is 1–10 photos plus one video clip. For more media, create the next batch so every file retains a traceable result revision.</small>
+          </div>
+          {resumableSurvey ? (
+            <div className="rg-notice rg-warning" role="status">
+              <CheckCircle2 size={18} />
+              <div>
+                <strong>Interrupted upload matched safely</strong>
+                <p>{resumableSurvey.name}: {resumableAssets.filter((asset) => asset.status === "Verified").length} of {resumableSurvey.expected_assets} originals verified. Submit to resume this same survey; no duplicate record will be created.</p>
+              </div>
+            </div>
+          ) : null}
           <h2>01 · Flight details</h2>
           <div className="rg-form-grid">
             <label>
               Survey name
               <input
-                required
+                required={!resumableSurvey}
                 name="name"
                 placeholder="Santa Maria · Morning flight"
                 maxLength={160}
@@ -278,7 +536,7 @@ export function UploadWorkspace() {
             <label>
               Camera / aircraft ID
               <input
-                required
+                required={!resumableSurvey}
                 name="camera"
                 placeholder="DJI-LITO-X1-01"
                 maxLength={120}
@@ -286,7 +544,7 @@ export function UploadWorkspace() {
             </label>
             <label>
               Capture date & time
-              <input required type="datetime-local" name="captured_at" />
+              <input required={!resumableSurvey} type="datetime-local" name="captured_at" />
             </label>
             <label>
               Location note
@@ -297,7 +555,31 @@ export function UploadWorkspace() {
               />
             </label>
           </div>
-          <h2>02 · Original media</h2>
+          <h2>02 · Field context</h2>
+          <p className="rg-muted">These reviewed observations make the advisory situation-specific. The disease models do not infer flooding, crop stage, nutrient stress, or pests.</p>
+          <div className="rg-form-grid">
+            <label>
+              Crop stage
+              <select name="crop_stage" defaultValue="unknown">
+                <option value="unknown">Not confirmed</option>
+                <option value="seedling">Seedling</option>
+                <option value="vegetative">Vegetative / tillering</option>
+                <option value="reproductive">Reproductive / heading</option>
+                <option value="ripening">Ripening / maturity</option>
+                <option value="post_harvest">Post-harvest</option>
+              </select>
+            </label>
+          </div>
+          <fieldset className="rg-field-conditions">
+            <legend>Conditions observed during capture</legend>
+            <label className="rg-check"><input type="checkbox" name="field_conditions" value="standing_water" />Standing water / possible flooding</label>
+            <label className="rg-check"><input type="checkbox" name="field_conditions" value="lodging" />Lodged or flattened plants</label>
+            <label className="rg-check"><input type="checkbox" name="field_conditions" value="dry_or_cracked_soil" />Dry or cracked soil</label>
+            <label className="rg-check"><input type="checkbox" name="field_conditions" value="nutrient_stress_suspected" />Possible nutrient stress</label>
+            <label className="rg-check"><input type="checkbox" name="field_conditions" value="pest_damage_suspected" />Possible pest or animal damage</label>
+          </fieldset>
+          <small className="rg-muted">Leave all unchecked when none is confirmed. Weather alone never marks a field as flooded.</small>
+          <h2>03 · Original media</h2>
           <label
             className="rg-dropzone"
             onDragOver={(e) => e.preventDefault()}
@@ -308,12 +590,12 @@ export function UploadWorkspace() {
           >
             <UploadCloud size={36} />
             <strong>
-              {busy ? "Working on the batch…" : "Drop drone photos, videos or telemetry here"}
+              {busy ? "Working on the batch…" : demo ? "Drop drone photos, videos or telemetry here" : pinnedMediaEnabled ? "Drop survey photos and one optional MP4 here" : "Drop drone photos here"}
             </strong>
-            <span>or tap to browse · JPEG / PNG / MP4 / SRT / CSV / JSON · up to 250 files</span>
+            <span>{demo ? "or tap to browse · JPEG / PNG / MP4 / SRT / CSV / JSON · up to 250 files" : pinnedMediaEnabled ? "or tap to browse · 1–10 JPEG/PNG + optional MP4 · up to 11 files" : "or tap to browse · JPEG / PNG · up to 4 photos · 60 MP / 200 MB each"}</span>
             <input
               type="file"
-              accept="image/jpeg,image/png,video/mp4,.srt,.csv,.json"
+              accept={demo || pinnedMediaEnabled ? "image/jpeg,image/png,video/mp4" : "image/jpeg,image/png"}
               multiple
               disabled={busy}
               onChange={(e) => {
@@ -344,10 +626,39 @@ export function UploadWorkspace() {
                     {f.width && f.height ? `${f.width} × ${f.height} · ` : ""}
                     {(f.file.size / 1048576).toFixed(1)} MB ·{" "}
                     {f.gps
-                      ? "EXIF GPS extracted; confirm below"
-                      : "No embedded GPS; location can be resolved during review"}
+                      ? "Camera GPS available for the survey average"
+                      : "No embedded GPS; not included in the location average"}
                   </small>
                   <small>{f.status}</small>
+                  {!demo && pinnedMediaEnabled && f.kind === "video" ? (
+                    <div className="rg-form-grid">
+                      <label>
+                        Clip start (seconds)
+                        <input type="number" min={0} max={Math.max(0, (f.duration || 0) - 1 / 30)} step={1 / 30}
+                          value={f.clipStart} disabled={busy}
+                          onChange={(event) => setFiles((current) => current.map((item) => item.id === f.id
+                            ? { ...item, clipStart: Number(event.target.value) } : item))} />
+                      </label>
+                      <label>
+                        Clip duration (max 30 seconds)
+                        <input type="number" min={1 / 30} max={Math.min(30, Math.max(1 / 30, (f.duration || 0) - f.clipStart))}
+                          step={1 / 30} value={f.clipDuration} disabled={busy}
+                          onChange={(event) => setFiles((current) => current.map((item) => item.id === f.id
+                            ? { ...item, clipDuration: Number(event.target.value) } : item))} />
+                      </label>
+                      <label>
+                        Location-reference photo
+                        <select value={f.linkedPhotoLocalId} required disabled={busy}
+                          onChange={(event) => setFiles((current) => current.map((item) => item.id === f.id
+                            ? { ...item, linkedPhotoLocalId: event.target.value } : item))}>
+                          <option value="">Auto-select the first survey photo</option>
+                          {files.filter((item) => item.kind === "image").map((photo) =>
+                            <option key={photo.id} value={photo.id}>{photo.file.name}</option>)}
+                        </select>
+                      </label>
+                      <small>Video location will use this photo’s verified camera/survey reference point. The video does not create a flight path.</small>
+                    </div>
+                  ) : null}
                   <progress
                     aria-label={`Upload progress for ${f.file.name}`}
                     value={f.progress}
@@ -370,13 +681,17 @@ export function UploadWorkspace() {
           </div>
         </section>
         <aside className="rg-panel rg-form">
-          <h2>03 · Confirm the field</h2>
+          <h2>04 · Confirm the field</h2>
           <p className="rg-muted">
-            Confirm extracted GPS when available. A photo’s GPS is a camera location, not a georeferenced lesion. Analysis may continue without a location, but 3 km SMS targeting cannot.
+            One survey, one field pin. Valid EXIF/DJI camera coordinates suggest an average location across the photos. Check that all photos show the same field, then confirm or move the pin. This is not a surveyed field boundary. Public pins still use an approved approximate area.
           </p>
+          <p role="status">{photoLocation.gpsCount ? `${photoLocation.gpsCount} of ${photoLocation.photoCount} photos have GPS · capture spread ${Math.round(photoLocation.spreadMeters)} m. Photos without GPS do not affect the average.` : "No photo GPS found. For screenshots or video captures, the administrator must choose a field pin manually."}</p>
+          {photoLocation.spreadMeters > 1000 ? <p className="rg-notice rg-warning" role="alert">Capture points are over 1 km apart. No average pin was applied. Verify whether these belong to one field; separate surveys if they do not, or choose a reviewed manual pin.</p> : null}
+          {pinSource === "manual" && photoLocation.center ? <button type="button" className="rg-button rg-secondary" disabled={busy} onClick={()=>{setPin(photoLocation.center);setPinSource("photo_average");setConfirmed(false);}}>Use photo GPS average</button> : null}
           <FieldMap
             onPick={(lat, lng) => {
               setPin({ lat, lng });
+              setPinSource("manual");
               setConfirmed(false);
             }}
             points={
@@ -395,9 +710,10 @@ export function UploadWorkspace() {
           <p className="rg-location">
             <MapPin size={16} />
             {pin
-              ? `${pin.lat.toFixed(6)}, ${pin.lng.toFixed(6)}`
-              : "No location yet — analysis is still allowed"}
+              ? `${pin.lat.toFixed(6)}, ${pin.lng.toFixed(6)} · ${pinSource === "photo_average" ? "average camera location — needs confirmation" : "manual field pin"}`
+              : "Choose a manual field pin before creating this survey"}
           </p>
+          {resumableSurvey ? <p role="status">Resuming preserves the original survey location. Change it later in the location review step; the pin shown here does not overwrite it.</p> : null}
           <label className="rg-check">
             <input
               type="checkbox"
@@ -405,22 +721,23 @@ export function UploadWorkspace() {
               disabled={!pin}
               onChange={(e) => setConfirmed(e.target.checked)}
             />
-            I verified the surveyed field in Region II. Server coverage
-            validation is required before live processing.
+            I checked that these images belong to one field and confirmed this survey pin.
           </label>
           <button
             className="rg-button rg-primary"
-            disabled={busy || !files.length || Boolean(pin && !confirmed)}
+            disabled={busy || !files.length || (!resumableSurvey && (!pin || !confirmed))}
             type="submit"
           >
             <UploadCloud size={18} />
-            {demo ? "Create demo survey" : "Create survey & upload"}
+            {demo ? "Create demo survey" : resumableSurvey ? "Resume this upload" : "Create survey & upload"}
           </button>
           <div className="rg-notice">
             <CircleAlert size={18} />
             {demo
               ? "Preview mode does not upload files or generate synthetic predictions for your photos."
-              : "If the GPU is offline, valid jobs remain queued. Upload completion does not mean analysis is complete."}
+              : busy
+                ? "Keep this page open. Each original is verified before the private processing job is created."
+                : "If an upload is interrupted, reselect the exact original batch here to resume the same survey safely."}
           </div>
         </aside>
       </form>
@@ -631,39 +948,89 @@ type ReviewAssetResult = {
   kind: "image" | "video" | "telemetry_sidecar";
   width: number;
   height: number;
-  classes: Record<string, { predicted_pixels?: number; mask_fraction_of_image?: number }>;
+  classes?: Record<string, { predicted_pixels?: number; mask_fraction_of_image?: number }>;
+  diseases?: { disease: "BLB" | "Brown Spot"; status: "detected" | "not_detected"; predicted_pixels: number }[];
   ambiguous_overlap_pixels?: number;
 };
+type FindingDecision = "accepted" | "rejected" | "uncertain";
 
 export function ReviewWorkspace() {
-  const { data, refresh } = useOperations();
-  const [params] = useSearchParams();
-  const [selectedSurvey, setSelectedSurvey] = useState(params.get("survey") || data.surveys[0]?.id || "");
+  const { data, refresh, operation } = useOperations();
+  const [params, setParams] = useSearchParams();
+  const surveyChoice = params.get("survey") || data.surveys[0]?.id || "";
+  const selectedSurvey = data.surveys.some(item => item.id === surveyChoice) ? surveyChoice : "";
   const survey = data.surveys.find((item) => item.id === selectedSurvey);
+  const requestedAdvisory = params.get("advisory");
+  const bulletin = requestedAdvisory ? data.bulletins.find(item => item.id === requestedAdvisory && item.survey_id === survey?.id && (item.status === "published" || item.result_revision === survey?.active_result_revision))
+    : survey ? currentSeverityBulletin(survey, data.bulletins) : undefined;
+  const latestJob = data.jobs.find((item) => item.survey_id === selectedSurvey);
   const job = data.jobs.find((item) => item.survey_id === selectedSurvey && item.result_manifest);
+  const v2Result = ["aws", "kaggle_yolo26"].includes(job?.provider || "") &&
+    job?.result_manifest?.schema_version === "riceguard.result.v2";
+  // Snapshot refreshes produce new object references; only changed evidence
+  // should reset a staff member's checkbox, layer selection, or decisions.
+  const assetsJson = JSON.stringify(job?.result_manifest?.assets || []);
   const resultAssets = useMemo(
-    () => ((job?.result_manifest?.assets || []) as ReviewAssetResult[]).filter((item) => item.kind !== "telemetry_sidecar"),
-    [job?.result_manifest?.assets],
+    () => (JSON.parse(assetsJson) as ReviewAssetResult[]).filter((item) => item.kind !== "telemetry_sidecar"),
+    [assetsJson],
   );
+  const savedDecisionsJson = JSON.stringify(job?.finding_reviews || []);
   const [assetId, setAssetId] = useState("");
   const [variant, setVariant] = useState<"original" | "BLB" | "Brown Spot" | "combined" | "video">("combined");
   const [zoom, setZoom] = useState(1);
   const [geometryChecked, setGeometryChecked] = useState(false);
+  const [decisions, setDecisions] = useState<Record<string, FindingDecision>>({});
   const [mediaApproved, setMediaApproved] = useState(false);
+  const [imageDirty, setImageDirty] = useState(false);
   const [locationApproved, setLocationApproved] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [videoStarted, setVideoStarted] = useState(false);
+  const mediaPointerStart = useRef<number | null>(null);
+  const reviewVideo = useRef<HTMLVideoElement>(null);
   const asset = resultAssets.find((item) => item.source_asset_id === assetId) || resultAssets[0];
   const urls = asset ? job?.review_urls?.[asset.source_asset_id] || {} : {};
   const shownVariant = asset?.kind === "video" ? "video" : variant;
   const url = urls[shownVariant];
+  const findingKey = (assetId: string, disease: string) => `${assetId}:${disease}`;
+  const assetIndex = Math.max(0, resultAssets.findIndex((item) => item.source_asset_id === asset?.source_asset_id));
+  const selectAsset = (index: number) => {
+    if (!resultAssets.length) return;
+    const next = resultAssets[(index + resultAssets.length) % resultAssets.length];
+    setAssetId(next.source_asset_id);
+    setVariant(next.kind === "video" ? "video" : "combined");
+    setZoom(1);
+    setVideoStarted(false);
+  };
+  const predictedPixels = (disease: "BLB" | "Brown Spot") =>
+    asset?.diseases?.find((finding) => finding.disease === disease)?.predicted_pixels ??
+    asset?.classes?.[disease]?.predicted_pixels;
+  const approvalBlockedReason = !survey
+    ? "Select a survey first."
+    : survey.status === "Reviewed"
+      ? "Image review saved. Continue to severity for this same survey."
+      : survey.status !== "Needs review"
+        ? `Approval is available only at “Needs review”; this survey is currently “${survey.status}”.`
+        : !job || !url
+          ? "Validated review media is still unavailable."
+          : !v2Result && !geometryChecked
+            ? "Check the displayed alignment and geometry first."
+            : !mediaApproved
+              ? "Check the complete-survey approval box first."
+              : null;
 
   useEffect(() => {
     setAssetId(resultAssets[0]?.source_asset_id || "");
     setVariant(resultAssets[0]?.kind === "video" ? "video" : "combined");
     setGeometryChecked(false);
+    const saved = JSON.parse(savedDecisionsJson) as { source_asset_id: string; disease: string; decision: FindingDecision }[];
+    setDecisions(Object.fromEntries(resultAssets.flatMap((item) => (item.diseases || []).map((finding) => [
+      findingKey(item.source_asset_id, finding.disease),
+      saved.find(row => row.source_asset_id === item.source_asset_id && row.disease === finding.disease)?.decision || "accepted" as FindingDecision,
+    ]))));
     setMediaApproved(false);
-    setLocationApproved(survey?.location_status === "verified");
-  }, [selectedSurvey, job?.id, resultAssets, survey?.location_status]);
+    setLocationApproved(false);
+    setImageDirty(false);
+  }, [selectedSurvey, job?.id, resultAssets, savedDecisionsJson, survey?.lat, survey?.lng, survey?.location_status]);
 
   const approve = async () => {
     if (!survey?.active_result_revision) return;
@@ -674,9 +1041,15 @@ export function ReviewWorkspace() {
         result_revision: survey.active_result_revision,
         location_approved: locationApproved,
         media_approved: mediaApproved,
+        ...(v2Result ? { reviews: resultAssets.flatMap((item) => (item.diseases || []).map((finding) => ({
+          source_asset_id: item.source_asset_id,
+          disease: finding.disease,
+          decision: decisions[findingKey(item.source_asset_id, finding.disease)],
+        }))) } : {}),
       });
+      setImageDirty(false);
       await refresh();
-      toast.success("Exact result revision reviewed. Advisory approval remains separate.");
+      toast.success("Image review saved. Continue to severity, location and publication. No advisory generation or publication was started.");
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
@@ -686,16 +1059,14 @@ export function ReviewWorkspace() {
 
   return (
     <>
-      <div className="rg-page-heading">
-        <div>
-          <div className="rg-eyebrow">ORIGINAL → MASKS → ADVISORY DRAFT</div>
-          <h1>Detection review</h1>
-          <p>Review the uploaded media and exact result revision. BLB and Brown Spot remain separate overlays.</p>
-        </div>
-        <select aria-label="Selected survey" value={selectedSurvey} onChange={(event) => setSelectedSurvey(event.target.value)}>
-          {data.surveys.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-        </select>
-      </div>
+      <div className="rg-journey-survey-picker"><label>Select survey
+        <select aria-label="Selected survey" value={selectedSurvey} onChange={event => setParams({ survey:event.target.value, step:"images" })}>
+          {!selectedSurvey ? <option value="">Requested survey not found</option> : null}
+          {data.surveys.map(item => <option key={item.id} value={item.id}>{item.name} · {new Date(item.captured_at).toLocaleDateString("en-PH")} · {item.id.slice(0,8)}</option>)}
+        </select></label></div>
+      {!selectedSurvey && params.get("survey") ? <p role="alert">The requested survey is unavailable. Another survey has not been substituted.</p> : null}
+      {requestedAdvisory && !bulletin ? <p role="alert">This advisory does not belong to the selected current result. Select the intended survey again.</p> : null}
+      <ReviewJourney survey={survey} bulletin={bulletin} imageDirty={imageDirty} onDiscardImages={()=>setImageDirty(false)}>
       <div className="rg-review-workspace rg-review-live">
         <section className="rg-panel">
           <div className="rg-viewer-toolbar">
@@ -714,21 +1085,38 @@ export function ReviewWorkspace() {
               </div>
             ) : null}
           </div>
-          <div className="rg-image-viewer rg-live-viewer">
+          <div className={`rg-image-viewer rg-live-viewer ${zoom === 1 ? "is-fit" : "is-zoomed"}`}
+            onPointerDown={(event) => { mediaPointerStart.current = event.clientX; }}
+            onPointerUp={(event) => {
+              if (mediaPointerStart.current == null || resultAssets.length < 2 || zoom > 1 || (event.target as HTMLElement).closest("button,video")) return;
+              const distance = event.clientX - mediaPointerStart.current;
+              mediaPointerStart.current = null;
+              if (Math.abs(distance) > 45) selectAsset(assetIndex + (distance < 0 ? 1 : -1));
+            }}>
+            {resultAssets.length > 1 ? <button type="button" className="rg-gallery-arrow previous" aria-label="Previous uploaded media" onClick={() => selectAsset(assetIndex - 1)}><ChevronLeft /></button> : null}
             {!url ? (
-              <div className="rg-empty"><CircleAlert size={30} /><h3>Aligned review media is unavailable</h3><p>The survey cannot be approved until validated artifacts are returned.</p></div>
+              <div className="rg-empty">
+                <CircleAlert size={30} />
+                <h3>Aligned review media is unavailable</h3>
+                <p>The survey cannot be approved until validated artifacts are returned.</p>
+                <Link className="rg-button rg-secondary" to="../surveys">Open survey queue</Link>
+              </div>
             ) : asset?.kind === "video" ? (
-              <video src={url} controls preload="metadata" aria-label="Frame-aligned annotated review video" />
+              <div className="rg-video-playback"><video ref={reviewVideo} src={url} controls={videoStarted} playsInline preload="metadata" aria-label="Frame-aligned annotated review video" />
+                {!videoStarted ? <button type="button" className="rg-tap-to-play" onClick={() => { setVideoStarted(true); void reviewVideo.current?.play(); }}><Play size={26} fill="currentColor" /> Tap to play video</button> : null}
+              </div>
             ) : (
-              <img src={url} style={{ width: `${zoom * 100}%`, maxWidth: "none" }} alt={`${shownVariant} review layer for the selected uploaded image`} />
+              <img
+                src={url}
+                style={zoom > 1 ? { width: `${zoom * 100}%`, maxWidth: "none", maxHeight: "none" } : undefined}
+                alt={`${shownVariant} review layer for the selected uploaded image`}
+              />
             )}
+            {resultAssets.length > 1 ? <button type="button" className="rg-gallery-arrow next" aria-label="Next uploaded media" onClick={() => selectAsset(assetIndex + 1)}><ChevronRight /></button> : null}
           </div>
-          <div className="rg-review-thumbnails">
-            {resultAssets.map((item, index) => (
-              <button key={item.source_asset_id} className={asset?.source_asset_id === item.source_asset_id ? "selected" : ""} onClick={() => { setAssetId(item.source_asset_id); setVariant(item.kind === "video" ? "video" : "combined"); setZoom(1); }}>
-                {item.kind === "video" ? "Video" : "Image"} {index + 1}
-              </button>
-            ))}
+          <div className="rg-review-pagination">
+            <span>{resultAssets.length ? `${assetIndex + 1} / ${resultAssets.length}` : "No aligned review media yet"}</span>
+            {resultAssets.length > 1 ? <small>Swipe on mobile or use the arrows on desktop.</small> : null}
           </div>
         </section>
         <aside className="rg-panel rg-form">
@@ -737,21 +1125,71 @@ export function ReviewWorkspace() {
           <div className="rg-review-measures">
             <span>Processing<strong>{survey?.status || "Unavailable"}</strong></span>
             <span>Result revision<strong>{survey?.active_result_revision || "Not available"}</strong></span>
-            <span>BLB predicted pixels<strong>{asset?.classes?.BLB?.predicted_pixels?.toLocaleString() ?? "Video frame series"}</strong></span>
-            <span>Brown Spot predicted pixels<strong>{asset?.classes?.["Brown Spot"]?.predicted_pixels?.toLocaleString() ?? "Video frame series"}</strong></span>
+            <span>{asset?.kind === "video" ? "BLB frame-pixel sum" : "BLB predicted pixels"}<strong>{predictedPixels("BLB")?.toLocaleString() ?? "Unavailable"}</strong></span>
+            <span>{asset?.kind === "video" ? "Brown Spot frame-pixel sum" : "Brown Spot predicted pixels"}<strong>{predictedPixels("Brown Spot")?.toLocaleString() ?? "Unavailable"}</strong></span>
             <span>Ambiguous overlap<strong>{asset?.ambiguous_overlap_pixels?.toLocaleString() ?? "Not applicable"}</strong></span>
-            <span>Agronomic severity<strong>Not yet calibrated</strong></span>
+            <span>Reviewed damage grade<strong>{survey ? fieldSeverityLabel(fieldSeverityForSurvey(survey, data.bulletins)) : "Not assessed"}</strong></span>
+            <span>AI severity calibration<strong>Not validated</strong></span>
           </div>
-          <div className="rg-notice"><Info size={17} /> Pixel counts are diagnostics. Coverage needs a reviewed visible-rice-leaf denominator, and Brown Spot whole-leaf coverage is not lesion severity.</div>
-          <label className="rg-check"><input type="checkbox" checked={geometryChecked} onChange={(event) => setGeometryChecked(event.target.checked)} disabled={!url} /> I checked alignment, tile seams, class mapping and conflicts on the displayed revision.</label>
-          <label className="rg-check"><input type="checkbox" checked={mediaApproved} onChange={(event) => setMediaApproved(event.target.checked)} disabled={!geometryChecked} /> The selected public preview removes precise GPS metadata and is suitable for publication.</label>
-          <label className="rg-check"><input type="checkbox" checked={locationApproved} onChange={(event) => setLocationApproved(event.target.checked)} disabled={survey?.lat == null || survey?.lng == null} /> The approximate public location is verified. Leave unchecked when location is missing; analysis may still be approved without geographic SMS.</label>
-          <button className="rg-button rg-primary" disabled={busy || survey?.status !== "Needs review" || !geometryChecked || !mediaApproved || !job} onClick={() => void approve()}>
-            <CheckCircle2 size={17} /> Approve result revision
+          {survey?.status === "Failed" ? (
+            <>
+              <div className="rg-notice rg-notice-error">
+                <CircleAlert size={18} />
+                <span>{latestJob?.error || "Private processing stopped before a review result was created."}</span>
+              </div>
+              <button className="rg-button rg-secondary" disabled={busy} onClick={async () => {
+                setBusy(true);
+                try {
+                  await operation("retry-processing", { id: survey.id });
+                  await refresh();
+                  toast.success("Private processing was safely re-queued from the verified originals.");
+                } catch (error) {
+                  toast.error((error as Error).message);
+                } finally {
+                  setBusy(false);
+                }
+              }}>
+                Retry private processing
+              </button>
+            </>
+          ) : null}
+          {v2Result && asset?.diseases ? (
+            <details className="rg-ai-decision-editor">
+              <summary>{survey?.status === "Reviewed" ? "Approved decisions" : "Edit AI decisions"} for this {asset.kind === "video" ? "clip" : "photo"}</summary>
+              <div className="rg-finding-decisions">
+              {asset.diseases.map((finding) => (
+                <label key={finding.disease}>
+                  {finding.disease} · {finding.status === "detected" ? "candidate detected" : "no target detected"}
+                  <select disabled={survey?.status === "Reviewed"} value={decisions[findingKey(asset.source_asset_id, finding.disease)] || ""}
+                    onChange={(event) => { setImageDirty(true); setDecisions((current) => ({ ...current,
+                      [findingKey(asset.source_asset_id, finding.disease)]: event.target.value as FindingDecision })); }}>
+                    <option value="accepted">{finding.status === "detected" ? "Accept finding" : "Confirm no target detected"}</option>
+                    <option value="rejected">Reject finding</option>
+                    <option value="uncertain">Uncertain · do not publish this finding</option>
+                  </select>
+                </label>
+              ))}
+              </div>
+            </details>
+          ) : null}
+          {!v2Result ? (
+            <label className="rg-check"><input type="checkbox" checked={geometryChecked} onChange={(event) => {setGeometryChecked(event.target.checked);setImageDirty(true);}} disabled={!url} /> I checked alignment, tile seams, class mapping and conflicts on the displayed revision.</label>
+          ) : null}
+          <label className="rg-check rg-whole-approval"><input type="checkbox" checked={survey?.status === "Reviewed" || mediaApproved} onChange={(event) => {setMediaApproved(event.target.checked);setImageDirty(true);}} disabled={survey?.status === "Reviewed" || !url || (!v2Result && !geometryChecked)} />
+            {survey?.status === "Reviewed" ? "This survey result and its review media are already approved." : "Approve this complete survey result, its sanitized review media, and the proposed advisory input."}</label>
+          {survey?.lat != null && survey?.lng != null ? <p className="rg-auto-location"><MapPin size={16} /> Survey coordinates are attached automatically. You can still correct the pin before publication.</p> : null}
+          <button className="rg-button rg-primary" disabled={busy || survey?.status !== "Needs review" ||
+            (!v2Result && !geometryChecked) || !mediaApproved || !job}
+            title={approvalBlockedReason || undefined}
+            onClick={() => void approve()}>
+            <CheckCircle2 size={17} /> {survey?.status === "Reviewed" ? "Image review saved" : busy ? "Approving…" : "Approve complete survey images"}
           </button>
-          <small>Failed or incomplete processing can never become “Healthy.” A successful empty mask is “No target disease detected.”</small>
+          {approvalBlockedReason ? <small className="rg-disabled-reason" role="status">{approvalBlockedReason}</small> : null}
+          <small>AI decisions are prefilled from the pinned model result. Use “Edit AI decisions” only when you need to correct a finding before approval.</small>
+          <details className="rg-ai-decision-editor"><summary>How is severity measured?</summary><p>Severity means the proportion of rice leaf tissue damaged by a disease—not predicted pixels divided by the whole photo. Water, soil, and background must not be included.</p><p>BLB masks mark proposed disease regions; Brown Spot masks mark entire affected leaves, not individual lesions. Neither is a validated field-wide severity score. AI calibration requires independent specialist-scored leaves and a reviewed leaf-area denominator. Approval alone does not assign Low, Moderate, or Severe.</p></details>
         </aside>
       </div>
+      </ReviewJourney>
     </>
   );
 }

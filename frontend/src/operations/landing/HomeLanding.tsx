@@ -1,0 +1,684 @@
+import { Component, lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { ArrowRight, ArrowUpRight, Check, MapPin, Menu, MessageSquareText, Play, ScanLine, ShieldCheck, X } from "lucide-react";
+import { AssistantWidget } from "../Assistant";
+import { useSmsRegistrationStatus } from "../registrationStatus";
+import { bulletinMapPoint, usePublicPosts } from "../publicPosts";
+import { FieldMap } from "../LazyMap";
+import { reviewedDiseaseLabel, smsAdvisoryMessage } from "../advisoryPresentation";
+import { smsSegments } from "../domain";
+import type { Bulletin } from "../domain";
+import { useSmoothScroll } from "@/components/motion/useSmoothScroll";
+import { heroInput } from "./heroInput";
+import "../operations.css";
+import "./landing.css";
+
+const RiceField3D = lazy(() => import("./RiceField3D"));
+
+/** If WebGL or the 3D chunk fails, the hero keeps its photograph instead of taking the page down. */
+class SceneBoundary extends Component<{ children: ReactNode; fallback?: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() { return this.state.failed ? (this.props.fallback ?? null) : this.props.children; }
+}
+
+const FILM_SRC = "/video/riceguardai-film.mp4";
+const FILM_POSTER = "/video/riceguardai-film-poster.jpg";
+
+const vars = (values: Record<string, string | number>) => values as CSSProperties;
+
+function useReducedMotion() {
+  const [reduced, setReduced] = useState(() => matchMedia("(prefers-reduced-motion: reduce)").matches);
+  useEffect(() => {
+    const query = matchMedia("(prefers-reduced-motion: reduce)");
+    const onChange = (event: MediaQueryListEvent) => setReduced(event.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+  return reduced;
+}
+
+/**
+ * `[data-reveal]` gets `is-in` once, when it first enters the viewport (entrances).
+ * `[data-live]` toggles `is-live` while on screen, so looping micro-animations only run when seen.
+ */
+function useViewportClasses(root: React.RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const scope = root.current;
+    if (!scope) return;
+    const reveals = [...scope.querySelectorAll<HTMLElement>("[data-reveal]")];
+    const lives = [...scope.querySelectorAll<HTMLElement>("[data-live]")];
+    if (!("IntersectionObserver" in window)) {
+      reveals.forEach((node) => node.classList.add("is-in"));
+      lives.forEach((node) => node.classList.add("is-live"));
+      return;
+    }
+    const reveal = new IntersectionObserver(
+      (entries) => entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add("is-in");
+        reveal.unobserve(entry.target);
+      }),
+      { rootMargin: "0px 0px -10% 0px", threshold: 0.05 },
+    );
+    const live = new IntersectionObserver(
+      (entries) => entries.forEach((entry) => entry.target.classList.toggle("is-live", entry.isIntersecting)),
+      { threshold: 0.15 },
+    );
+    reveals.forEach((node) => reveal.observe(node));
+    lives.forEach((node) => live.observe(node));
+    return () => {
+      reveal.disconnect();
+      live.disconnect();
+    };
+  }, [root]);
+}
+
+/** True once the element is within `margin` of the viewport; used to defer heavy widgets. */
+function useNearViewport<T extends HTMLElement>(margin = "600px") {
+  const ref = useRef<T>(null);
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    const node = ref.current;
+    if (!node || near) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) { setNear(true); observer.disconnect(); }
+    }, { rootMargin: margin });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [margin, near]);
+  return [ref, near] as const;
+}
+
+function Wordmark({ light = false }: { light?: boolean }) {
+  return (
+    <Link to="/" className={`lp-wordmark ${light ? "is-light" : ""}`} aria-label="RiceGuardAI home">
+      <img src="/images/mascot/field-companion.png" alt="" width="40" height="40" />
+      <span>RiceGuard<b>AI</b></span>
+    </Link>
+  );
+}
+
+function LandingHeader({ smsPath, smsLabel }: { smsPath: string; smsLabel: string }) {
+  const [solid, setSolid] = useState(false);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    let frame = 0;
+    const onScroll = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => { frame = 0; setSolid(window.scrollY > 40); });
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => { cancelAnimationFrame(frame); window.removeEventListener("scroll", onScroll); };
+  }, []);
+  const close = () => setOpen(false);
+  return (
+    <header className={`lp-header ${solid || open ? "is-solid" : ""}`}>
+      <Wordmark light={!solid && !open} />
+      <nav className={open ? "is-open" : ""} aria-label="Main navigation">
+        <a href="#how" onClick={close}>How it works</a>
+        <Link to="/bulletin" onClick={close}>Field advisories</Link>
+        <Link to="/map" onClick={close}>Monitoring map</Link>
+        <a href="#film" onClick={close}>Watch the film</a>
+        <Link to={smsPath} onClick={close} className="lp-nav-sms">{smsLabel}</Link>
+      </nav>
+      <div className="lp-header-actions">
+        <Link className="lp-button" to={smsPath}>{smsLabel}</Link>
+        <button className="lp-menu-button" type="button" aria-expanded={open} aria-label={open ? "Close menu" : "Open menu"} onClick={() => setOpen(!open)}>
+          {open ? <X size={22} /> : <Menu size={22} />}
+        </button>
+      </div>
+    </header>
+  );
+}
+
+function Hero({ latest, smsPath, smsLabel }: { latest?: Bulletin; smsPath: string; smsLabel: string }) {
+  const section = useRef<HTMLElement>(null);
+  const photo = useRef<HTMLDivElement>(null);
+  const copy = useRef<HTMLDivElement>(null);
+  const reduced = useReducedMotion();
+  const [visible, setVisible] = useState(true);
+  const [show3D, setShow3D] = useState(false);
+  const [narrow] = useState(() => window.innerWidth < 760);
+
+  useEffect(() => {
+    // Mount the scene after the boot loader has gone so it never competes with first paint.
+    const start = () => {
+      const idle = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
+      if (idle) idle(() => setShow3D(true), { timeout: 600 });
+      else window.setTimeout(() => setShow3D(true), 200);
+    };
+    if (document.documentElement.classList.contains("rg-app-ready")) { start(); return; }
+    const observer = new MutationObserver(() => {
+      if (document.documentElement.classList.contains("rg-app-ready")) { observer.disconnect(); start(); }
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const node = section.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting));
+    observer.observe(node);
+    let frame = 0;
+    // Write transforms straight onto the two layers; no inherited CSS variables, no React renders.
+    const apply = () => {
+      frame = 0;
+      const height = node.offsetHeight || 1;
+      const p = reduced ? 0 : Math.min(1, Math.max(0, window.scrollY / height));
+      heroInput.scroll = p;
+      node.closest(".lp")?.classList.toggle("is-past-hero", p > 0.55);
+      if (p >= 1) return;
+      if (photo.current) photo.current.style.transform = `translate3d(${(heroInput.x * -10).toFixed(1)}px, ${(p * height * 0.2).toFixed(1)}px, 0)`;
+      if (copy.current) {
+        copy.current.style.transform = `translate3d(0, ${(p * height * -0.12).toFixed(1)}px, 0)`;
+        copy.current.style.opacity = String(Math.max(0, 1 - p * 1.5).toFixed(3));
+      }
+    };
+    const request = () => { if (!frame) frame = requestAnimationFrame(apply); };
+    const onPointer = (event: PointerEvent) => {
+      if (reduced || event.pointerType === "touch") return;
+      heroInput.x = (event.clientX / window.innerWidth) * 2 - 1;
+      heroInput.y = (event.clientY / window.innerHeight) * 2 - 1;
+      heroInput.moved = performance.now();
+      if (window.scrollY < node.offsetHeight) request();
+    };
+    apply();
+    window.addEventListener("scroll", request, { passive: true });
+    window.addEventListener("pointermove", onPointer, { passive: true });
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", request);
+      window.removeEventListener("pointermove", onPointer);
+    };
+  }, [reduced]);
+
+  const latestImage = latest?.media?.find((entry) => entry.type === "image")?.url || latest?.image;
+  const headline = [["Catch", "rice", "disease"], ["before", "it", "spreads."]];
+  let wordIndex = 0;
+  return (
+    <section className="lp-hero" ref={section} aria-labelledby="lp-hero-title">
+      <div className="lp-hero-sky" ref={photo} aria-hidden="true"><span className="lp-sun" /></div>
+      <div className="lp-hero-stage" aria-hidden="true">
+        {show3D ? (
+          <SceneBoundary fallback={<img className="lp-hero-fallback" src="/images/field-hero-1600.webp" alt="" />}>
+            <Suspense fallback={null}>
+              <RiceField3D paused={!visible || reduced} density={narrow ? 0.4 : 1} />
+            </Suspense>
+          </SceneBoundary>
+        ) : null}
+      </div>
+      <div className="lp-hero-scrim" aria-hidden="true" />
+      <div className="lp-hero-copy" ref={copy}>
+        <p className="lp-hero-tag"><span><i /> Live in Region II</span> AI rice disease monitoring</p>
+        <h1 id="lp-hero-title">
+          {headline.map((line, lineIndex) => (
+            <span key={lineIndex} className="lp-line">
+              {line.map((word) => {
+                const index = wordIndex++;
+                return <span key={word} className={`lp-word ${word === "spreads." ? "is-accent" : ""}`} style={vars({ "--i": index })}>{word}</span>;
+              })}
+            </span>
+          ))}
+        </h1>
+        <p className="lp-hero-lead">
+          RiceGuardAI reads drone photos of Region II paddies for Bacterial Leaf Blight and Brown Spot.
+          Our team checks every finding, then texts nearby farmers what to do.
+        </p>
+        <div className="lp-hero-actions">
+          <Link className="lp-button lp-button-lg" to={smsPath}>{smsLabel} <MessageSquareText size={18} /></Link>
+          <a className="lp-ghost" href="#film"><span><Play size={15} fill="currentColor" /></span> Watch the film</a>
+        </div>
+      </div>
+      <div className="lp-hero-bottom">
+        <p className="lp-hero-status"><i /> Two disease models · every finding reviewed by a person</p>
+        <a className="lp-scroll-cue" href="#problem" aria-label="Scroll to learn more"><i /></a>
+        <Link to={latest ? `/advisories/${latest.slug}` : "/bulletin"} className="lp-hero-card">
+          <img src={latestImage || "/images/field/compare-detected-960.webp"} alt="" width="96" height="72" loading="lazy" />
+          <span><small>{latest ? "Latest advisory" : "Field bulletin"}</small>{latest ? latest.title : "Read reviewed advisories"}</span>
+          <ArrowUpRight size={18} />
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+function Ticker() {
+  const items = ["Batanes", "Cagayan", "Isabela", "Nueva Vizcaya", "Quirino", "Bacterial Leaf Blight", "Brown Spot", "Reviewed advisories", "SMS alerts"];
+  const row = (hidden: boolean) => (
+    <div className="lp-ticker-row" aria-hidden={hidden || undefined}>
+      {items.map((item) => <span key={item}>{item}<i /></span>)}
+    </div>
+  );
+  return (
+    <div className="lp-ticker" role="region" aria-label="Coverage and focus">
+      <div className="lp-ticker-track">{row(false)}{row(true)}</div>
+    </div>
+  );
+}
+
+function TiltCard({ children, className = "" }: { children: ReactNode; className?: string }) {
+  const card = useRef<HTMLDivElement>(null);
+  const onMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "mouse" || !card.current) return;
+    const box = card.current.getBoundingClientRect();
+    const x = (event.clientX - box.left) / box.width - 0.5;
+    const y = (event.clientY - box.top) / box.height - 0.5;
+    card.current.style.transform = `perspective(900px) rotateY(${(x * 10).toFixed(2)}deg) rotateX(${(-y * 10).toFixed(2)}deg) translateZ(0)`;
+    card.current.style.setProperty("--gx", `${((x + 0.5) * 100).toFixed(1)}%`);
+    card.current.style.setProperty("--gy", `${((y + 0.5) * 100).toFixed(1)}%`);
+  };
+  const onLeave = () => { if (card.current) card.current.style.transform = ""; };
+  return <div ref={card} className={`lp-tilt ${className}`} onPointerMove={onMove} onPointerLeave={onLeave}>{children}</div>;
+}
+
+function ProblemSection() {
+  const statement = "Bacterial Leaf Blight and Brown Spot start as a few streaks on scattered leaves. By the time they show from the dike, they have often spread, and no one can walk every hectare.";
+  const words = statement.split(" ");
+  return (
+    <section className="lp-section lp-problem" id="problem" aria-labelledby="lp-problem-title">
+      <h2 id="lp-problem-title" className="lp-eyebrow-title" data-reveal>The trouble starts small</h2>
+      <p className="lp-statement">
+        {words.map((word, index) => <span key={`${word}-${index}`} style={vars({ "--w": index / words.length })}>{word} </span>)}
+      </p>
+      <div className="lp-disease-grid" data-reveal>
+        <TiltCard className="lp-disease">
+          <img src="/images/field/disease-blb-800.webp" alt="Rice leaves with yellow-to-white streaks running down from the tips" width="800" height="1000" loading="lazy" decoding="async" />
+          <div>
+            <span className="lp-pill">Bacterial Leaf Blight</span>
+            <h3>Streaks that start at the tip</h3>
+            <p>Wavy yellow-to-white stripes run down the leaf edge and dry out the blade.</p>
+          </div>
+        </TiltCard>
+        <TiltCard className="lp-disease">
+          <img src="/images/field/disease-brownspot-800.webp" alt="Rice leaves dotted with small brown oval spots" width="800" height="1000" loading="lazy" decoding="async" />
+          <div>
+            <span className="lp-pill">Brown Spot</span>
+            <h3>Specks that multiply</h3>
+            <p>Small oval brown spots with pale centres scatter across the leaves.</p>
+          </div>
+        </TiltCard>
+        <div className="lp-problem-note">
+          <ScanLine size={26} />
+          <h3>Too many hectares to walk</h3>
+          <p>Five provinces and thousands of paddies. A drone covers in minutes the ground that takes hours to walk.</p>
+          <a className="lp-text-link" href="#see">See what the drone sees <ArrowRight size={16} /></a>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CompareSlider() {
+  const [value, setValue] = useState(50);
+  const [touched, setTouched] = useState(false);
+  const frame = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+  const setFromPointer = (clientX: number) => {
+    const box = frame.current?.getBoundingClientRect();
+    if (!box) return;
+    setValue(Math.min(100, Math.max(0, ((clientX - box.left) / box.width) * 100)));
+  };
+  return (
+    <div
+      className={`lp-compare ${touched ? "is-touched" : ""}`}
+      ref={frame}
+      data-live
+      style={vars({ "--split": `${value}%` })}
+      onPointerDown={(event) => { dragging.current = true; setTouched(true); event.currentTarget.setPointerCapture(event.pointerId); setFromPointer(event.clientX); }}
+      onPointerMove={(event) => { if (dragging.current) setFromPointer(event.clientX); }}
+      onPointerUp={() => { dragging.current = false; }}
+      onPointerCancel={() => { dragging.current = false; }}
+    >
+      <img src="/images/field/compare-original-1600.webp" srcSet="/images/field/compare-original-960.webp 960w, /images/field/compare-original-1600.webp 1600w" sizes="(max-width: 900px) 100vw, 64vw" alt="Top-down drone photo of a rice canopy before analysis" width="1600" height="1067" loading="lazy" decoding="async" draggable={false} />
+      <img className="lp-compare-top" src="/images/field/compare-detected-1600.webp" srcSet="/images/field/compare-detected-960.webp 960w, /images/field/compare-detected-1600.webp 1600w" sizes="(max-width: 900px) 100vw, 64vw" alt="The same photo with leaf areas outlined by the disease models" width="1600" height="1067" loading="lazy" decoding="async" draggable={false} />
+      <span className="lp-compare-sweep" aria-hidden="true" />
+      <span className="lp-compare-tag is-left">Model view</span>
+      <span className="lp-compare-tag is-right">Original photo</span>
+      <span className="lp-compare-handle" aria-hidden="true"><i /></span>
+      <span className="lp-compare-hint" aria-hidden="true">Drag to compare</span>
+      <input type="range" min={0} max={100} value={Math.round(value)} onChange={(event) => { setTouched(true); setValue(Number(event.target.value)); }} aria-label="Reveal the model view over the original photo" />
+    </div>
+  );
+}
+
+function SeeSection() {
+  return (
+    <section className="lp-see" id="see" aria-labelledby="lp-see-title">
+      <div className="lp-see-inner">
+        <div className="lp-see-copy" data-reveal>
+          <span className="lp-pill is-dark"><i /> Live model output</span>
+          <h2 id="lp-see-title">See what the models see</h2>
+          <p>Drag across a real drone photo from our September validation run. The outlined leaves are the areas the Bacterial Leaf Blight and Brown Spot models marked for a reviewer to check.</p>
+          <ul className="lp-see-facts">
+            <li><strong>2</strong> specialist models, one photo</li>
+            <li><strong>Full</strong> resolution, never a thumbnail</li>
+            <li><strong>Every</strong> outline reviewed by a person</li>
+          </ul>
+        </div>
+        <div className="lp-see-frame" data-reveal><CompareSlider /></div>
+      </div>
+    </section>
+  );
+}
+
+function HowSection() {
+  const checks = ["Original photo", "BLB model view", "Brown Spot model view", "Weather context", "Approximate map pin"];
+  return (
+    <section className="lp-section lp-how" id="how" aria-labelledby="lp-how-title">
+      <div className="lp-section-head" data-reveal>
+        <h2 id="lp-how-title">From one flight to one text</h2>
+        <p>Four steps, each one checked before the next. Nothing reaches a farmer's phone without a person approving it.</p>
+      </div>
+      <div className="lp-bento" data-reveal>
+        <article className="lp-card lp-card-capture" data-live>
+          <div className="lp-card-media">
+            <img src="/images/field/paddy-water-1600.webp" srcSet="/images/field/paddy-water-960.webp 960w, /images/field/paddy-water-1600.webp 1600w" sizes="(max-width: 860px) 100vw, 60vw" alt="Young rice plants in a flooded paddy, photographed from above" width="1600" height="900" loading="lazy" decoding="async" />
+            <span className="lp-scanline" aria-hidden="true" />
+            <span className="lp-brackets" aria-hidden="true"><i /><i /><i /><i /></span>
+            <span className="lp-gps" aria-hidden="true"><MapPin size={14} /> GPS + time read from the photo</span>
+          </div>
+          <div className="lp-card-body"><span className="lp-step">Step 1 · Capture</span><h3>A drone flies low over the paddy</h3><p>Full-resolution photos, each tied to its field by the time and GPS in the file.</p></div>
+        </article>
+        <article className="lp-card lp-card-detect" data-live>
+          <div className="lp-card-media">
+            <img src="/images/field/leaf-polygons-960.webp" alt="Rice leaves outlined one by one by the models" width="960" height="540" loading="lazy" decoding="async" />
+            <span className="lp-model-chips" aria-hidden="true"><b>BLB</b><b>Brown Spot</b></span>
+          </div>
+          <div className="lp-card-body"><span className="lp-step">Step 2 · Detect</span><h3>Two models, one photo</h3><p>Each model marks only its own disease, so one finding never hides the other.</p></div>
+        </article>
+        <article className="lp-card lp-card-review" data-live>
+          <div className="lp-review-ui" aria-hidden="true">
+            <div className="lp-review-head"><ShieldCheck size={16} /> Reviewer checklist</div>
+            <ul>{checks.map((check, index) => <li key={check} style={vars({ "--k": index })}><span><Check size={13} strokeWidth={3} /></span>{check}</li>)}</ul>
+            <div className="lp-stamp">Approved</div>
+          </div>
+          <div className="lp-card-body"><span className="lp-step">Step 3 · Review</span><h3>A person decides</h3><p>Weak or doubtful findings stop here. Approved ones get weather and an approximate pin.</p></div>
+        </article>
+        <article className="lp-card lp-card-publish" data-live>
+          <div className="lp-publish-ui" aria-hidden="true">
+            <div className="lp-mini-bulletin">
+              <img src="/images/field/disease-blb-800.webp" alt="" width="800" height="1000" loading="lazy" />
+              <div><span className="lp-pill">Reviewed</span><strong>BLB advisory · Cagayan</strong><small>Walk the marked area and check the leaf tips.</small></div>
+            </div>
+            <div className="lp-mini-sms"><MessageSquareText size={16} /><span><b>RiceGuardAI</b> BLB advisory near your field. Details: riceguardai.dev</span></div>
+            <span className="lp-mini-pin"><MapPin size={18} /></span>
+          </div>
+          <div className="lp-card-body"><span className="lp-step">Step 4 · Publish</span><h3>Bulletin, map and SMS</h3><p>The advisory goes public, and a separate decision texts farmers registered nearby.</p></div>
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function useFilmAvailable() {
+  const [available, setAvailable] = useState<boolean | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetch(FILM_SRC, { method: "HEAD" })
+      .then((response) => alive && setAvailable(response.ok && (response.headers.get("content-type") || "").startsWith("video/")))
+      .catch(() => alive && setAvailable(false));
+    return () => { alive = false; };
+  }, []);
+  return available;
+}
+
+function FilmSection() {
+  const hasFilm = useFilmAvailable();
+  const video = useRef<HTMLVideoElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const src = hasFilm ? FILM_SRC : "/video/blb-prototype-preview.mp4";
+  const poster = hasFilm ? FILM_POSTER : "/video/blb-prototype-poster.jpg";
+  const start = () => {
+    setPlaying(true);
+    requestAnimationFrame(() => void video.current?.play().catch(() => {}));
+  };
+  return (
+    <section className="lp-section lp-film" id="film" aria-labelledby="lp-film-title">
+      <div className="lp-section-head is-center" data-reveal>
+        <h2 id="lp-film-title">RiceGuardAI in one minute</h2>
+        <p>The problem in the paddy, how the drone and the two models work, and a walk through the website.</p>
+      </div>
+      <div className="lp-film-frame" data-reveal>
+        {hasFilm === null ? null : (
+          <video ref={video} key={src} controls={playing} playsInline preload="none" poster={poster} aria-label="RiceGuardAI explainer film">
+            <source src={src} type="video/mp4" />
+            Your browser cannot play this video.
+          </video>
+        )}
+        {!playing ? (
+          <button type="button" className="lp-film-play" onClick={start} aria-label="Play the RiceGuardAI film">
+            <span><Play size={30} fill="currentColor" /></span>
+            <small>{hasFilm ? "Play film · about 1 min" : "Play field preview"}</small>
+          </button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+const PROVINCES = [
+  { name: "Batanes", lat: 20.45, lng: 121.97 },
+  { name: "Cagayan", lat: 17.61, lng: 121.73 },
+  { name: "Isabela", lat: 17.15, lng: 121.89 },
+  { name: "Nueva Vizcaya", lat: 16.48, lng: 121.15 },
+  { name: "Quirino", lat: 16.49, lng: 121.54 },
+] as const;
+
+const SAMPLE_ACTIONS = {
+  BLB: "Walk the marked area and look for yellow-to-white streaks running down from the leaf tips.\nDrain standing water where the field allows and hold back extra nitrogen for now.\nAsk your municipal agriculturist to confirm before you spray anything.",
+  "Brown Spot": "Check the lower leaves for small oval brown spots with grey centres.\nReview your fertiliser plan, especially potassium, with your technician.\nAsk your municipal agriculturist to confirm before you apply any fungicide.",
+} as const;
+
+function SmsSection({ smsPath, smsLabel }: { smsPath: string; smsLabel: string }) {
+  const [province, setProvince] = useState<(typeof PROVINCES)[number]["name"]>("Cagayan");
+  const [disease, setDisease] = useState<"BLB" | "Brown Spot">("BLB");
+  const [withMap, setWithMap] = useState(true);
+  const [typing, setTyping] = useState(false);
+  const place = PROVINCES.find((item) => item.name === province)!;
+  const message = useMemo(() => smsAdvisoryMessage(
+    { disease, action: SAMPLE_ACTIONS[disease], slug: "sample", lat: place.lat, lng: place.lng, public_location_approved: withMap },
+    `https://riceguardai.dev/advisories/${disease === "BLB" ? "blb" : "brown-spot"}-${province.toLowerCase().replace(/\s+/g, "-")}`,
+    false,
+  ), [disease, place, province, withMap]);
+  const segments = smsSegments(message);
+  const typingTimer = useRef(0);
+  useEffect(() => () => window.clearTimeout(typingTimer.current), []);
+  // Each change shows the typing dots briefly before the new message lands.
+  const update = (apply: () => void) => {
+    apply();
+    setTyping(true);
+    window.clearTimeout(typingTimer.current);
+    typingTimer.current = window.setTimeout(() => setTyping(false), 650);
+  };
+  return (
+    <section className="lp-section lp-sms" aria-labelledby="lp-sms-title">
+      <div className="lp-sms-panel" data-reveal>
+        <div className="lp-sms-device">
+          <div className="lp-phone" data-ui>
+            <div className="lp-phone-island" />
+            <div className="lp-phone-status"><span>9:41</span><span className="lp-phone-signal"><i /><i /><i /><i /></span></div>
+            <div className="lp-phone-app">
+              <img src="/images/mascot/field-companion.png" alt="" width="34" height="34" />
+              <div><strong>RiceGuardAI</strong><small>Field alerts · {province}</small></div>
+            </div>
+            <div className="lp-phone-thread">
+              <small className="lp-phone-day">Today</small>
+              {typing ? (
+                <div className="lp-typing"><i /><i /><i /></div>
+              ) : (
+                <p key={message} className="lp-bubble">{message}</p>
+              )}
+            </div>
+            <div className="lp-phone-compose"><span>Text message</span></div>
+          </div>
+        </div>
+        <div className="lp-sms-copy">
+          <span className="lp-pill is-dark"><MessageSquareText size={14} /> Works on any phone</span>
+          <h2 id="lp-sms-title">An alert built for a basic phone</h2>
+          <p>No app, no data plan. Try the options and watch the real message format update.</p>
+          <div className="lp-control">
+            <span className="lp-control-label">Province</span>
+            <div className="lp-chips" role="radiogroup" aria-label="Province">
+              {PROVINCES.map((item) => (
+                <button key={item.name} type="button" role="radio" aria-checked={province === item.name} onClick={() => update(() => setProvince(item.name))}>{item.name}</button>
+              ))}
+            </div>
+          </div>
+          <div className="lp-control">
+            <span className="lp-control-label">Disease confirmed by the reviewer</span>
+            <div className="lp-segment" role="radiogroup" aria-label="Disease" style={vars({ "--pos": disease === "BLB" ? 0 : 1 })}>
+              <span className="lp-segment-thumb" aria-hidden="true" />
+              {(["BLB", "Brown Spot"] as const).map((item) => (
+                <button key={item} type="button" role="radio" aria-checked={disease === item} onClick={() => update(() => setDisease(item))}>{item === "BLB" ? "Bacterial Leaf Blight" : item}</button>
+              ))}
+            </div>
+          </div>
+          <label className="lp-switch">
+            <input type="checkbox" checked={withMap} onChange={(event) => { const checked = event.target.checked; update(() => setWithMap(checked)); }} />
+            <span aria-hidden="true" />
+            Include an approximate map link, never the exact farm
+          </label>
+          <div className="lp-sms-meter" aria-live="polite">
+            <span>{segments.units} characters</span>
+            <span className="lp-sms-parts">{Array.from({ length: Math.max(1, segments.segments) }, (_, index) => <i key={index} />)}</span>
+            <span>{segments.segments} SMS part{segments.segments === 1 ? "" : "s"}</span>
+          </div>
+          <Link className="lp-button lp-button-lg" to={smsPath}>{smsLabel} <ArrowRight size={17} /></Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function formatDay(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Manila" });
+}
+
+function AdvisoriesSection({ items, loading, error }: { items: Bulletin[]; loading: boolean; error: string }) {
+  return (
+    <section className="lp-section lp-latest" aria-labelledby="lp-latest-title">
+      <div className="lp-section-head is-row" data-reveal>
+        <div>
+          <h2 id="lp-latest-title">Latest field advisories</h2>
+          <p>Reviewed findings, published with what to do next.</p>
+        </div>
+        <Link className="lp-button lp-button-dark" to="/bulletin">Open the bulletin <ArrowRight size={17} /></Link>
+      </div>
+      <div className="lp-advisories" data-reveal>
+        {loading ? (
+          [0, 1, 2].map((index) => <div key={index} className="lp-advisory is-loading" />)
+        ) : items.length ? (
+          items.slice(0, 3).map((item) => {
+            const image = item.media?.find((entry) => entry.type === "image")?.url || item.image;
+            return (
+              <Link key={item.id} to={`/advisories/${item.slug}`} className="lp-advisory">
+                <div className="lp-advisory-media">{image ? <img src={image} alt="" loading="lazy" decoding="async" /> : null}<span className="lp-pill">{reviewedDiseaseLabel(item) === "BLB" ? "Bacterial Leaf Blight" : reviewedDiseaseLabel(item)}</span></div>
+                <div className="lp-advisory-body">
+                  <time dateTime={item.published_at}>{formatDay(item.published_at || item.date)}</time>
+                  <strong>{item.title}</strong>
+                  <small><MapPin size={13} /> {item.location}</small>
+                </div>
+              </Link>
+            );
+          })
+        ) : (
+          <div className="lp-advisory-empty">
+            <img src="/images/mascot/bulletin-reader-v2.png" alt="" width="160" height="160" loading="lazy" />
+            <div>
+              <strong>{error ? "Field updates are out of reach right now." : "No published advisories yet."}</strong>
+              <p>{error ? "Please check back in a little while." : "Only approved findings appear here. An empty bulletin does not mean a field is disease-free."}</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function MapSection({ items }: { items: Bulletin[] }) {
+  const [shell, near] = useNearViewport<HTMLDivElement>();
+  return (
+    <section className="lp-section lp-map" aria-labelledby="lp-map-title">
+      <div className="lp-map-card" data-reveal>
+        <div className="lp-map-copy">
+          <h2 id="lp-map-title">Where the updates come from</h2>
+          <p>Browse reviewed updates across the five provinces of Region II. Each marker is a general survey area; exact farm locations stay private.</p>
+          <ul className="lp-map-provinces">{PROVINCES.map((item) => <li key={item.name}>{item.name}</li>)}</ul>
+          <Link className="lp-button" to="/map">Explore the map <ArrowUpRight size={17} /></Link>
+        </div>
+        <div className="lp-map-shell" ref={shell} data-ui data-lenis-prevent-wheel>
+          {near ? <FieldMap publicView points={items.filter((item) => item.lat != null && item.lng != null).map(bulletinMapPoint)} /> : <div className="lp-map-placeholder" />}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CloseSection({ smsPath, smsLabel }: { smsPath: string; smsLabel: string }) {
+  return (
+    <section className="lp-close" aria-labelledby="lp-close-title" data-live>
+      <div className="lp-close-glow" aria-hidden="true" />
+      <div className="lp-close-inner" data-reveal>
+        <h2 id="lp-close-title"><span>Know before</span> <span>it spreads.</span></h2>
+        <p>Register your farm and mobile number. We text you only when a reviewed advisory concerns fields near yours.</p>
+        <div className="lp-close-actions">
+          <Link className="lp-button lp-button-lg" to={smsPath}>{smsLabel} <MessageSquareText size={18} /></Link>
+          <Link className="lp-ghost" to="/bulletin">Read the bulletin <ArrowRight size={16} /></Link>
+        </div>
+      </div>
+      <img className="lp-close-mascot" src="/images/mascot/hero-wave-open-v2.png" alt="" width="420" height="420" loading="lazy" decoding="async" />
+    </section>
+  );
+}
+
+function LandingFooter({ smsPath, registered }: { smsPath: string; registered: boolean }) {
+  return (
+    <footer className="lp-footer">
+      <div className="lp-footer-cols">
+        <div className="lp-footer-brand"><Wordmark light /><p>Drone imagery, two disease models and human review, for rice farmers in Region II.</p></div>
+        <div><strong>Public information</strong><Link to="/bulletin">Field advisories</Link><Link to="/map">Monitoring map</Link><Link to={smsPath}>{registered ? "SMS preferences" : "SMS registration"}</Link></div>
+        <div><strong>Account</strong><Link to="/preferences">Alert preferences</Link><Link to="/login">Authorized staff login</Link></div>
+        <div><strong>Coverage</strong><span>Batanes, Cagayan, Isabela, Nueva Vizcaya and Quirino</span></div>
+      </div>
+      <svg className="lp-footer-word" viewBox="0 0 1000 150" role="img" aria-label="RiceGuardAI">
+        <text x="0" y="122" textLength="1000" lengthAdjust="spacingAndGlyphs">RiceGuard<tspan>AI</tspan></text>
+      </svg>
+      <small>© {new Date().getFullYear()} RiceGuardAI · Decision support only. Field verification by your agriculturist remains required.</small>
+    </footer>
+  );
+}
+
+export function HomePage() {
+  const page = useRef<HTMLDivElement>(null);
+  const registered = useSmsRegistrationStatus();
+  const smsPath = registered ? "/preferences" : "/register";
+  const smsLabel = registered ? "SMS preferences" : "Get SMS alerts";
+  const { items, loading, error } = usePublicPosts({ limit: 4 });
+  useSmoothScroll();
+  useViewportClasses(page);
+  return (
+    <div className="lp" ref={page}>
+      <a className="rg-skip" href="#main">Skip to content</a>
+      <LandingHeader smsPath={smsPath} smsLabel={smsLabel} />
+      <main id="main">
+        <Hero latest={items[0]} smsPath={smsPath} smsLabel={smsLabel} />
+        <Ticker />
+        <ProblemSection />
+        <SeeSection />
+        <HowSection />
+        <FilmSection />
+        <SmsSection smsPath={smsPath} smsLabel={smsLabel} />
+        <AdvisoriesSection items={items} loading={loading} error={error} />
+        <MapSection items={items} />
+        <CloseSection smsPath={smsPath} smsLabel={smsLabel} />
+      </main>
+      <LandingFooter smsPath={smsPath} registered={registered} />
+      <AssistantWidget />
+    </div>
+  );
+}

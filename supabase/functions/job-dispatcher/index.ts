@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { PINNED_KAGGLE_WORKFLOW_SHA256 } from "../_shared/pinnedResult.ts";
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
   auth: { persistSession: false },
@@ -25,11 +26,16 @@ Deno.serve(async (req) => {
   if (!expected || req.headers.get("authorization") !== `Bearer ${expected}`) return json({ error: "Unauthorized" }, 401);
   const dispatchUrl = Deno.env.get("KAGGLE_DISPATCH_URL");
   const dispatchSecret = Deno.env.get("KAGGLE_DISPATCH_SECRET");
+  if (Deno.env.get("PINNED_KAGGLE_DISPATCH_ENABLED") !== "true")
+    return json({ error: "Pinned Kaggle dispatch is not activated" }, 503);
   if (!dispatchUrl || !dispatchSecret) return json({ error: "Kaggle dispatcher is not configured" }, 503);
   const owner = `edge-${crypto.randomUUID()}`;
   const { data: job, error } = await db.rpc("rg_claim_dispatch_v2", { p_owner: owner, p_lease_seconds: 120 });
   if (error) return json({ error: error.message }, 500);
   if (!job?.id) return json({ status: "idle" });
+  if (job.provider !== "kaggle_yolo26" || job.manifest?.execution_provider !== "kaggle_yolo26" ||
+    job.manifest?.pinned_workflow_sha256 !== PINNED_KAGGLE_WORKFLOW_SHA256)
+    return json({ error: "Claimed job is not pinned to the active workflow" }, 409);
 
   const workerToken = randomToken();
   const expires = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
@@ -40,6 +46,7 @@ Deno.serve(async (req) => {
     run_id: job.run_id,
     worker_token: workerToken,
     worker_callback_url: callbackBase,
+    workflow_sha256: PINNED_KAGGLE_WORKFLOW_SHA256,
   });
   await db.from("rg_processing_jobs").update({
     worker_token_hash: await digest(workerToken),
@@ -48,6 +55,19 @@ Deno.serve(async (req) => {
   }).eq("id", job.id);
 
   try {
+    // Fail before spending a Kaggle GPU run if the callback cannot yet issue
+    // the verified Drive/model context for this exact token and manifest.
+    const preflight = await fetch(callbackBase, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${workerToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "manifest-pinned", job_id: job.id }),
+    });
+    if (!preflight.ok) {
+      const detail = await preflight.json().catch(() => ({}));
+      throw new Error(typeof detail?.error === "string"
+        ? `Pinned worker preflight failed: ${detail.error.slice(0, 240)}`
+        : `Pinned worker preflight returned ${preflight.status}`);
+    }
     const response = await fetch(dispatchUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-RiceGuard-Signature": await signature(dispatchSecret, body) },

@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { isStopMessage } from "../_shared/smsDelivery.ts";
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
   auth: { persistSession: false },
@@ -55,9 +56,8 @@ Deno.serve(async (req) => {
   const signatureIsValid = Boolean(secret) && /^\d{10}$/.test(timestamp) &&
     Math.abs(Date.now() / 1000 - seconds) <= 300 &&
     equalHex(signatureHeader, await signature(secret!, raw + timestamp));
-  // SMS Gate Cloud does not expose a configurable webhook signing key. A
-  // high-entropy callback token keeps Cloud callbacks private, while the HMAC
-  // path above remains available for self-hosted/local gateway callbacks.
+  // Verify the device's configured signing key when available. The callback
+  // token remains compatible with the account's existing Cloud subscriptions.
   const suppliedToken = new URL(req.url).searchParams.get("token") || "";
   const tokenIsValid = Boolean(callbackToken) && equalText(suppliedToken, callbackToken!);
   if (!signatureIsValid && !tokenIsValid) {
@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
   if (event.event === "sms:received") {
     const phone = normalizePhone(event.payload.sender);
     const text = String(event.payload.message || "").trim().toUpperCase();
-    if (phone && ["STOP", "UNSUBSCRIBE", "CANCEL"].includes(text)) {
+    if (phone && isStopMessage(text)) {
       const contact = await db.from("rg_contacts").update({ consent: false })
         .eq("phone", phone).select("id").maybeSingle();
       if (contact.error) return json({ error: "Could not process opt-out" }, 500);
@@ -112,39 +112,17 @@ Deno.serve(async (req) => {
 
   const messageId = String(event.payload.messageId || "");
   if (!messageId || messageId.length > 100) return json({ accepted: true });
-  if (event.event === "sms:failed") {
-    const result = await db.from("rg_recipients").update({
-      status: "failed", error: String(event.payload.reason || "Gateway delivery failure").slice(0, 400),
-    }).eq("message_id", messageId).in("status", ["accepted", "sent", "delivered"]);
-    if (result.error) return json({ error: "Could not record delivery failure" }, 500);
-  } else if (event.event === "sms:sent") {
-    const result = await db.from("rg_recipients").update({ status: "sent" })
-      .eq("message_id", messageId).eq("status", "accepted");
-    if (result.error) return json({ error: "Could not update delivery state" }, 500);
-  } else {
-    // SMS Gate emits one delivered event per part. Confirm aggregate message
-    // state before promoting the recipient to delivered.
-    const user = Deno.env.get("SMS_GATE_USER");
-    const pass = Deno.env.get("SMS_GATE_PASS");
-    if (!user || !pass) return json({ error: "Gateway status unavailable" }, 503);
-    try {
-      const response = await fetch(`https://api.sms-gate.app/3rdparty/v1/messages/${encodeURIComponent(messageId)}`, {
-        headers: { Authorization: `Basic ${btoa(`${user}:${pass}`)}` },
-        signal: AbortSignal.timeout(5_000),
-      });
-      if (!response.ok) return json({ error: "Gateway status unavailable" }, 503);
-      const message = await response.json();
-      if (String(message.state || "").toLowerCase() === "delivered") {
-        const result = await db.from("rg_recipients").update({
-          status: "delivered", delivered_at: new Date().toISOString(), error: null,
-        }).eq("message_id", messageId).in("status", ["accepted", "sent"]);
-        if (result.error) return json({ error: "Could not update delivery state" }, 500);
-      }
-    } catch {
-      return json({ error: "Gateway status unavailable" }, 503);
-    }
-  }
-  const audit = await recordEvent();
-  if (audit.error && audit.error.code !== "23505") return json({ error: "Could not record event" }, 500);
-  return json({ accepted: true });
+  const recipientPhone = normalizePhone(event.payload.recipient || event.payload.phoneNumber);
+  const rawParts = event.payload.partsCount;
+  const parts = Number.isSafeInteger(rawParts) && Number(rawParts) >= 1 && Number(rawParts) <= 100 ? Number(rawParts) : null;
+  // The provider's aggregate Delivered can mean only one multipart part arrived.
+  // The guarded RPC records unique callbacks and uses authoritative partsCount
+  // from sms:sent. No GET response is treated as complete multipart proof.
+  const receipt = await db.rpc("rg_sms_receipt", {
+    p_event: externalId, p_message: messageId, p_phone: recipientPhone,
+    p_kind: event.event, p_parts: parts,
+    p_reason: event.event === "sms:failed" ? String(event.payload.reason || "Gateway delivery failure").slice(0, 400) : null,
+  });
+  if (receipt.error) return json({ error: "Could not record delivery receipt" }, 500);
+  return json(receipt.data || { accepted: true });
 });

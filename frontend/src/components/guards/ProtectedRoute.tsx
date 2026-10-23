@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import type { UserRole } from "@/types/database";
+import { safeAdminReturnPath } from "@/operations/geminiConnector";
 
 interface Props {
   role?: UserRole;
@@ -9,6 +10,9 @@ interface Props {
 export function ProtectedRoute({ role }: Props) {
   const { session, profile, loading, profileLoading, aal } = useAuth();
   const location = useLocation();
+  const from = location.pathname === "/admin/connect/gemini"
+    ? safeAdminReturnPath(location.pathname + location.search)
+    : location.pathname;
 
   // Initial session restore.
   if (loading) {
@@ -20,7 +24,7 @@ export function ProtectedRoute({ role }: Props) {
   }
 
   if (!session) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    return <Navigate to="/login" replace state={{ from }} />;
   }
 
   // Session ready but profile fetch still in flight — wait, don't redirect
@@ -50,7 +54,7 @@ export function ProtectedRoute({ role }: Props) {
   }
 
   if (role === "admin" && aal !== "aal2") {
-    return <Navigate to="/login" replace state={{ from: location.pathname, requireMfa: true }} />;
+    return <Navigate to="/login" replace state={{ from, requireMfa: true }} />;
   }
 
   return <Outlet />;

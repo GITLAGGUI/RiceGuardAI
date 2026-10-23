@@ -1,0 +1,40 @@
+- generic [ref=f1e2]:
+  - complementary [ref=f1e3]: SYNTHETIC LOCAL PREVIEW. No real login, permission grant or Gemini connection.
+  - main [ref=f1e4]:
+    - generic [ref=f1e5]:
+      - generic [ref=f1e7]:
+        - paragraph [ref=f1e8]: GEMINI CONNECTION
+        - heading "RiceGuardAI Advisory" [level=1] [ref=f1e9]
+        - paragraph [ref=f1e10]: Review the evidence Gemini may read and the private advisory it may save.
+      - region "Connection permissions" [ref=f1e11]:
+        - heading "Connect RiceGuardAI Advisory" [level=2] [ref=f1e12]
+        - paragraph [ref=f1e13]: Mababasa ng Gemini ang pinili mong detection evidence at makakapag-save ng advisory. Hindi ito magpa-publish o magpapadala ng SMS sa setup test.
+        - paragraph [ref=f1e14]: The server verifies the configured connector owner and MFA for every action.
+        - generic [ref=f1e15]:
+          - heading "Requested permissions" [level=3] [ref=f1e16]
+          - list [ref=f1e17]:
+            - listitem [ref=f1e18]:
+              - code [ref=f1e19]: evidence:read
+              - text: — read selected detection evidence
+            - listitem [ref=f1e20]:
+              - code [ref=f1e21]: advisory:submit
+              - text: — save a private advisory; Gemini may request write confirmation
+        - paragraph [ref=f1e22]: Access lasts at most 30 days. You can revoke it at any time.
+        - paragraph [ref=f1e23]:
+          - text: "Request expires:"
+          - time [ref=f1e24]: 10/23/2026, 7:37:37 AM
+        - group "Choose surveys to share" [ref=f1e25]:
+          - paragraph [ref=f1e27]: Select at least one survey. Only the selected evidence is accessible.
+          - generic [ref=f1e28]:
+            - 'checkbox "Synthetic survey: sample rice field evidence, not a real farm" [ref=f1e29]'
+            - generic [ref=f1e30]: "Synthetic survey: sample rice field evidence, not a real farm"
+        - generic [ref=f1e31]:
+          - checkbox "Share sanitized evidence images Optional. Off by default. Only bounded derivatives without EXIF, contact or location identifiers may be shared." [ref=f1e32]
+          - generic [ref=f1e33]:
+            - strong [ref=f1e34]: Share sanitized evidence images
+            - text: Optional. Off by default. Only bounded derivatives without EXIF, contact or location identifiers may be shared.
+        - generic [ref=f1e35]:
+          - button "Allow" [disabled] [ref=f1e36]
+          - button "Deny" [ref=f1e37]
+      - link "Back to admin overview" [ref=f1e38] [cursor=pointer]:
+        - /url: /admin/overview

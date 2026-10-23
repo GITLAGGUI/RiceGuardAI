@@ -1,0 +1,10 @@
+import {createRoot} from 'react-dom/client';
+import {createMemoryRouter,RouterProvider} from 'react-router-dom';
+import {OperationsContext,type Store} from '../src/operations/store';
+import {UploadWorkspace} from '../src/operations/Upload';
+import '../src/styles/index.css';
+import '../src/operations/operations.css';
+import '../src/operations/accessibility.css';
+const store:Store={demo:true,loading:false,error:null,data:{surveys:[],assets:[],jobs:[],bulletins:[],contacts:[],campaigns:[],models:[],providers:{drive:'configuration_required',kaggle:'configuration_required',sms:'configuration_required',advisory:'configuration_required'}},operation:async()=>{throw Error('No live operation in fixture');},refresh:async()=>{},addSurvey:async()=>{},review:async()=>{},saveDraft:async()=>{},publish:async()=>{},generateAdvisory:async()=>'',addContact:async()=>{},reset:()=>{}};
+const router=createMemoryRouter([{path:'*',element:<><p>ISOLATED QA — no backend writes, uploads or inference</p><UploadWorkspace/></>}],{initialEntries:['/demo/surveys/new']});
+createRoot(document.getElementById('root')!).render(<OperationsContext.Provider value={store}><RouterProvider router={router}/></OperationsContext.Provider>);
