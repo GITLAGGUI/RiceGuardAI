@@ -252,6 +252,17 @@ async function replaceDriveUploadSession(asset: {
   return uploadUrl;
 }
 
+// Kick the GPU dispatcher as soon as a job exists instead of waiting for its cron tick.
+function startDispatch(kind: "kaggle-dispatch" | "aws-dispatch") {
+  const secret = Deno.env.get("CRON_SECRET");
+  if (!secret) return;
+  const request = fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/${kind === "aws-dispatch" ? "aws-dispatcher" : "job-dispatcher"}`, {
+    method: "POST", headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json" }, body: "{}",
+    signal: AbortSignal.timeout(50_000),
+  }).catch(() => undefined);
+  (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime?.waitUntil(request);
+}
+
 function startAutoPipeline(surveyId: string) {
   const secret = Deno.env.get("CRON_SECRET");
   if (!secret) return;
@@ -321,6 +332,7 @@ async function createJobIfReady(surveyId: string, recoveryAttemptId?: string) {
     { kind: provider === "aws" ? "aws-dispatch" : "kaggle-dispatch", entity_id: resolved.id, state: "pending", available_at: new Date().toISOString() },
     { onConflict: "kind,entity_id", ignoreDuplicates: true },
   ));
+  startDispatch(provider === "aws" ? "aws-dispatch" : "kaggle-dispatch");
   return resolved;
 }
 
