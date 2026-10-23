@@ -111,7 +111,7 @@ begin
   select * into j from public.rg_processing_jobs where id=p_job for update;
   if j.id is null or j.provider is distinct from 'kaggle_yolo26' or
     j.manifest->>'execution_provider' is distinct from 'kaggle_yolo26' or
-    coalesce(j.manifest->>'pinned_workflow_sha256', '') not in ('310e867809b5fd495b37f9468782ddd3a4920e15a4f49fc69d909f0d35c64589',
+    coalesce(j.manifest->>'pinned_workflow_sha256', '') not in ('20d3fc452a6f4575791162fbf28a21a592cf7b9ea8992852940e165459b03eb2',
       '7695ca57f8d093c05fe73c916bb9c13315b615b6210ef76343dae0423a84ab62',
       '09533f998a7e51ad8f44703aef1d7dee8eb91b4251681a538cabe881b5bec5b0',
       'df3d156e64d778ea818fdb34005a340570661d40e0d9a306ec891087f68a35de')

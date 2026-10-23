@@ -59,7 +59,7 @@ Per photo `i`, computed on the GPU worker from full-resolution pixels:
 
 - `P_i` plant tissue = green vegetation (Excess Green `2g - r - b` on chromatic
   coordinates, Otsu threshold clamped to [0.02, 0.20]) OR yellow/brown leaf tissue
-  (HSV hue 15–60 deg, S >= 0.25, V >= 0.20) OR any disease mask. Very dark,
+  (HSV hue 25–60 deg, S >= 0.35, V >= 0.45) OR any disease mask. Very dark,
   glare and sky pixels fall out automatically.
 - `D_i,d` lesion pixels for disease `d` after removing specks under 25 px.
 - `S_i,d = 100 * D_i,d / P_i` (percent of visible plant tissue diseased).

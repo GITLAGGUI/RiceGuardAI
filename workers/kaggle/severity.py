@@ -32,7 +32,8 @@ def plant_tissue_mask(rgb: np.ndarray) -> np.ndarray:
     value = hsv[..., 2].astype(np.float32) / 255
     lit = (value >= 0.12) & ~((value > 0.92) & (saturation < 0.12))  # drop shadow and glare/sky
     green = (exg >= cut) & lit
-    senescent = (hue >= 15) & (hue <= 60) & (saturation >= 0.25) & (value >= 0.20)
+    # Yellowing or straw-coloured leaves are bright; dark brown soil and mud are not.
+    senescent = (hue >= 25) & (hue <= 60) & (saturation >= 0.35) & (value >= 0.45)
     return green | senescent
 
 
