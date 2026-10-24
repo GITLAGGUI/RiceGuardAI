@@ -158,10 +158,16 @@ function LandingHeader({ smsPath, smsLabel }: { smsPath: string; smsLabel: strin
     return () => { cancelAnimationFrame(frame); window.removeEventListener("scroll", onScroll); };
   }, []);
   const close = () => setOpen(false);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
   return (
     <header className={`lp-header ${solid || open ? "is-solid" : ""} ${hidden && !open ? "is-hidden" : ""}`}>
       <Wordmark light={!solid && !open} />
-      <nav className={open ? "is-open" : ""} aria-label="Main navigation">
+      <nav id="lp-menu" className={open ? "is-open" : ""} aria-label="Main navigation">
         <a href="#how" onClick={close}>How it works</a>
         <Link to="/bulletin" onClick={close}>Field advisories</Link>
         <Link to="/map" onClick={close}>Monitoring map</Link>
@@ -170,10 +176,11 @@ function LandingHeader({ smsPath, smsLabel }: { smsPath: string; smsLabel: strin
       </nav>
       <div className="lp-header-actions">
         <Link className="lp-button" to={smsPath}>{smsLabel}</Link>
-        <button className="lp-menu-button" type="button" aria-expanded={open} aria-label={open ? "Close menu" : "Open menu"} onClick={() => setOpen(!open)}>
+        <button className="lp-menu-button" type="button" aria-expanded={open} aria-controls="lp-menu" aria-label={open ? "Close menu" : "Open menu"} onClick={() => setOpen(!open)}>
           {open ? <X size={22} /> : <Menu size={22} />}
         </button>
       </div>
+      {open ? <button type="button" className="lp-menu-scrim" aria-label="Close menu" tabIndex={-1} onClick={close} /> : null}
     </header>
   );
 }
@@ -644,7 +651,7 @@ function CloseSection({ smsPath, smsLabel }: { smsPath: string; smsLabel: string
           <Link className="lp-ghost" to="/bulletin">Read the bulletin <ArrowRight size={16} /></Link>
         </div>
       </div>
-      <div className="lp-close-art" data-parallax="0.12"><img className="lp-close-mascot" src="/images/mascot/mascot-wave.webp" alt="" width="420" height="397" loading="lazy" decoding="async" /></div>
+      <div className="lp-close-art"><img className="lp-close-mascot" src="/images/mascot/inspect-leaf.webp" alt="The RiceGuardAI mascot pointing at a rice leaf with brown spots" width="800" height="775" loading="lazy" decoding="async" /></div>
     </section>
   );
 }

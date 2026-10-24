@@ -479,7 +479,7 @@ export default function RiceField3D({ paused = false, density = 1, narrow = fals
         className="lp-hero-canvas"
         frameloop={paused ? "never" : "always"}
         camera={{ position: [0, 1.2, 13], fov: 42, near: 0.1, far: 80 }}
-        dpr={[1, 1.4]}
+        dpr={narrow ? 1 : [1, 1.4]}
         gl={{ antialias: true, alpha: true, powerPreference: "high-performance", stencil: false }}
         aria-hidden="true"
       >

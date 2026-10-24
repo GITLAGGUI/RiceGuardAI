@@ -90,10 +90,15 @@ export function HeroSky({ paused }: { paused: boolean }) {
     const depth = [0, 0.15, 0.25, 0.45, 0.7, 1, 1.2];
     let frame = 0;
     const s = { x: 0, y: 0 };
+    let written = "";
     const tick = () => {
       s.x += (heroInput.x - s.x) * 0.05;
       s.y += (heroInput.y - s.y) * 0.05;
       const lift = heroInput.scroll;
+      // Skip the style writes while nothing moves (always the case on touch screens at rest).
+      const key = `${s.x.toFixed(3)}|${s.y.toFixed(3)}|${lift.toFixed(4)}`;
+      if (key === written) { frame = requestAnimationFrame(tick); return; }
+      written = key;
       layers.current.forEach((el, i) => {
         if (!el) return;
         const k = depth[i] ?? 1;

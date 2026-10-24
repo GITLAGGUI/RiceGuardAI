@@ -10,7 +10,7 @@
 .lp-sky-sun b { position: absolute; left: -46px; top: -46px; width: 92px; height: 92px; border-radius: 50%;
   background: radial-gradient(circle, #fffaf0 0 38%, #ffe9b8 52%, rgba(255, 220, 150, 0) 72%);
   box-shadow: 0 0 80px 40px rgba(255, 222, 160, .45), 0 0 220px 120px rgba(255, 210, 140, .28); animation: lp-sun-breathe 7s ease-in-out infinite; }
-.lp-sky-rays { position: absolute; left: -70vmax; top: -70vmax; width: 140vmax; height: 140vmax; border-radius: 50%; opacity: .13; mix-blend-mode: screen; filter: blur(3px);
+.lp-sky-rays { position: absolute; left: -70vmax; top: -70vmax; width: 140vmax; height: 140vmax; border-radius: 50%; opacity: .1;
   background: repeating-conic-gradient(from 0deg, rgba(255, 244, 214, 0) 0deg, rgba(255, 244, 214, .6) 2.5deg, rgba(255, 244, 214, 0) 5deg, rgba(255, 244, 214, 0) 11deg);
   -webkit-mask: radial-gradient(circle, #000 0 8%, rgba(0, 0, 0, .55) 22%, transparent 48%); mask: radial-gradient(circle, #000 0 8%, rgba(0, 0, 0, .55) 22%, transparent 48%);
   animation: lp-rays 140s linear infinite; }
@@ -20,7 +20,7 @@
     radial-gradient(40% 60% at 30% 60%, rgba(255, 246, 228, .9), transparent 70%),
     radial-gradient(35% 70% at 55% 45%, rgba(255, 250, 238, .85), transparent 72%),
     radial-gradient(30% 55% at 78% 62%, rgba(255, 240, 215, .8), transparent 70%);
-  filter: blur(6px); animation: lp-cloud linear infinite; }
+  animation: lp-cloud linear infinite; }
 .lp-sky-clouds .c1 { top: 18%; left: -10%; animation-duration: 160s; }
 .lp-sky-clouds .c2 { top: 30%; left: 30%; width: 380px; height: 90px; opacity: .45; animation-duration: 210s; animation-delay: -80s; }
 .lp-sky-clouds .c3 { top: 40%; left: 60%; width: 640px; height: 110px; opacity: .4; animation-duration: 260s; animation-delay: -140s; }
@@ -47,26 +47,31 @@
 
 /* ---------- Mascot rig ---------- */
 .lp-rig { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
-.lp-rig-light { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.lp-beam { mix-blend-mode: screen; filter: blur(1.5px); }
-.lp-pool { mix-blend-mode: screen; }
-.lp-link { stroke: rgba(255, 255, 255, .9); stroke-width: 1.6; stroke-dasharray: 4 5; opacity: 0; transition: opacity 260ms ease; }
-.lp-link.is-on { opacity: 1; animation: lp-dash 1.2s linear infinite; }
-.lp-link-dot { fill: #fff; stroke-width: 4; opacity: 0; transition: opacity 260ms ease; }
-.lp-link-dot.is-blb { stroke: rgba(255, 212, 0, .55); }
-.lp-link-dot.is-brownspot { stroke: rgba(229, 38, 43, .5); }
-.lp-link-dot.is-healthy { stroke: rgba(120, 220, 140, .55); }
+.lp-rig-light { position: absolute; inset: 0; overflow: hidden; }
+.lp-rig-light > * { position: absolute; left: 0; top: 0; will-change: transform, opacity; opacity: 0; }
+/* Soft edges are painted once into the layer; per frame only transform and opacity change. */
+.lp-beam { width: 100px; height: 400px; transform-origin: 50% 0;
+  background: linear-gradient(180deg, rgba(255, 246, 216, .62) 0%, rgba(255, 238, 184, .24) 55%, rgba(255, 233, 168, .08) 100%);
+  clip-path: polygon(48% 0, 52% 0, 100% 100%, 0 100%); }
+.lp-pool { width: 100px; height: 100px; border-radius: 50%; transform-origin: 50% 50%;
+  background: radial-gradient(closest-side, rgba(255, 244, 207, .5), rgba(255, 233, 168, .16) 70%, rgba(255, 233, 168, 0)); }
+.lp-link { width: 1000px; height: 2px; margin-top: -1px; transform-origin: 0 50%; transition: opacity 260ms ease;
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, .9) 0 4px, transparent 4px 9px); }
+.lp-link.is-on { opacity: 1; }
+.lp-link-dot { width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: #fff; transition: opacity 260ms ease; }
+.lp-link-dot.is-blb { box-shadow: 0 0 0 4px rgba(255, 212, 0, .55); }
+.lp-link-dot.is-brownspot { box-shadow: 0 0 0 4px rgba(229, 38, 43, .5); }
+.lp-link-dot.is-healthy { box-shadow: 0 0 0 4px rgba(120, 220, 140, .55); }
 .lp-link-dot.is-on { opacity: 1; }
-@keyframes lp-dash { to { stroke-dashoffset: -18; } }
 
 .lp-rig .lp-mascot { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; will-change: transform, opacity; }
-.lp-rig .lp-mascot-body { position: absolute; left: 0; top: 0; width: 200px; height: 200px; transform-origin: 50% 74%; will-change: transform; filter: drop-shadow(0 16px 16px rgba(0, 0, 0, .28)); }
-.lp-rig .lp-mascot-body img { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 240ms cubic-bezier(.4, 0, .2, 1); -webkit-user-drag: none; }
+.lp-rig .lp-mascot-body { position: absolute; left: 0; top: 0; width: 200px; height: 200px; transform-origin: 50% 74%; will-change: transform; }
+.lp-rig .lp-mascot-body img { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; filter: drop-shadow(0 16px 16px rgba(0, 0, 0, .28)); transition: opacity 240ms cubic-bezier(.4, 0, .2, 1); -webkit-user-drag: none; }
 .lp-rig .lp-mascot-body img.is-on { opacity: 1; }
 
 /* ---------- Finding card ---------- */
 .lp-find { position: absolute; left: 0; top: 0; width: 292px; display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 12px; padding: 10px; border-radius: 18px;
-  background: rgba(255, 255, 255, .96); color: #10291d; box-shadow: 0 18px 50px rgba(4, 24, 17, .28), 0 2px 6px rgba(4, 24, 17, .12);
+  background: rgba(255, 255, 255, .96); color: #10291d; box-shadow: 0 14px 34px rgba(4, 24, 17, .26), 0 2px 6px rgba(4, 24, 17, .12);
   opacity: 0; scale: .92; transform-origin: 100% 50%; transition: opacity 280ms ease, scale 420ms cubic-bezier(.2, .9, .25, 1.15); will-change: transform; }
 .lp-find[data-side="right"] { transform-origin: 0 50%; }
 .lp-find[data-side="below"] { transform-origin: 50% 0; }
@@ -177,8 +182,7 @@
 .lp-film-side h2 { margin: 0; font-size: clamp(36px, 4.4vw, 72px); line-height: 1; letter-spacing: -0.045em; color: var(--ink); }
 .lp-film-side h2 span { display: block; color: var(--green); }
 .lp-film-side p { margin: 14px 0 0; max-width: 28ch; color: var(--on-dark-soft, #cfe0d6); font-size: clamp(14px, 1.05vw, 17px); line-height: 1.5; }
-.lp-film-mascot { width: min(100%, 300px); height: auto; margin-top: auto; align-self: center; filter: drop-shadow(0 18px 22px rgba(11, 45, 34, .18)); animation: lp-presenter 4.5s ease-in-out infinite; will-change: transform; }
-@keyframes lp-presenter { 0%, 100% { transform: translateY(0) rotate(-1deg); } 50% { transform: translateY(-10px) rotate(1deg); } }
+.lp-film-mascot { width: min(100%, 520px); height: auto; margin-top: auto; align-self: center; filter: drop-shadow(0 18px 22px rgba(11, 45, 34, .16)); }
 .lp .lp-film .lp-film-frame { position: relative; justify-self: end; align-self: center; width: min(100%, calc((100svh - 150px) * 16 / 9)); aspect-ratio: 16 / 9; height: auto;
   margin: 0; border-radius: var(--radius); overflow: hidden; background: #07201a; box-shadow: 0 30px 70px -36px rgba(11, 45, 34, .55), 0 0 0 1px rgba(11, 45, 34, .06); }
 .lp .lp-film .lp-film-frame video { width: 100%; height: 100%; object-fit: cover; }
@@ -190,9 +194,46 @@
   .lp-film-mascot { grid-column: 2; grid-row: 1; width: 130px; margin: 0; }
   .lp .lp-film .lp-film-frame { grid-column: 1 / -1; grid-row: 2; width: 100%; }
 }
-@media (prefers-reduced-motion: reduce) { .lp-film-mascot { animation: none; } }
 
 /* Header: tucks away while scrolling down, slides back on any scroll up. */
 .lp .lp-header { transition: background-color 300ms ease, color 300ms ease, box-shadow 300ms ease, height 300ms var(--ease-out), transform 420ms cubic-bezier(.2, .8, .2, 1); will-change: transform; }
 .lp .lp-header.is-hidden { transform: translate3d(0, -110%, 0); box-shadow: none; }
 @media (prefers-reduced-motion: reduce) { .lp .lp-header { transition: background-color 300ms ease, color 300ms ease; } }
+
+/* Closing section: the mascot inspecting a leaf, large and still, on the right half. */
+.lp .lp-close { grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr); gap: clamp(24px, 4vw, 64px); }
+.lp .lp-close-inner { width: auto; margin: 0; }
+.lp .lp-close-art { position: static; justify-self: center; align-self: center; }
+.lp .lp-close-mascot, .lp .lp-close.is-live .lp-close-mascot { position: static; right: auto; bottom: auto; animation: none; display: block; width: clamp(240px, 29vw, 560px); height: auto; translate: none; filter: drop-shadow(0 30px 40px rgba(0, 0, 0, .35)); }
+@media (max-width: 760px) {
+  .lp .lp-close { grid-template-columns: 1fr; padding: 48px var(--margin) 40px; }
+  .lp .lp-close-inner { padding-right: 0; }
+  .lp .lp-close-art { order: -1; justify-self: center; }
+  .lp .lp-close-mascot { width: min(68vw, 300px); }
+}
+
+/* ---------- Phones and tablets ---------- */
+.lp-menu-scrim { display: none; }
+@media (max-width: 860px) {
+  /* The menu button belongs at the far right edge, where the thumb expects it. */
+  .lp .lp-header-actions { margin-left: auto; }
+  .lp .lp-menu-button { margin-right: -8px; }
+  /* The menu drops from the header and goes back up the same way. */
+  .lp .lp-header nav { display: flex; z-index: 2; visibility: hidden; opacity: 0; transform: translate3d(0, -12px, 0);
+    max-height: calc(100dvh - 60px); overflow-y: auto; overscroll-behavior: contain; padding: 10px var(--margin) calc(22px + env(safe-area-inset-bottom));
+    border-radius: 0 0 22px 22px; transition: opacity 200ms ease, transform 320ms cubic-bezier(.2, .8, .2, 1), visibility 0s linear 320ms; }
+  .lp .lp-header nav.is-open { visibility: visible; opacity: 1; transform: none; transition-delay: 0s; }
+  .lp .lp-header nav a { min-height: 54px; padding: 0 12px; border-radius: 14px; font-size: 19px; }
+  .lp .lp-header nav a:active { background: var(--paper-2); }
+  .lp .lp-header .lp-nav-sms { justify-content: center; margin-top: 10px; border-radius: 999px; background: var(--leaf); color: var(--ink); }
+  .lp-menu-scrim { display: block; position: fixed; inset: 60px 0 0; z-index: 1; border: 0; padding: 0; background: rgba(5, 26, 19, .38); animation: lp-fade 200ms ease both; }
+}
+@media (max-width: 560px) {
+  /* How it works: one card per row so every step reads in full. */
+  .lp .lp-bento { grid-template-columns: 1fr; gap: 12px; }
+  .lp .lp-card-body p { display: block; -webkit-line-clamp: unset; overflow: visible; font-size: 14px; }
+  .lp .lp-advisories { grid-auto-columns: 84%; }
+}
+.lp .lp-advisory-meta { flex-wrap: wrap; row-gap: 6px; }
+.lp .lp-advisory-meta > * { white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .lp .lp-header nav { transition: opacity 150ms ease, visibility 0s linear 150ms; transform: none; } }

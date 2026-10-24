@@ -32,11 +32,10 @@ export function HeroMascot({ active }: { active: boolean }) {
   const body = useRef<HTMLDivElement>(null);
   const layerA = useRef<HTMLImageElement>(null);
   const layerB = useRef<HTMLImageElement>(null);
-  const beamPath = useRef<SVGPathElement>(null);
-  const beamGrad = useRef<SVGLinearGradientElement>(null);
-  const pool = useRef<SVGEllipseElement>(null);
-  const link = useRef<SVGLineElement>(null);
-  const dot = useRef<SVGCircleElement>(null);
+  const beamEl = useRef<HTMLDivElement>(null);
+  const pool = useRef<HTMLDivElement>(null);
+  const link = useRef<HTMLDivElement>(null);
+  const dot = useRef<HTMLDivElement>(null);
   const cardEl = useRef<HTMLDivElement>(null);
   const [card, setCard] = useState<{ finding: Finding; step: number }>({ finding: "blb", step: active ? 0 : 5 });
 
@@ -62,15 +61,15 @@ export function HeroMascot({ active }: { active: boolean }) {
         b.style.transform = `translate(-50%, -${LENS_Y * 100}%) rotate(${tilt.toFixed(2)}deg) scale(${(k * (1 - squash * 0.6)).toFixed(4)}, ${(k * (1 + squash)).toFixed(4)})`;
       },
       beam(lx, ly, px, py, rx, ry, strength) {
-        const path = beamPath.current, grad = beamGrad.current, ellipse = pool.current;
-        if (!path || !grad || !ellipse) return;
-        // Cone: narrow at the lens, meeting the pool at its widest horizontal points.
-        path.setAttribute("d", `M${(lx - 5).toFixed(1)} ${ly.toFixed(1)} L${(px - rx).toFixed(1)} ${py.toFixed(1)} A${rx.toFixed(1)} ${ry.toFixed(1)} 0 0 0 ${(px + rx).toFixed(1)} ${py.toFixed(1)} L${(lx + 5).toFixed(1)} ${ly.toFixed(1)} Z`);
-        grad.setAttribute("x1", lx.toFixed(1)); grad.setAttribute("y1", ly.toFixed(1));
-        grad.setAttribute("x2", px.toFixed(1)); grad.setAttribute("y2", (py + ry).toFixed(1));
-        path.style.opacity = strength.toFixed(3);
-        ellipse.setAttribute("cx", px.toFixed(1)); ellipse.setAttribute("cy", py.toFixed(1));
-        ellipse.setAttribute("rx", rx.toFixed(1)); ellipse.setAttribute("ry", ry.toFixed(1));
+        const cone = beamEl.current, ellipse = pool.current;
+        if (!cone || !ellipse) return;
+        // Both are fixed-size layers moved with transforms only, so the GPU composites them without repainting.
+        // Cone: a small 100 x 400 trapezoid hung from the lens, stretched to the pool and turned toward it.
+        const dx = px - lx, dy = py - ly, len = Math.max(1, Math.hypot(dx, dy));
+        const angle = (-Math.atan2(dx, dy) * 180) / Math.PI;
+        cone.style.transform = `translate3d(${(lx - 50).toFixed(1)}px, ${ly.toFixed(1)}px, 0) rotate(${angle.toFixed(2)}deg) scale(${((rx * 2) / 100).toFixed(3)}, ${(len / 400).toFixed(4)})`;
+        cone.style.opacity = strength.toFixed(3);
+        ellipse.style.transform = `translate3d(${(px - 50).toFixed(1)}px, ${(py - 50).toFixed(1)}px, 0) scale(${(rx / 50).toFixed(3)}, ${(ry / 50).toFixed(3)})`;
         ellipse.style.opacity = (strength * 0.9).toFixed(3);
       },
       card(lensX, lensY, bodySize, pointX, pointY) {
@@ -92,13 +91,14 @@ export function HeroMascot({ active }: { active: boolean }) {
         if (!cardPos.ready) { cardPos.x = x; cardPos.y = y; cardPos.ready = true; }
         cardPos.x += (x - cardPos.x) * 0.1;
         cardPos.y += (y - cardPos.y) * 0.1;
-        el.style.transform = `translate3d(${cardPos.x.toFixed(1)}px, ${cardPos.y.toFixed(1)}px, 0)`;
+        const cardTransform = `translate3d(${cardPos.x.toFixed(1)}px, ${cardPos.y.toFixed(1)}px, 0)`;
+        if (el.style.transform !== cardTransform) el.style.transform = cardTransform;
         if (el.dataset.side !== side) el.dataset.side = side;
         const sx = side === "below" ? cardPos.x + w / 2 : side === "left" ? cardPos.x + w : cardPos.x;
         const sy = side === "below" ? cardPos.y : cardPos.y + h * 0.5;
-        line.setAttribute("x1", sx.toFixed(1)); line.setAttribute("y1", sy.toFixed(1));
-        line.setAttribute("x2", pointX.toFixed(1)); line.setAttribute("y2", pointY.toFixed(1));
-        end.setAttribute("cx", pointX.toFixed(1)); end.setAttribute("cy", pointY.toFixed(1));
+        const ldx = pointX - sx, ldy = pointY - sy;
+        line.style.transform = `translate3d(${sx.toFixed(1)}px, ${sy.toFixed(1)}px, 0) rotate(${((Math.atan2(ldy, ldx) * 180) / Math.PI).toFixed(2)}deg) scaleX(${(Math.hypot(ldx, ldy) / 1000).toFixed(4)})`;
+        end.style.transform = `translate3d(${pointX.toFixed(1)}px, ${pointY.toFixed(1)}px, 0)`;
       },
       pose(next) {
         if (next === current) return;
@@ -125,24 +125,12 @@ export function HeroMascot({ active }: { active: boolean }) {
   const open = card.step > 0;
   return (
     <div className={`lp-rig ${active ? "" : "is-static"}`} aria-hidden="true">
-      <svg className="lp-rig-light">
-        <defs>
-          <linearGradient id="lp-beam-grad" ref={beamGrad} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#fff6d8" stopOpacity=".72" />
-            <stop offset=".55" stopColor="#ffeeb8" stopOpacity=".26" />
-            <stop offset="1" stopColor="#ffe9a8" stopOpacity=".1" />
-          </linearGradient>
-          <radialGradient id="lp-pool-grad">
-            <stop offset="0" stopColor="#fff4cf" stopOpacity=".5" />
-            <stop offset=".7" stopColor="#ffe9a8" stopOpacity=".16" />
-            <stop offset="1" stopColor="#ffe9a8" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-        <path ref={beamPath} className="lp-beam" fill="url(#lp-beam-grad)" />
-        <ellipse ref={pool} className="lp-pool" fill="url(#lp-pool-grad)" />
-        <line ref={link} className={`lp-link ${open ? "is-on" : ""}`} />
-        <circle ref={dot} className={`lp-link-dot is-${card.finding} ${open ? "is-on" : ""}`} r="5" />
-      </svg>
+      <div className="lp-rig-light">
+        <div ref={beamEl} className="lp-beam" />
+        <div ref={pool} className="lp-pool" />
+        <div ref={link} className={`lp-link ${open ? "is-on" : ""}`} />
+        <div ref={dot} className={`lp-link-dot is-${card.finding} ${open ? "is-on" : ""}`} />
+      </div>
       <div className="lp-mascot" ref={root}>
         <div className="lp-mascot-body" ref={body}>
           <img ref={layerA} className="is-on" src={src(active ? "search-right" : "confirmed")} alt="" width={BODY_PX} height={BODY_PX} draggable={false} />
