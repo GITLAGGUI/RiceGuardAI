@@ -538,7 +538,6 @@ function FilmSection() {
     <section className="lp-section lp-film" id="film" aria-labelledby="lp-film-title">
       <div className="lp-film-side">
         <h2 id="lp-film-title" data-reveal>What is <span>RiceGuardAI?</span></h2>
-        <p data-reveal>Mula sa isang drone photo hanggang sa text sa magsasaka, sa loob ng ilang minuto.</p>
         <img className="lp-film-mascot" src="/images/mascot/presenter-pointer.webp" alt="" width={640} height={621} loading="lazy" decoding="async" />
       </div>
       <div className="lp-film-frame" data-reveal ref={frame}>
