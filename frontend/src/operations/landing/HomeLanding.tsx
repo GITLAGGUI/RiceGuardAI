@@ -26,8 +26,8 @@ class SceneBoundary extends Component<{ children: ReactNode; fallback?: ReactNod
   render() { return this.state.failed ? (this.props.fallback ?? null) : this.props.children; }
 }
 
-const FILM_SRC = "/video/riceguardai-film.mp4";
-const FILM_POSTER = "/video/riceguardai-film-poster.jpg";
+const FILM_SRC = "/video/riceguardai-film-v2.mp4";
+const FILM_POSTER = "/video/riceguardai-film-v2-poster.jpg";
 
 const vars = (values: Record<string, string | number>) => values as CSSProperties;
 
@@ -340,7 +340,6 @@ function ProblemSection() {
             <h3>Specks that multiply</h3>
             <p>Oval brown lesions with pale centres. Red marks each lesion, not the whole leaf.</p>
           </div>
-          <small className="lp-pcard-credit">Photo: Donald Groth, LSU AgCenter · CC BY 3.0</small>
         </TiltCard>
         <div className="lp-pcard is-farm">
           <figure><img src="/images/field/v2/farmers-irri.webp" alt="Two farmers bent over a flooded paddy inspecting rice by hand" width="1200" height="900" loading="lazy" decoding="async" /></figure>
@@ -350,9 +349,9 @@ function ProblemSection() {
             <p>Five provinces, thousands of paddies, checked by hand under the sun. A drone covers in minutes what takes a day on foot.</p>
             <a className="lp-text-link" href="#see">See what the drone sees <ArrowRight size={16} /></a>
           </div>
-          <small className="lp-pcard-credit">Photo: IRRI · CC BY 2.0</small>
         </div>
       </div>
+      <p className="lp-credits">Photos: Brown Spot, Donald Groth, LSU AgCenter (CC BY 3.0) · farmers, IRRI (CC BY 2.0)</p>
     </section>
   );
 }
