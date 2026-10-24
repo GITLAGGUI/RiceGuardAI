@@ -169,8 +169,30 @@
 .lp-film-sound:hover { background: rgba(5, 26, 19, .9); }
 .lp-film-sound:active { transform: scale(.95); }
 
-/* The film owns its whole section: edge to edge, as tall as the screen allows, no frame. */
-.lp .lp-section.lp-film { width: 100%; max-width: none; padding: 0; }
-.lp .lp-film .lp-film-frame { width: 100%; height: min(100svh, 56.25vw); margin: 0; aspect-ratio: auto; border-radius: 0; box-shadow: none; overflow: hidden; background: #0b2d22; }
+/* Film: a dark band that fits one screen. Title and the presenter mascot on the left, the film on the right. */
+.lp .lp-section.lp-film { width: 100%; max-width: none; margin-top: var(--gap-section); padding: clamp(28px, 4vh, 56px) var(--margin);
+  display: grid; grid-template-columns: minmax(220px, 0.3fr) minmax(0, 1fr); gap: clamp(20px, 3vw, 48px); align-items: stretch;
+  background: radial-gradient(90% 120% at 20% 30%, #14432f 0%, var(--ink) 60%, #07201a 100%); color: var(--on-dark); }
+.lp-film-side { position: relative; display: flex; flex-direction: column; min-height: 0; }
+.lp-film-side h2 { margin: 0; font-size: clamp(30px, 3.4vw, 54px); line-height: 1.02; letter-spacing: -0.04em; }
+.lp-film-side h2 span { display: block; color: var(--leaf); }
+.lp-film-side p { margin: 14px 0 0; max-width: 28ch; color: var(--on-dark-soft, #cfe0d6); font-size: clamp(14px, 1.05vw, 17px); line-height: 1.5; }
+.lp-film-mascot { width: min(100%, 300px); height: auto; margin-top: auto; align-self: center; filter: drop-shadow(0 24px 30px rgba(0, 0, 0, .35)); animation: lp-presenter 4.5s ease-in-out infinite; will-change: transform; }
+@keyframes lp-presenter { 0%, 100% { transform: translateY(0) rotate(-1deg); } 50% { transform: translateY(-10px) rotate(1deg); } }
+.lp .lp-film .lp-film-frame { position: relative; justify-self: end; align-self: center; width: min(100%, calc((100svh - 150px) * 16 / 9)); aspect-ratio: 16 / 9; height: auto;
+  margin: 0; border-radius: var(--radius); overflow: hidden; background: #07201a; box-shadow: 0 40px 90px -40px rgba(0, 0, 0, .8), 0 0 0 1px rgba(255, 255, 255, .06); }
 .lp .lp-film .lp-film-frame video { width: 100%; height: 100%; object-fit: cover; }
-.lp .lp-film .lp-film-sound { right: clamp(14px, 2.4vw, 36px); bottom: clamp(14px, 2.4vw, 36px); }
+@media (max-width: 860px) {
+  .lp .lp-section.lp-film { grid-template-columns: minmax(0, 1fr) 130px; grid-template-rows: auto auto; padding: 28px var(--margin) 32px; }
+  .lp-film-side { display: contents; }
+  .lp-film-side h2 { grid-column: 1; grid-row: 1; align-self: center; font-size: clamp(28px, 8vw, 40px); }
+  .lp-film-side p { display: none; }
+  .lp-film-mascot { grid-column: 2; grid-row: 1; width: 130px; margin: 0; }
+  .lp .lp-film .lp-film-frame { grid-column: 1 / -1; grid-row: 2; width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .lp-film-mascot { animation: none; } }
+
+/* Header: tucks away while scrolling down, slides back on any scroll up. */
+.lp .lp-header { transition: background-color 300ms ease, color 300ms ease, box-shadow 300ms ease, height 300ms var(--ease-out), transform 420ms cubic-bezier(.2, .8, .2, 1); will-change: transform; }
+.lp .lp-header.is-hidden { transform: translate3d(0, -110%, 0); box-shadow: none; }
+@media (prefers-reduced-motion: reduce) { .lp .lp-header { transition: background-color 300ms ease, color 300ms ease; } }

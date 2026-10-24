@@ -135,12 +135,23 @@ function Wordmark({ light = false }: { light?: boolean }) {
 
 function LandingHeader({ smsPath, smsLabel }: { smsPath: string; smsLabel: string }) {
   const [solid, setSolid] = useState(false);
+  const [hidden, setHidden] = useState(false);
   const [open, setOpen] = useState(false);
   useEffect(() => {
     let frame = 0;
+    let lastY = window.scrollY;
+    // Scrolling down tucks the header away; any scroll up brings it back. Small jitters are ignored.
     const onScroll = () => {
       if (frame) return;
-      frame = requestAnimationFrame(() => { frame = 0; setSolid(window.scrollY > 40); });
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        const y = window.scrollY;
+        setSolid(y > 40);
+        if (y < 120) setHidden(false);
+        else if (y > lastY + 6) setHidden(true);
+        else if (y < lastY - 6) setHidden(false);
+        if (Math.abs(y - lastY) > 6 || y < 120) lastY = y;
+      });
     };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -148,7 +159,7 @@ function LandingHeader({ smsPath, smsLabel }: { smsPath: string; smsLabel: strin
   }, []);
   const close = () => setOpen(false);
   return (
-    <header className={`lp-header ${solid || open ? "is-solid" : ""}`}>
+    <header className={`lp-header ${solid || open ? "is-solid" : ""} ${hidden && !open ? "is-hidden" : ""}`}>
       <Wordmark light={!solid && !open} />
       <nav className={open ? "is-open" : ""} aria-label="Main navigation">
         <a href="#how" onClick={close}>How it works</a>
@@ -525,7 +536,11 @@ function FilmSection() {
 
   return (
     <section className="lp-section lp-film" id="film" aria-labelledby="lp-film-title">
-      <h2 id="lp-film-title" className="sr-only">RiceGuardAI in one minute</h2>
+      <div className="lp-film-side">
+        <h2 id="lp-film-title" data-reveal>What is <span>RiceGuardAI?</span></h2>
+        <p data-reveal>Mula sa isang drone photo hanggang sa text sa magsasaka, sa loob ng ilang minuto.</p>
+        <img className="lp-film-mascot" src="/images/mascot/presenter-pointer.webp" alt="" width={640} height={621} loading="lazy" decoding="async" />
+      </div>
       <div className="lp-film-frame" data-reveal ref={frame}>
         {hasFilm === null ? null : (
           <video ref={video} key={src} playsInline preload="metadata" poster={poster} disablePictureInPicture
