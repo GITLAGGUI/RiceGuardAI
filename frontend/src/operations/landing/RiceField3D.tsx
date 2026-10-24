@@ -30,9 +30,6 @@ const CELL_X = 8.5; // paddy size between dikes
 const CELL_Z = 9;
 const DIKE = 0.42;
 const SCAN_FROM = -FIELD_D + FIELD_Z0;
-const SCAN_TO = FIELD_Z0 + 2;
-const SCAN_PERIOD = 7;
-const SCAN_SWEEP = 5;
 
 type Target = { x: number; z: number; finding: Finding; kind: number };
 /** Spots the mascot inspects; on desktop they keep to the right, away from the headline. */
