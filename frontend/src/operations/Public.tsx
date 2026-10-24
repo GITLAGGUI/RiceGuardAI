@@ -49,6 +49,7 @@ import { WeatherLocation } from "./WeatherLocation";
 import "./operations.css";
 import "./bulletin.css";
 import "./bulletin-feed.css";
+import "./fit-pages.css";
 
 export function Brand({ light = false }: { light?: boolean }) {
   return (
@@ -420,20 +421,39 @@ export function PublicMapPage() {
   const [params,setParams]=useSearchParams();
   const { items, error, loading } = usePublicPosts({ limit: 100 });
   const points = items.filter((b) => b.lat != null && b.lng != null).map(bulletinMapPoint);
+  const unmapped = items.filter((item) => item.lat == null || item.lng == null).length;
+  const selected = params.get("advisory");
   return (
     <CommunityShell active="map" points={points}>
-      <section className="rg-map-masthead rg-community-heading">
-        <div><h1>Monitoring Map</h1></div>
-        <img className="rg-map-page-mascot" src="/images/mascot/map-focused-v2.png" alt="RiceGuardAI field companion checking a map" />
-      </section>
-      <section className="rg-public-map-page">
+      <section className="rg-mapfit" aria-labelledby="rg-mapfit-title">
+        <header className="rg-mapfit-head">
+          <img src="/images/mascot/map-focused-v2.png" alt="" width={44} height={44} />
+          <div>
+            <h1 id="rg-mapfit-title">Monitoring Map</h1>
+            <p><MapPin size={14} aria-hidden /> {loading ? "Loading approved locations…" : publicMapSummary(points.length, groupMapPoints(points).length)}</p>
+          </div>
+        </header>
         {error ? <HonestState title="The monitoring map is unavailable" text={error} /> : null}
-        <FieldMap publicView large points={points} focusId={params.get("advisory") || undefined} />
-        {params.get("advisory") && !loading && !points.some(point=>point.id===params.get("advisory")) ? <p role="status">This advisory has no approved public map pin. It may still appear in the bulletin.</p> : null}
-          <div className="rg-map-summary"><MapPin size={18} /><span>{loading ? "Loading approved locations…" : publicMapSummary(points.length,groupMapPoints(points).length)}</span><Info size={17} /><small>Each post has its own pin. Shared locations may overlap; use Locate or choose a post in the popup.</small></div>
-        <section className="rg-map-posts" aria-label="Published map areas"><h2>Updates on the map</h2><p>Select a post to find its location. Pins show approximate areas, not field boundaries.</p><ul className="rg-map-post-list">{points.map(point=><li key={point.id} className={params.get("advisory")===point.id?"selected":""}>
-          <div><strong>{point.name}</strong><span>{point.location}</span></div><div className="rg-map-record-actions"><button type="button" className="rg-button rg-secondary" onClick={()=>setParams({advisory:point.id},{replace:true})}><MapPin size={16}/> Locate</button><Link className="rg-button rg-secondary" to={point.href || "/advisories"}>Read post <ArrowRight size={16}/></Link></div></li>)}</ul></section>
-        {!loading && items.some(item=>item.lat==null||item.lng==null)?<p className="rg-map-unmapped">{items.filter(item=>item.lat==null||item.lng==null).length} published {items.filter(item=>item.lat==null||item.lng==null).length===1?'post has':'posts have'} no approved map pin. <Link to="/bulletin">Read all posts in the bulletin.</Link></p>:null}
+        <div className="rg-mapfit-body">
+          <div className="rg-mapfit-map">
+            <FieldMap publicView large points={points} focusId={selected || undefined} />
+            {selected && !loading && !points.some((point) => point.id === selected)
+              ? <p className="rg-mapfit-toast" role="status">This advisory has no approved public map pin. It may still appear in the bulletin.</p> : null}
+          </div>
+          <section className="rg-mapfit-list" aria-label="Published map areas">
+            <h2>Updates on the map <span>{points.length}</span></h2>
+            <p><Info size={14} aria-hidden /> Pins show approximate areas, not field boundaries. Shared locations may overlap.</p>
+            <ul>{points.map((point) => (
+              <li key={point.id} className={selected === point.id ? "selected" : ""}>
+                <button type="button" className="rg-mapfit-locate" onClick={() => setParams({ advisory: point.id }, { replace: true })}>
+                  <strong>{point.name}</strong><span>{point.location}</span>
+                </button>
+                <Link to={point.href || "/advisories"} aria-label={`Read post: ${point.name}`}>Read <ArrowRight size={14} /></Link>
+              </li>))}
+            </ul>
+            {!loading && unmapped ? <p className="rg-mapfit-unmapped">{unmapped} published {unmapped === 1 ? "post has" : "posts have"} no approved map pin. <Link to="/bulletin">Read them in the bulletin.</Link></p> : null}
+          </section>
+        </div>
       </section>
     </CommunityShell>
   );

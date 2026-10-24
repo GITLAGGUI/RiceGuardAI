@@ -108,7 +108,8 @@ async function nearbyWeather(lat: number | null, lng: number | null) {
   try {
     const response = await fetch(`${url}/functions/v1/weather?lat=${lat.toFixed(2)}&lng=${lng.toFixed(2)}`, {
       headers: { Authorization: `Bearer ${serviceKey}`, apikey: serviceKey }, signal: AbortSignal.timeout(10_000) });
-    return response.ok ? normalizeWeatherContext(await response.json(), Date.now()) : null;
+    const context = response.ok ? normalizeWeatherContext(await response.json(), Date.now()) : null;
+    return context ? { ...context, point: { lat: Number(lat.toFixed(2)), lng: Number(lng.toFixed(2)) } } : null;
   } catch { return null; }
 }
 

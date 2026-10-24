@@ -1,0 +1,169 @@
+/* Hero v5: morning sky over the valley, the patrolling mascot, its light and the finding card. */
+
+/* ---------- Sky ---------- */
+.lp-sky { position: absolute; inset: 0; z-index: -3; overflow: hidden; pointer-events: none; }
+.lp-sky > * { position: absolute; will-change: transform; }
+.lp-sky-grad { inset: -8% -4% 0; background:
+  radial-gradient(70% 55% at 62% 62%, rgba(255, 214, 150, .55), transparent 70%),
+  linear-gradient(180deg, #0b2b27 0%, #134640 16%, #2f6a5e 34%, #76a08a 48%, #c9c69a 58%, #f2d79d 64%, #f6dfab 70%, #dcc596 100%); }
+.lp-sky-sun { left: 62%; top: 57%; width: 0; height: 0; }
+.lp-sky-sun b { position: absolute; left: -46px; top: -46px; width: 92px; height: 92px; border-radius: 50%;
+  background: radial-gradient(circle, #fffaf0 0 38%, #ffe9b8 52%, rgba(255, 220, 150, 0) 72%);
+  box-shadow: 0 0 80px 40px rgba(255, 222, 160, .45), 0 0 220px 120px rgba(255, 210, 140, .28); animation: lp-sun-breathe 7s ease-in-out infinite; }
+.lp-sky-rays { position: absolute; left: -70vmax; top: -70vmax; width: 140vmax; height: 140vmax; border-radius: 50%; opacity: .13; mix-blend-mode: screen; filter: blur(3px);
+  background: repeating-conic-gradient(from 0deg, rgba(255, 244, 214, 0) 0deg, rgba(255, 244, 214, .6) 2.5deg, rgba(255, 244, 214, 0) 5deg, rgba(255, 244, 214, 0) 11deg);
+  -webkit-mask: radial-gradient(circle, #000 0 8%, rgba(0, 0, 0, .55) 22%, transparent 48%); mask: radial-gradient(circle, #000 0 8%, rgba(0, 0, 0, .55) 22%, transparent 48%);
+  animation: lp-rays 140s linear infinite; }
+.lp-sky-clouds { inset: 0; }
+.lp-sky-clouds i { position: absolute; display: block; width: 520px; height: 120px; border-radius: 50%; opacity: .55;
+  background:
+    radial-gradient(40% 60% at 30% 60%, rgba(255, 246, 228, .9), transparent 70%),
+    radial-gradient(35% 70% at 55% 45%, rgba(255, 250, 238, .85), transparent 72%),
+    radial-gradient(30% 55% at 78% 62%, rgba(255, 240, 215, .8), transparent 70%);
+  filter: blur(6px); animation: lp-cloud linear infinite; }
+.lp-sky-clouds .c1 { top: 18%; left: -10%; animation-duration: 160s; }
+.lp-sky-clouds .c2 { top: 30%; left: 30%; width: 380px; height: 90px; opacity: .45; animation-duration: 210s; animation-delay: -80s; }
+.lp-sky-clouds .c3 { top: 40%; left: 60%; width: 640px; height: 110px; opacity: .4; animation-duration: 260s; animation-delay: -140s; }
+.lp-sky-clouds .c4 { top: 11%; left: 75%; width: 300px; height: 70px; opacity: .35; animation-duration: 190s; animation-delay: -30s; }
+.lp-sky-birds { left: 0; top: 22%; width: 100%; height: 40%; overflow: visible; }
+.lp-sky-birds .flock { animation: lp-flock 42s linear infinite; }
+.lp-sky-birds .bird { fill: none; stroke: #1c3a31; stroke-width: 2.2; stroke-linecap: round; transform-box: fill-box; transform-origin: center; animation: lp-flap .9s ease-in-out infinite alternate; }
+.lp-sky-hills { left: -3%; width: 106%; bottom: 36%; height: 34%; }
+.lp-sky-haze { left: 0; right: 0; bottom: 28%; height: 16%; background: linear-gradient(180deg, rgba(240, 220, 172, 0), rgba(236, 216, 168, .8) 55%, #e6cf9e); }
+/* Soft mist over the far edge of the 3D field so it melts into the tree line. */
+.lp-hero-horizon { position: absolute; left: 0; right: 0; top: 54%; height: 16%; pointer-events: none;
+  background: linear-gradient(180deg, rgba(230, 207, 158, 0) 0%, rgba(230, 207, 158, .82) 40%, rgba(230, 207, 158, .55) 62%, rgba(230, 207, 158, 0) 100%); }
+@keyframes lp-rays { to { transform: rotate(360deg); } }
+@keyframes lp-sun-breathe { 50% { transform: scale(1.06); } }
+@keyframes lp-cloud { from { transform: translate3d(-30vw, 0, 0); } to { transform: translate3d(130vw, 0, 0); } }
+@keyframes lp-flock { from { transform: translate(-200px, 40px); } 50% { transform: translate(800px, -10px); } to { transform: translate(1900px, 30px); } }
+@keyframes lp-flap { from { transform: scaleY(1); } to { transform: scaleY(-.55) translateY(2px); } }
+
+/* The sky is brighter now: keep the headline legible with a softer left-side wash. */
+.lp-hero-scrim { background:
+  linear-gradient(90deg, rgba(5, 30, 22, .72) 0%, rgba(5, 30, 22, .42) 34%, rgba(5, 30, 22, 0) 58%),
+  linear-gradient(180deg, rgba(5, 30, 22, .55) 0%, rgba(5, 30, 22, 0) 26%, rgba(5, 30, 22, 0) 82%, rgba(5, 30, 22, .45) 100%); }
+.lp-hero h1, .lp-hero-lead { text-shadow: 0 2px 24px rgba(4, 24, 17, .35); }
+
+/* ---------- Mascot rig ---------- */
+.lp-rig { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.lp-rig-light { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.lp-beam { mix-blend-mode: screen; filter: blur(1.5px); }
+.lp-pool { mix-blend-mode: screen; }
+.lp-link { stroke: rgba(255, 255, 255, .9); stroke-width: 1.6; stroke-dasharray: 4 5; opacity: 0; transition: opacity 260ms ease; }
+.lp-link.is-on { opacity: 1; animation: lp-dash 1.2s linear infinite; }
+.lp-link-dot { fill: #fff; stroke-width: 4; opacity: 0; transition: opacity 260ms ease; }
+.lp-link-dot.is-blb { stroke: rgba(255, 212, 0, .55); }
+.lp-link-dot.is-brownspot { stroke: rgba(229, 38, 43, .5); }
+.lp-link-dot.is-healthy { stroke: rgba(120, 220, 140, .55); }
+.lp-link-dot.is-on { opacity: 1; }
+@keyframes lp-dash { to { stroke-dashoffset: -18; } }
+
+.lp-rig .lp-mascot { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; will-change: transform, opacity; }
+.lp-rig .lp-mascot-body { position: absolute; left: 0; top: 0; width: 200px; height: 200px; transform-origin: 50% 74%; will-change: transform; filter: drop-shadow(0 16px 16px rgba(0, 0, 0, .28)); }
+.lp-rig .lp-mascot-body img { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 240ms cubic-bezier(.4, 0, .2, 1); -webkit-user-drag: none; }
+.lp-rig .lp-mascot-body img.is-on { opacity: 1; }
+
+/* ---------- Finding card ---------- */
+.lp-find { position: absolute; left: 0; top: 0; width: 292px; display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 12px; padding: 10px; border-radius: 18px;
+  background: rgba(255, 255, 255, .96); color: #10291d; box-shadow: 0 18px 50px rgba(4, 24, 17, .28), 0 2px 6px rgba(4, 24, 17, .12);
+  opacity: 0; scale: .92; transform-origin: 100% 50%; transition: opacity 280ms ease, scale 420ms cubic-bezier(.2, .9, .25, 1.15); will-change: transform; }
+.lp-find[data-side="right"] { transform-origin: 0 50%; }
+.lp-find[data-side="below"] { transform-origin: 50% 0; }
+.lp-find.is-open { opacity: 1; scale: 1; }
+.lp-find figure { position: relative; margin: 0; width: 104px; height: 104px; border-radius: 12px; overflow: hidden; background: #dfe8dc; }
+.lp-find figure img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.lp-find-mask { clip-path: inset(0 0 100% 0); transition: clip-path 1.1s cubic-bezier(.4, 0, .2, 1); }
+.lp-find.step-1 .lp-find-mask, .lp-find.step-2 .lp-find-mask, .lp-find.step-3 .lp-find-mask, .lp-find.step-4 .lp-find-mask, .lp-find.step-5 .lp-find-mask { clip-path: inset(0 0 0 0); }
+.lp-find-scan { position: absolute; left: 0; right: 0; top: 0; height: 2px; background: #c4ff7a; box-shadow: 0 0 12px 3px rgba(196, 255, 122, .8); opacity: 0; }
+.lp-find.step-1 .lp-find-scan { animation: lp-scanline 1.1s cubic-bezier(.4, 0, .2, 1) both; }
+@keyframes lp-scanline { 0% { opacity: 1; transform: translateY(0); } 92% { opacity: 1; } 100% { opacity: 0; transform: translateY(102px); } }
+.lp-find-text { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding-top: 2px; }
+.lp-find-text small { color: #5b6f62; font-size: 10.5px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
+.lp-find-text h3 { margin: 0; font-size: 16px; line-height: 1.15; letter-spacing: -.02em; }
+.lp-find-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: #edf2ec; color: #4b5f52; font-size: 12px; font-weight: 750; }
+.lp-find-pill i { width: 7px; height: 7px; border-radius: 50%; background: #7fbf4d; animation: lp-blink 1s ease-in-out infinite; }
+.lp-find.step-5 .lp-find-pill { animation: lp-pill-in 420ms cubic-bezier(.2, .9, .25, 1.3) both; }
+@keyframes lp-pill-in { from { scale: .7; opacity: 0; } }
+.lp-find.is-blb.step-5 .lp-find-pill { background: #fff1b8; color: #6a5200; }
+.lp-find.is-brownspot.step-5 .lp-find-pill { background: #fde0c4; color: #7a3410; }
+.lp-find.is-healthy.step-5 .lp-find-pill { background: #d9f3dc; color: #1d6a35; }
+.lp-find ul { margin: 2px 0 0; padding: 0; list-style: none; display: grid; gap: 3px; }
+.lp-find li { display: flex; align-items: center; gap: 6px; color: #5b6f62; font-size: 11.5px; line-height: 1.25; transition: color 200ms ease; }
+.lp-find li span { width: 15px; height: 15px; flex: none; border-radius: 50%; border: 1.5px solid #c5d3c8; display: grid; place-items: center; color: transparent; transition: background 220ms ease, border-color 220ms ease, color 220ms ease, transform 300ms cubic-bezier(.2, .9, .25, 1.4); }
+.lp-find li.is-done { color: #10291d; }
+.lp-find li.is-done span { background: #1f7a4d; border-color: #1f7a4d; color: #fff; transform: scale(1.08); }
+.lp-find-text p { margin: 4px 0 0 !important; font-size: 12px; line-height: 1.35; font-weight: 650; color: #24412f; animation: lp-fade 360ms ease both; }
+
+/* Without the 3D scene the mascot and its last finding simply sit on the field. */
+.lp-rig.is-static .lp-mascot { opacity: 1; transform: translate3d(74vw, 60vh, 0); }
+.lp-rig.is-static .lp-mascot-body { transform: translate(-50%, -74%) scale(.9); }
+.lp-rig.is-static .lp-find { opacity: 1; scale: 1; transform: translate3d(calc(74vw - 360px), calc(60vh - 160px), 0); }
+.lp-rig.is-static .lp-rig-light { display: none; }
+
+@media (max-width: 759px) {
+  .lp-find { width: min(330px, calc(100vw - 32px)); grid-template-columns: 88px minmax(0, 1fr); }
+  .lp-find figure { width: 88px; height: 88px; }
+  .lp-sky-hills { bottom: 34%; height: 22%; }
+  .lp-sky-sun { left: 70%; top: 56%; }
+  .lp-rig.is-static .lp-mascot { transform: translate3d(70vw, 66vh, 0); }
+  .lp-rig.is-static .lp-find { transform: translate3d(16px, calc(100svh - 230px), 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-sky-rays, .lp-sky-clouds i, .lp-sky-birds .flock, .lp-sky-birds .bird, .lp-sky-sun b { animation: none; }
+}
+
+/* ---------- Problem: bento of real close-ups with the model's semantic marks ---------- */
+.lp-compare { aspect-ratio: 16 / 9; }
+.lp-problem > .lp-plight { grid-column: 2; grid-row: 1 / span 2; }
+.lp-plight { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; height: clamp(440px, 66svh, 620px); }
+.lp-pcard { position: relative; overflow: hidden; border-radius: var(--radius); background: var(--ink); color: var(--on-dark); isolation: isolate; }
+.lp-pcard.is-blb { grid-row: 1 / span 2; }
+.lp-pcard figure { position: absolute; inset: 0; margin: 0; }
+.lp-pcard figure img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 900ms var(--ease-out); }
+.lp-pcard.is-blb figure img { object-position: 50% 30%; }
+.lp-pcard::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(0deg, rgba(5, 26, 19, .92) 0%, rgba(5, 26, 19, .35) 42%, rgba(5, 26, 19, 0) 64%); }
+.lp-pcard.is-farm::before { background: linear-gradient(0deg, rgba(5, 26, 19, .94) 0%, rgba(5, 26, 19, .55) 55%, rgba(5, 26, 19, .15) 100%); }
+.lp-pcard > div { position: absolute; left: 16px; right: 16px; bottom: 16px; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.lp-pcard h3 { margin: 2px 0 0; font-size: clamp(16px, 1.35vw, 21px); line-height: 1.15; letter-spacing: -.02em; }
+.lp-pcard p { margin: 0; color: #dfe8e1; font-size: 13px; line-height: 1.45; max-width: 40ch; }
+.lp-pcard.is-farm svg { color: var(--leaf); }
+.lp-pcard .lp-text-link { color: var(--leaf); font-size: 14px; }
+.lp-pcard-credit { position: absolute; right: 10px; top: 10px; z-index: 3; padding: 3px 8px; border-radius: 999px; background: rgba(5, 26, 19, .55); color: rgba(255, 255, 255, .78); font-size: 10px; }
+.lp-pcard-chip { position: absolute; left: 12px; top: 12px; z-index: 3; display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: rgba(5, 26, 19, .62); color: #fff; font-size: 11.5px; font-weight: 700; backdrop-filter: blur(6px); }
+.lp-pcard-chip i { width: 8px; height: 8px; border-radius: 50%; background: #ffd400; }
+.lp-pcard.is-bs .lp-pcard-chip i { background: #e5262b; }
+/* The mask sweeps in and out on its own; hovering holds it on. */
+.lp-pcard-mask { clip-path: inset(0 100% 0 0); }
+.lp-plight.is-live .lp-pcard-mask { animation: lp-mask-cycle 8s cubic-bezier(.65, 0, .35, 1) infinite; }
+.lp-plight.is-live .lp-pcard.is-bs .lp-pcard-mask { animation-delay: -4s; }
+@keyframes lp-mask-cycle { 0%, 12% { clip-path: inset(0 100% 0 0); } 30%, 72% { clip-path: inset(0 0 0 0); } 90%, 100% { clip-path: inset(0 0 0 100%); } }
+@media (hover: hover) and (pointer: fine) {
+  .lp-pcard:hover figure img { transform: scale(1.04); }
+  .lp-plight.is-live .lp-pcard:hover .lp-pcard-mask { animation: none; clip-path: inset(0 0 0 0); }
+}
+.lp .lp-plight[data-reveal] { opacity: 1; transform: none; }
+.lp .lp-plight[data-reveal] > * { opacity: 0; translate: 0 40px; transition: opacity 900ms var(--ease-out), translate 1000ms var(--ease-out), transform 400ms var(--ease-out); }
+.lp .lp-plight[data-reveal] > :nth-child(2) { transition-delay: 90ms; }
+.lp .lp-plight[data-reveal] > :nth-child(3) { transition-delay: 180ms; }
+.lp .lp-plight.is-in > * { opacity: 1; translate: 0 0; }
+@media (max-width: 1100px) {
+  .lp-problem > .lp-plight { grid-column: 1; grid-row: auto; }
+}
+@media (max-width: 640px) {
+  .lp-plight { grid-template-columns: 1fr 1fr; grid-template-rows: 300px 210px; height: auto; gap: 10px; }
+  .lp-pcard.is-blb { grid-row: 1; }
+  .lp-pcard.is-farm { grid-column: 1 / -1; }
+  .lp-pcard p { font-size: 12px; }
+  .lp-pcard.is-blb p, .lp-pcard.is-bs p { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .lp-plight.is-live .lp-pcard-mask { animation: none; clip-path: inset(0 0 0 0); } }
+
+/* ---------- Film: plays in view, no controls ---------- */
+.lp-film-frame { position: relative; }
+.lp-film-frame video { pointer-events: none; }
+.lp-film-sound { position: absolute; right: 14px; bottom: 14px; display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border: 0; border-radius: 999px;
+  background: rgba(5, 26, 19, .72); color: #fff; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; backdrop-filter: blur(8px);
+  animation: lp-up 500ms var(--ease-out) both; transition: transform 140ms var(--ease-out), background 160ms ease; }
+.lp-film-sound:hover { background: rgba(5, 26, 19, .9); }
+.lp-film-sound:active { transform: scale(.95); }

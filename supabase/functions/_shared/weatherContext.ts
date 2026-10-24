@@ -38,6 +38,8 @@ export function normalizeWeatherContext(payload: unknown, nowMs: number): Record
     humidity_pct: finite(main?.humidity),
     wind_m_s: finite(wind?.speed),
     rain_1h_mm: finite(rain?.["1h"]),
+    conditions: Array.isArray(current?.weather) ? String((current!.weather as Array<Record<string, unknown>>)[0]?.description ?? "") || null : null,
+    clouds_pct: finite((current?.clouds as Record<string, unknown> | undefined)?.all),
   } : null;
   const steps = Array.isArray(value?.forecast5) ? value.forecast5 : [];
   const forecast = steps.flatMap((raw) => {
@@ -60,4 +62,43 @@ export function normalizeWeatherContext(payload: unknown, nowMs: number): Record
     forecast_3hour_intervals: forecast,
     disease_risk_calibrated: false,
   };
+}
+
+type Step = { forecast_at: string; temperature_c: number | null; humidity_pct: number | null; wind_m_s: number | null;
+  precipitation_probability: number | null; rain_3h_mm: number | null };
+
+/**
+ * Plain facts an advisory writer can act on: what the weather is now and over the next 24 hours.
+ * The disease notes are general agronomy (IRRI/PhilRice), not a calibrated risk score.
+ */
+export function weatherBrief(context: unknown): Record<string, unknown> | null {
+  const value = context as { observation?: Record<string, unknown> | null; forecast_3hour_intervals?: Step[] } | null;
+  if (!value) return null;
+  const now = value.observation || null;
+  const steps = Array.isArray(value.forecast_3hour_intervals) ? value.forecast_3hour_intervals : [];
+  const nums = (pick: (s: Step) => number | null) => steps.map(pick).filter((n): n is number => typeof n === "number");
+  const rain = nums((s) => s.rain_3h_mm ?? 0);
+  const pop = nums((s) => s.precipitation_probability);
+  const humid = nums((s) => s.humidity_pct);
+  const wind = nums((s) => s.wind_m_s);
+  const temps = nums((s) => s.temperature_c);
+  const round = (n: number, d = 1) => Math.round(n * 10 ** d) / 10 ** d;
+  const firstRain = steps.find((s) => (s.precipitation_probability ?? 0) >= 0.5 || (s.rain_3h_mm ?? 0) >= 1);
+  const next24 = steps.length ? {
+    total_rain_mm: round(rain.reduce((a, b) => a + b, 0)),
+    max_rain_chance_pct: pop.length ? Math.round(Math.max(...pop) * 100) : null,
+    likely_rain_starts_at: firstRain?.forecast_at ?? null,
+    hours_with_humidity_85_plus: humid.filter((h) => h >= 85).length * 3,
+    max_wind_m_s: wind.length ? round(Math.max(...wind)) : null,
+    temperature_range_c: temps.length ? [round(Math.min(...temps)), round(Math.max(...temps))] : null,
+  } : null;
+  const notes: string[] = [];
+  const wet = (next24?.total_rain_mm ?? 0) >= 5 || (next24?.max_rain_chance_pct ?? 0) >= 60 || (now?.rain_1h_mm as number ?? 0) > 0;
+  const humidNow = typeof now?.humidity_pct === "number" && (now.humidity_pct as number) >= 85;
+  if (wet) notes.push("Rain is likely within 24 h: BLB bacteria spread with rain splash, wind-driven rain and floodwater; sprays applied right before rain wash off.");
+  if (humidNow || (next24?.hours_with_humidity_85_plus ?? 0) >= 12) notes.push("Long humid periods keep leaves wet, which favours Brown Spot and BLB development.");
+  if ((next24?.max_wind_m_s ?? 0) >= 6) notes.push("Strong wind: leaves rub and tear, giving BLB entry wounds; avoid spraying or flying in strong wind.");
+  if (!wet && !humidNow) notes.push("Dry spell expected: a good window for field work, drainage and any recommended application.");
+  return { provider: "OpenWeather", now, next_24h: next24, agronomy_notes: notes,
+    scope: "Nearby weather point, not an on-field sensor. Use it to time actions, not to diagnose." };
 }

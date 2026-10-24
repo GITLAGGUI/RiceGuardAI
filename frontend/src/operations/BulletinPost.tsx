@@ -5,6 +5,7 @@ import { BookmarkSimple as PhBookmark, ShareNetwork as PhShare } from "@phosphor
 import type { Bulletin, Disease, PublicPhoto, WebSource } from "./domain";
 import { DiseasePhoto, DISEASE_COLORS, DISEASE_NAMES } from "./DiseasePhoto";
 import { VerificationBadge } from "./VerificationBadge";
+import { PhotoLightbox } from "./PhotoLightbox";
 import { advisoryActionSteps } from "./advisoryPresentation";
 
 const LEVEL: Record<string, string> = { low: "Mababa", moderate: "Katamtaman", high: "Mataas" };
@@ -28,7 +29,19 @@ export function useBookmarks() {
 }
 
 export const diseasesOf = (item: Bulletin): Disease[] => item.diseases?.length ? item.diseases : [item.disease];
-export const stripCitations = (text: string) => text.replace(/\s*\[S\d+\]/g, "");
+/** One citation group: [S1], [S1, S4], [S1][S2], [S1-S3] or [S1; S2]. */
+const CITATION = /\s*\[S\d+(?:\s*[,;–-]\s*S?\d+)*\]/g;
+export const stripCitations = (text: string) => text.replace(CITATION, "");
+
+function citationNumbers(group: string): number[] {
+  const out: number[] = [];
+  for (const part of group.replace(/[\[\]\sS]/g, "").split(/[,;]/)) {
+    const [a, b] = part.split(/[–-]/).map(Number);
+    if (!Number.isFinite(a)) continue;
+    for (let n = a; n <= (Number.isFinite(b) && b >= a && b - a < 10 ? b : a); n += 1) if (!out.includes(n)) out.push(n);
+  }
+  return out;
+}
 
 export function photosOf(item: Bulletin): PublicPhoto[] {
   if (item.media?.length) return item.media;
@@ -58,7 +71,7 @@ export function DiseaseChips({ item }: { item: Bulletin }) {
   );
 }
 
-function PhotoView({ photo, compact }: { photo: PublicPhoto; compact?: boolean }) {
+function PhotoView({ photo, compact, onOpen }: { photo: PublicPhoto; compact?: boolean; onOpen?: () => void }) {
   const [playing, setPlaying] = useState(false);
   if (photo.type === "video") {
     return (
@@ -70,7 +83,7 @@ function PhotoView({ photo, compact }: { photo: PublicPhoto; compact?: boolean }
     );
   }
   return <DiseasePhoto compact={compact} original={photo.original_url} layers={photo.layers} fallback={photo.url}
-    alt={photo.alt} width={photo.width} height={photo.height} />;
+    alt={photo.alt} width={photo.width} height={photo.height} onOpen={onOpen} />;
 }
 
 function ago(value: string) {
@@ -98,6 +111,7 @@ export function BulletinCard({ item }: { item: Bulletin }) {
     catch { /* dismissed */ }
   };
   const shown = photos.slice(0, 2);
+  const [viewing, setViewing] = useState<number | null>(null);
   return (
     <article className="rg-xpost">
       <img className="rg-xpost-avatar" src="/images/mascot/field-companion.png" alt="" width={40} height={40} loading="lazy" />
@@ -115,7 +129,7 @@ export function BulletinCard({ item }: { item: Bulletin }) {
           <div className={`rg-xpost-media count-${shown.length}`}>
             {shown.map((photo, i) => (
               <div key={photo.url} className="rg-xpost-cell">
-                <PhotoView photo={photo} compact />
+                <PhotoView photo={photo} compact onOpen={() => setViewing(i)} />
                 {i === shown.length - 1 && photos.length > shown.length
                   ? <Link className="rg-post3-more" to={href}>+{photos.length - shown.length}</Link> : null}
               </div>
@@ -129,19 +143,21 @@ export function BulletinCard({ item }: { item: Bulletin }) {
           <button type="button" onClick={() => void share()} aria-label="I-share"><PhShare size={18} /></button>
         </footer>
       </div>
+      {viewing !== null ? <PhotoLightbox photos={photos.filter((p) => p.type !== "video")} index={Math.min(viewing, photos.length - 1)}
+        onIndex={setViewing} onClose={() => setViewing(null)} /> : null}
     </article>
   );
 }
 
-/** Text with [S#] markers turned into links to the numbered sources below. */
+/** Text with [S#] groups turned into small numbered links to the sources below. */
 function Cited({ text, sources }: { text: string; sources: WebSource[] }) {
   const parts: ReactNode[] = [];
   let last = 0;
-  for (const match of text.matchAll(/\s*\[S(\d+)\]/g)) {
+  for (const match of text.matchAll(CITATION)) {
     parts.push(text.slice(last, match.index));
-    const n = Number(match[1]);
-    parts.push(sources.some((s) => s.n === n)
-      ? <a key={match.index} className="rg-cite" href={`#source-${n}`}>{n}</a> : null);
+    const numbers = citationNumbers(match[0]).filter((n) => sources.some((s) => s.n === n));
+    parts.push(numbers.length ? <sup key={match.index} className="rg-cites">{numbers.map((n) => (
+      <a key={n} className="rg-cite" href={`#source-${n}`} aria-label={`Pinagkunan ${n}`}>{n}</a>))}</sup> : null);
     last = (match.index || 0) + match[0].length;
   }
   parts.push(text.slice(last));
@@ -156,12 +172,14 @@ export function AdvisoryDetail({ item }: { item: Bulletin }) {
   const legacySources = (item.advisory_sources || []).filter((s) => !("n" in s)) as Array<{ disease: string; title: string; version: string; reference: string }>;
   const steps = advisoryActionSteps(item.action);
   const sev = item.severity_detail;
+  const [viewing, setViewing] = useState(false);
+  const stills = photos.filter((p) => p.type !== "video");
   return (
     <article className="rg-advisory3">
       <Link to="/bulletin" className="rg-back-link">← Field Bulletin</Link>
       <div className="rg-advisory3-grid">
         <section className="rg-advisory3-media" aria-label="Mga larawan">
-          {shown ? <PhotoView photo={shown} /> : null}
+          {shown ? <PhotoView photo={shown} onOpen={() => setViewing(true)} /> : null}
           {photos.length > 1 ? (
             <div className="rg-advisory3-thumbs">
               {photos.map((photo, i) => (
@@ -205,7 +223,7 @@ export function AdvisoryDetail({ item }: { item: Bulletin }) {
             <div className="rg-advisory3-sources">
               <h2>Pinagkunan</h2>
               <ol>{sources.map((s) => <li key={s.n} id={`source-${s.n}`} value={s.n}>
-                <a href={s.url} target="_blank" rel="noopener noreferrer">{s.title}</a> <small>{s.publisher}</small></li>)}</ol>
+                <a href={s.url} target="_blank" rel="noopener noreferrer">{sourceTitle(s)}</a> <small>{s.publisher}</small></li>)}</ol>
             </div>
           ) : legacySources.length ? (
             <div className="rg-advisory3-sources">
@@ -215,6 +233,20 @@ export function AdvisoryDetail({ item }: { item: Bulletin }) {
           ) : null}
         </section>
       </div>
+      {viewing && shown && shown.type !== "video" ? <PhotoLightbox photos={stills} index={Math.max(0, stills.indexOf(shown))}
+        onIndex={(i) => setActive(photos.indexOf(stills[i]))} onClose={() => setViewing(false)} /> : null}
     </article>
   );
+}
+
+/** Search results sometimes carry page titles like "Untitled Document"; fall back to the URL path. */
+function sourceTitle(source: WebSource) {
+  const title = source.title.trim();
+  if (title && !/^untitled|^document$|^home$/i.test(title)) return title.length > 4 && title === title.toUpperCase()
+    ? title.charAt(0) + title.slice(1).toLowerCase() : title;
+  try {
+    const slug = decodeURIComponent(new URL(source.url).pathname.split("/").filter(Boolean).pop() || "");
+    const words = slug.replace(/\.[a-z0-9]+$/i, "").replace(/[-_+]+/g, " ").trim();
+    return words ? words.charAt(0).toUpperCase() + words.slice(1) : source.publisher;
+  } catch { return source.publisher || title; }
 }

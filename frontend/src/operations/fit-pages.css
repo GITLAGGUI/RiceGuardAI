@@ -1,0 +1,98 @@
+/* One-screen layouts for the Monitoring Map and SMS preferences pages. */
+
+/* ---------- Monitoring Map ---------- */
+.rg-social-bulletin-main:has(> .rg-mapfit) { padding: 16px clamp(14px, 1.6vw, 22px); }
+.rg-mapfit { height: calc(100dvh - 32px); min-height: 560px; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 12px; }
+.rg-mapfit-head { display: flex; align-items: center; gap: 12px; }
+.rg-mapfit-head img { width: 44px; height: 44px; object-fit: contain; flex: none; }
+.rg-mapfit-head h1 { margin: 0; font-size: clamp(22px, 2vw, 28px); line-height: 1.05; letter-spacing: -.025em; color: #10291d; }
+.rg-mapfit-head p { margin: 3px 0 0; display: flex; align-items: center; gap: 5px; color: #56695d; font-size: 13px; }
+.rg-mapfit-body { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(250px, 300px); gap: 12px; }
+.rg-mapfit-map { position: relative; min-height: 0; }
+.rg-mapfit-map > .rg-map, .rg-mapfit-map .rg-map.rg-map-large { height: 100% !important; min-height: 0 !important; border-radius: 16px; border: 1px solid #d6ded4; overflow: hidden; }
+.rg-mapfit-toast { position: absolute; left: 50%; bottom: 52px; translate: -50% 0; z-index: 600; margin: 0; padding: 8px 12px; border-radius: 10px; background: #10291d; color: #fff; font-size: 12px; box-shadow: 0 6px 18px rgba(16, 41, 29, .25); }
+.rg-mapfit-list { min-height: 0; display: flex; flex-direction: column; border: 1px solid #dce6dc; border-radius: 16px; background: #fbfcfa; overflow: hidden; }
+.rg-mapfit-list h2 { margin: 0; padding: 14px 14px 4px; display: flex; align-items: center; gap: 8px; font-size: 15px; color: #10291d; }
+.rg-mapfit-list h2 span { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: #e3efe2; color: #176541; font-size: 12px; display: inline-grid; place-items: center; }
+.rg-mapfit-list > p { margin: 0; padding: 0 14px 10px; display: flex; gap: 6px; color: #5d7064; font-size: 11.5px; line-height: 1.45; border-bottom: 1px solid #e6ece4; }
+.rg-mapfit-list > p svg { flex: none; margin-top: 1px; }
+.rg-mapfit-list ul { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin: 0; padding: 8px; list-style: none; display: grid; align-content: start; gap: 6px; scrollbar-width: thin; }
+.rg-mapfit-list li { display: flex; align-items: stretch; border: 1px solid transparent; border-radius: 12px; background: #fff; box-shadow: 0 1px 0 #e6ece4; transition: border-color 140ms ease-out, background 140ms ease-out; }
+.rg-mapfit-list li:hover { border-color: #cfe0cf; }
+.rg-mapfit-list li.selected { border-color: #28734b; background: #eef6e9; }
+.rg-mapfit-locate { flex: 1; min-width: 0; padding: 10px 10px 10px 12px; border: 0; background: transparent; text-align: left; display: grid; gap: 2px; cursor: pointer; font: inherit; }
+.rg-mapfit-locate strong { color: #173f2c; font-size: 13px; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.rg-mapfit-locate span { color: #5d7064; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rg-mapfit-list li > a { flex: none; align-self: center; margin-right: 8px; padding: 6px 9px; border-radius: 999px; color: #176541; background: #eaf3e8; font-size: 12px; font-weight: 750; text-decoration: none; display: inline-flex; align-items: center; gap: 3px; transition: background 140ms ease-out, color 140ms ease-out; }
+.rg-mapfit-list li > a:hover { background: #176541; color: #fff; }
+.rg-mapfit-list > p.rg-mapfit-unmapped { display: block; margin: 0; padding: 10px 14px; border-top: 1px solid #e6ece4; color: #5d7064; font-size: 11.5px; }
+
+@media (max-width: 1239px) {
+  .rg-mapfit-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .rg-mapfit-list > p, .rg-mapfit-list > p.rg-mapfit-unmapped { display: none; }
+  .rg-mapfit-list ul { grid-auto-flow: column; grid-auto-columns: minmax(220px, 260px); overflow-x: auto; overflow-y: hidden; }
+}
+@media (max-width: 720px) {
+  .rg-social-bulletin-main:has(> .rg-mapfit) { padding: 10px 10px 14px; }
+  .rg-mapfit { height: calc(100dvh - 62px - 76px - 24px); min-height: 440px; gap: 8px; }
+  .rg-mapfit-head img { width: 34px; height: 34px; }
+  .rg-mapfit-head h1 { font-size: 20px; }
+  .rg-mapfit-head p { font-size: 12px; }
+  .rg-mapfit-map > .rg-map { border-radius: 12px; }
+  .rg-mapfit-list h2 { padding: 10px 12px 2px; font-size: 14px; }
+  .rg-mapfit-list ul { grid-auto-columns: minmax(200px, 78%); padding: 6px 8px 8px; }
+}
+
+/* ---------- SMS registration and preferences ---------- */
+.rg-social-bulletin-main:has(> .rg-regfit) { padding: 0; }
+.rg-registration.rg-regfit { width: 100%; max-width: 1120px; min-height: 100dvh; margin: 0 auto; padding: 24px clamp(18px, 3vw, 40px);
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 440px); gap: clamp(22px, 3.6vw, 52px); align-items: center; }
+.rg-regfit .rg-registration-story .rg-eyebrow { font-size: 11px; }
+.rg-regfit h1 { margin: 8px 0 12px; font-size: clamp(28px, 3vw, 40px); line-height: 1.06; letter-spacing: -.03em; }
+.rg-regfit .rg-registration-story > p { margin: 0; max-width: 46ch; font-size: 14px; line-height: 1.6; }
+.rg-regfit .rg-registration-benefits { margin: 18px 0 16px; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.rg-regfit .rg-registration-benefits > div { display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: 12px; background: #f1f6ef; }
+.rg-regfit .rg-registration-benefits svg { width: 20px; height: 20px; color: #2c7a4b; margin-bottom: 2px; }
+.rg-regfit .rg-registration-benefits strong { font-size: 13px; }
+.rg-regfit .rg-registration-benefits p { margin: 0; font-size: 11.5px; line-height: 1.4; color: #5d7064; }
+.rg-regfit .rg-registration-form { padding: 22px 24px; }
+.rg-regfit .rg-registration-form .rg-eyebrow { font-size: 10.5px; }
+.rg-regfit .rg-registration-form h2 { margin: 6px 0 14px; font-size: 22px; }
+.rg-regfit .rg-registration-form label, .rg-regfit .rg-registration-form button { margin: 0; }
+.rg-regfit .rg-registration-form > label, .rg-regfit .rg-registration-form > button { margin-bottom: 10px; }
+.rg-regfit .rg-registration-form form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; align-items: end; }
+.rg-regfit .rg-registration-form form > :is(.rg-check, .rg-notice, .rg-text-button) { grid-column: 1 / -1; }
+.rg-regfit .rg-registration-form form > button.rg-primary:nth-last-child(2) { grid-column: 1 / -1; }
+.rg-regfit .rg-registration-form form input, .rg-regfit .rg-registration-form form select { min-height: 42px; }
+.rg-regfit .rg-registration-form .rg-check { padding: 2px 0; font-size: 12px !important; line-height: 1.45 !important; }
+.rg-regfit .rg-registration-form .rg-text-button { min-height: 32px; }
+.rg-regfit .rg-registration-form > small { margin-top: 12px; padding-top: 10px; font-size: 11px; line-height: 1.45; }
+.rg-regfit .rg-form-error { margin: -4px 0 10px; }
+.rg-regfit .rg-registration-complete { display: grid; gap: 8px; justify-items: start; }
+
+@media (max-width: 980px) {
+  .rg-registration.rg-regfit { grid-template-columns: minmax(0, .9fr) minmax(320px, 1fr); }
+  .rg-regfit .rg-registration-benefits { grid-template-columns: 1fr; }
+  .rg-regfit .rg-registration-benefits > div { flex-direction: row; align-items: center; gap: 10px; padding: 8px 10px; }
+  .rg-regfit .rg-registration-benefits p { display: none; }
+}
+@media (max-width: 720px) {
+  .rg-registration.rg-regfit { min-height: calc(100dvh - 62px - 76px); grid-template-columns: 1fr; gap: 14px; padding: 14px 14px 16px; align-content: start; }
+  .rg-regfit h1 { margin: 4px 0 6px; font-size: 25px; }
+  .rg-regfit .rg-registration-story > p { display: none; }
+  .rg-regfit .rg-registration-benefits { margin: 10px 0 0; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .rg-regfit .rg-registration-benefits > div { flex-direction: column; align-items: flex-start; padding: 8px; gap: 3px; }
+  .rg-regfit .rg-registration-benefits strong { font-size: 11.5px; }
+  .rg-regfit .rg-registration-story > .rg-text-link { display: none; }
+  .rg-regfit .rg-registration-form { padding: 16px; }
+  .rg-regfit .rg-registration-form h2 { margin: 4px 0 10px; font-size: 19px; }
+  .rg-regfit .rg-registration-form form { gap: 8px 10px; }
+  .rg-regfit .rg-registration-form form button { font-size: 13px; }
+  .rg-regfit .rg-registration-form > small { margin-top: 8px; padding-top: 8px; }
+}
+.rg-regfit .rg-registration-form form button.rg-secondary { white-space: nowrap; }
+
+@media (max-width: 720px) {
+  /* The shell already reserves room for the bottom nav. */
+  .rg-public:has(.rg-mapfit, .rg-regfit) { padding-bottom: 0; }
+}

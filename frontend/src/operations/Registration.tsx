@@ -7,6 +7,7 @@ import { subscriberSupabase, supabase, supabaseConfigured } from "@/lib/supabase
 import { normalizePhone } from "./domain";
 import { fieldOperation, registrationErrorMessage } from "./fieldOperations";
 import { announceSmsRegistrationChange, useSmsRegistration } from "./registrationStatus";
+import "./fit-pages.css";
 
 interface Location {
   code: string;
@@ -211,7 +212,7 @@ export function RegistrationPage({ preferences = false }: { preferences?: boolea
 
   return (
     <CommunityShell active="sms">
-      <section className="rg-registration">
+      <section className="rg-registration rg-regfit">
         <div className="rg-registration-story">
           <span className="rg-eyebrow">PARA SA MAGSASAKA</span>
           <h1>{preferences ? "Ikaw ang may kontrol sa iyong alerts." : "Balita sa palayan, diretso sa iyong cellphone."}</h1>

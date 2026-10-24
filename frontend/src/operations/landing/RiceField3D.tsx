@@ -9,16 +9,18 @@ import {
   PlaneGeometry,
   ShaderMaterial,
   Vector3,
+  Vector4,
   BufferGeometry,
   Float32BufferAttribute,
 } from "three";
-import { heroInput } from "./heroInput";
+import { heroInput, heroRig, type Finding, type Pose } from "./heroInput";
 
 /*
- * A transplanted rice paddy at dusk: rice hills in rows, water between them, mud dikes between paddies.
+ * A transplanted rice paddy in the morning: rice hills in rows, water between them, mud dikes between paddies.
  * Every blade bends in the vertex shader (wind + a pointer gust), so the CPU only updates a few uniforms.
- * A scan band sweeps from the horizon to the camera; diseased patches light up as it passes, and the
- * DOM brackets above them are positioned from the same patch coordinates.
+ * The mascot patrols the field with its camera light. It stops over three spots (BLB, healthy, Brown Spot):
+ * the light pool brightens the blades and a semantic mask paints every affected blade in the pool, the way
+ * the real models colour each diseased pixel. The DOM mascot, light cone and card are driven from here.
  */
 
 const FIELD_W = 26;
@@ -32,11 +34,32 @@ const SCAN_TO = FIELD_Z0 + 2;
 const SCAN_PERIOD = 7;
 const SCAN_SWEEP = 5;
 
-export const PATCHES = [
-  { x: -4.2, z: -3.2, r: 1.15, kind: 1, label: "BLB candidate" },
-  { x: 4.6, z: -7.8, r: 1.25, kind: 2, label: "Brown Spot candidate" },
-  { x: -0.6, z: -14.5, r: 1.5, kind: 1, label: "BLB candidate" },
-] as const;
+type Target = { x: number; z: number; finding: Finding; kind: number };
+/** Spots the mascot inspects; on desktop they keep to the right, away from the headline. */
+const TARGETS_WIDE: Target[] = [
+  { x: 3.3, z: -2.2, finding: "blb", kind: 1 },
+  { x: 6.4, z: -7.4, finding: "healthy", kind: 0 },
+  { x: 1.9, z: -5.4, finding: "brownspot", kind: 2 },
+];
+const TARGETS_NARROW: Target[] = [
+  { x: 0.7, z: -1.2, finding: "blb", kind: 1 },
+  { x: -0.9, z: -6.2, finding: "healthy", kind: 0 },
+  { x: 1.1, z: -4.0, finding: "brownspot", kind: 2 },
+];
+const SPOT_R = 1.7;
+const ALTITUDE = 2.2;
+
+/** Pose changes and card steps after the mascot arrives over a spot (seconds). */
+type Plan = Array<[number, Pose, number]>;
+const DISEASE_PLAN: Plan = [
+  [0, "stop", 0], [0.85, "think", 1], [2.0, "clipboard", 1], [2.4, "clipboard", 2], [3.1, "notes", 2], [3.5, "notes", 3],
+  [4.2, "examine", 3], [4.6, "examine", 4], [5.3, "confirmed", 4], [5.45, "confirmed", 5], [6.9, "confirmed", 0],
+];
+const HEALTHY_PLAN: Plan = [
+  [0, "stop", 0], [0.85, "think", 1], [2.0, "clipboard", 1], [2.4, "clipboard", 2], [3.3, "notes", 3], [4.2, "notes", 4],
+  [4.5, "confirmed", 4], [4.65, "confirmed", 5], [6.1, "confirmed", 0],
+];
+const planEnd = (plan: Plan) => plan[plan.length - 1][0] + 0.15;
 
 function mulberry32(seed: number) {
   return () => {
@@ -67,7 +90,7 @@ function bladeGeometry() {
   return g;
 }
 
-function useFieldGeometry(density: number) {
+function useFieldGeometry(density: number, targets: Target[]) {
   return useMemo(() => {
     const rand = mulberry32(20261022);
     const base = bladeGeometry();
@@ -84,9 +107,11 @@ function useFieldGeometry(density: number) {
         const hz = z + (rand() - 0.5) * 0.06;
         let disease = 0;
         let kind = 0;
-        for (const p of PATCHES) {
+        for (const p of targets) {
+          if (!p.kind) continue;
+          const r = SPOT_R * 1.15;
           const d = Math.hypot(hx - p.x, hz - p.z);
-          if (d < p.r && rand() < 0.85 * (1 - d / p.r) + 0.25) { disease = 1 - (d / p.r) * 0.5; kind = p.kind; }
+          if (d < r && rand() < 0.75 * (1 - d / r) + 0.3) { disease = 1 - (d / r) * 0.45; kind = p.kind; }
         }
         const blades = 4 + Math.floor(rand() * 3);
         const hue = (rand() - 0.5) * 0.5;
@@ -105,7 +130,7 @@ function useFieldGeometry(density: number) {
     geo.setAttribute("aExtra", new InstancedBufferAttribute(new Float32Array(extra), 3));
     geo.instanceCount = offsets.length / 3;
     return geo;
-  }, [density]);
+  }, [density, targets]);
 }
 
 const SHARED_GLSL = /* glsl */ `
@@ -115,6 +140,11 @@ const SHARED_GLSL = /* glsl */ `
   uniform vec3 uFog;
   uniform vec3 uPointer;
   uniform float uGust;
+  uniform vec4 uSpot;     // light pool: x, z, radius, strength
+  uniform float uReveal;  // 0..1 progress of the semantic mask across the pool
+  uniform float uMask;    // mask visibility
+  uniform float uKind;    // 0 healthy, 1 BLB, 2 Brown Spot
+  float poolLight(vec2 xz) { return smoothstep(uSpot.z, uSpot.z * 0.3, distance(xz, uSpot.xy)) * uSpot.w; }
   float scanBand(float z) { return smoothstep(1.4, 0.0, abs(z - uScan)); }
   float scanned(float z) { return step(z, uScan + 0.0) * step(${SCAN_FROM.toFixed(1)}, uScan); }
 `;
@@ -126,9 +156,13 @@ function bladeMaterial() {
       uTime: { value: 0 },
       uGrow: { value: 0 },
       uScan: { value: SCAN_FROM - 4 },
-      uFog: { value: new Color("#cdb47c") },
+      uFog: { value: new Color("#e6cf9e") },
       uPointer: { value: new Vector3(0, 0, -100) },
       uGust: { value: 0 },
+      uSpot: { value: new Vector4(0, 0, 1, 0) },
+      uReveal: { value: 0 },
+      uMask: { value: 0 },
+      uKind: { value: 0 },
     },
     vertexShader: /* glsl */ `
       ${SHARED_GLSL}
@@ -141,6 +175,8 @@ function bladeMaterial() {
       varying float vScan;
       varying float vDepth;
       varying float vSeen;
+      varying vec2 vXZ;
+      varying float vPhase;
       void main() {
         float h = position.y;
         // Grow in from the camera towards the horizon.
@@ -167,6 +203,8 @@ function bladeMaterial() {
         vScan = scanBand(aOffset.z);
         vSeen = scanned(aOffset.z);
         vDepth = -mv.z;
+        vXZ = aOffset.xz;
+        vPhase = aExtra.y;
       }
     `,
     fragmentShader: /* glsl */ `
@@ -177,6 +215,8 @@ function bladeMaterial() {
       varying float vScan;
       varying float vDepth;
       varying float vSeen;
+      varying vec2 vXZ;
+      varying float vPhase;
       void main() {
         vec3 base = mix(vec3(0.07, 0.2, 0.11), vec3(0.42, 0.66, 0.26), smoothstep(0.0, 1.0, vH));
         vec3 tip = vec3(0.72, 0.84, 0.42);
@@ -188,13 +228,25 @@ function bladeMaterial() {
         base *= 1.0 + hue * 0.5;
         vec3 sick = floor(vKind + 0.5) > 1.5 ? brown : blb;
         vec3 col = mix(base, sick, vDisease);
-        // Scan band: lime wash, stronger on diseased blades; diseased blades keep a glow once scanned.
-        vec3 lime = vec3(0.66, 0.83, 0.36);
-        col += lime * vScan * (0.35 + vDisease * 0.9);
-        vec3 alert = floor(vKind + 0.5) > 1.5 ? vec3(0.94, 0.72, 0.35) : lime;
-        col += alert * vDisease * vSeen * 0.35 * (0.6 + 0.4 * sin(uTime * 4.0));
-        // Distance haze toward the dusk horizon.
-        col = mix(col, uFog, smoothstep(8.0, 33.0, vDepth));
+        // The mascot's light pool.
+        float pool = poolLight(vXZ);
+        col = mix(col, col * 1.4 + vec3(0.12, 0.1, 0.05), pool);
+        // Semantic mask: a ring sweeps out from the pool centre and colours every affected blade inside it.
+        float d = distance(vXZ, uSpot.xy);
+        float front = uReveal * uSpot.z * 1.08;
+        float revealed = smoothstep(front + 0.12, front - 0.12, d) * uMask;
+        float sameKind = 1.0 - step(0.5, abs(floor(vKind + 0.5) - uKind));
+        float blbLesion = step(1.0 - vDisease * 0.9, vH);
+        float speck = step(0.74, fract(sin(floor(vH * 17.0) * 12.9898 + vPhase * 78.233) * 43758.5453)) * step(0.12, vH);
+        float lesion = uKind < 1.5 ? blbLesion : speck;
+        float marked = lesion * step(0.2, vDisease) * sameKind * revealed * step(0.5, uKind);
+        vec3 maskCol = uKind < 1.5 ? vec3(1.0, 0.83, 0.0) : vec3(0.9, 0.15, 0.17);
+        col = mix(col, maskCol, marked * 0.94);
+        col = mix(col, vec3(0.6, 0.98, 0.62), revealed * (1.0 - step(0.5, uKind)) * 0.16 * step(0.3, vH));
+        float ring = smoothstep(0.14, 0.0, abs(d - front)) * uMask * (1.0 - step(0.999, uReveal));
+        col += vec3(0.78, 0.98, 0.52) * ring * 0.6;
+        // Distance haze toward the morning horizon.
+        col = mix(col, uFog, smoothstep(7.0, 27.0, vDepth));
         gl_FragColor = vec4(col, 1.0);
       }
     `,
@@ -207,9 +259,13 @@ function groundMaterial() {
       uTime: { value: 0 },
       uGrow: { value: 0 },
       uScan: { value: SCAN_FROM - 4 },
-      uFog: { value: new Color("#cdb47c") },
+      uFog: { value: new Color("#e6cf9e") },
       uPointer: { value: new Vector3(0, 0, -100) },
       uGust: { value: 0 },
+      uSpot: { value: new Vector4(0, 0, 1, 0) },
+      uReveal: { value: 0 },
+      uMask: { value: 0 },
+      uKind: { value: 0 },
     },
     vertexShader: /* glsl */ `
       varying vec3 vWorld;
@@ -236,18 +292,34 @@ function groundMaterial() {
         vec3 water = mix(vec3(0.05, 0.13, 0.11), vec3(0.62, 0.55, 0.38), facing * 0.75) + ripple * 0.03;
         vec3 mud = vec3(0.24, 0.2, 0.14);
         vec3 col = mix(water, mud, dike);
-        col += vec3(0.66, 0.83, 0.36) * scanBand(vWorld.z) * 0.22;
-        col = mix(col, uFog, smoothstep(8.0, 33.0, vDepth));
+        col += vec3(0.55, 0.48, 0.3) * poolLight(vWorld.xz) * 0.55;
+        col = mix(col, uFog, smoothstep(7.0, 27.0, vDepth));
         gl_FragColor = vec4(col, 1.0);
       }
     `,
   });
 }
 
-type Bracket = HTMLDivElement | null;
+const easeInOut = (u: number) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
 
-function Field({ density, brackets }: { density: number; brackets: React.MutableRefObject<Bracket[]> }) {
-  const geometry = useFieldGeometry(density);
+/** The patrol: fly a curved path to the next spot, stop, inspect, report, move on. */
+function useChoreography(targets: Target[], narrow: boolean) {
+  return useRef({
+    index: 0,
+    phase: "enter" as "enter" | "travel" | "inspect",
+    t: 0,
+    duration: 3.2,
+    from: new Vector3(), ctrl: new Vector3(), to: new Vector3(), pos: new Vector3(),
+    screen: { x: 0, y: 0, vx: 0, ax: 0, ready: false },
+    facing: 1, tilt: 0, squash: 0, squashV: 0, pose: "search-right" as Pose,
+    spot: new Vector4(0, 0, 1.1, 0), reveal: 0, mask: 0, kind: 1,
+    targets, narrow,
+  });
+}
+
+function Field({ density, narrow }: { density: number; narrow: boolean }) {
+  const targets = narrow ? TARGETS_NARROW : TARGETS_WIDE;
+  const geometry = useFieldGeometry(density, targets);
   const blades = useMemo(() => bladeMaterial(), []);
   const ground = useMemo(() => groundMaterial(), []);
   const groundGeo = useMemo(() => new PlaneGeometry(FIELD_W + 120, FIELD_D + 80).rotateX(-Math.PI / 2), []);
@@ -256,10 +328,18 @@ function Field({ density, brackets }: { density: number; brackets: React.Mutable
   const smooth = useRef({ x: 0, y: 0, gust: 0 });
   const tmp = useMemo(() => new Vector3(), []);
   const pointer = useMemo(() => new Vector3(), []);
+  const goal = useMemo(() => new Vector3(), []);
+  const ch = useChoreography(targets, narrow);
 
   useEffect(() => () => { geometry.dispose(); blades.dispose(); ground.dispose(); groundGeo.dispose(); }, [geometry, blades, ground, groundGeo]);
 
-  useFrame(({ clock }, delta) => {
+  const project = (v: Vector3) => {
+    tmp.copy(v).project(camera);
+    return { x: (tmp.x * 0.5 + 0.5) * size.width, y: (-tmp.y * 0.5 + 0.5) * size.height };
+  };
+
+  useFrame(({ clock }, rawDelta) => {
+    const delta = Math.min(rawDelta, 1 / 20);
     const t = clock.elapsedTime;
     if (start.current === null) start.current = t;
     const since = t - start.current;
@@ -274,6 +354,7 @@ function Field({ density, brackets }: { density: number; brackets: React.Mutable
     const intro = 1 - Math.pow(1 - grow, 3);
     camera.position.set(s.x * 0.7, MathUtils.lerp(1.4, 2.6, intro) + p * 6 - s.y * 0.25, MathUtils.lerp(14, 9.5, intro) - p * 4);
     camera.lookAt(s.x * 0.3, 3.9 - p * 9, -8 - p * 2);
+    camera.updateMatrixWorld();
 
     // Pointer ray onto the ground plane (y = 0.35, mid-blade) for the gust.
     tmp.set(heroInput.x, -heroInput.y, 0.5).unproject(camera).sub(camera.position).normalize();
@@ -282,29 +363,108 @@ function Field({ density, brackets }: { density: number; brackets: React.Mutable
     const active = performance.now() - heroInput.moved < 900;
     s.gust = MathUtils.lerp(s.gust, active ? 1 : 0, 1 - Math.exp(-delta * 3));
 
-    const cycle = since > 2.4 ? (since - 2.4) % SCAN_PERIOD : -1;
-    const scan = cycle < 0 || cycle > SCAN_SWEEP ? SCAN_FROM - 4 : MathUtils.lerp(SCAN_FROM, SCAN_TO, cycle / SCAN_SWEEP);
+    // ---- Patrol state machine ----
+    const c = ch.current;
+    const target = c.targets[c.index];
+    const plan = target.kind ? DISEASE_PLAN : HEALTHY_PLAN;
+    const goTo = (next: Target, from: Vector3, duration: number) => {
+      c.from.copy(from);
+      c.to.set(next.x, ALTITUDE, next.z);
+      // Arc up and slightly sideways so the path reads as flight, not a slide.
+      c.ctrl.copy(c.from).add(c.to).multiplyScalar(0.5);
+      c.ctrl.y += 0.9;
+      c.ctrl.x += (c.to.z - c.from.z) * 0.18;
+      c.duration = duration;
+      c.t = 0;
+    };
+    if (c.phase === "enter" && c.t === 0) goTo(target, tmp.set(target.x + 7, ALTITUDE + 2.2, target.z + 3), 3.4);
+    c.t += delta;
+    let step = 0;
+    let wantPose: Pose = c.pose;
+    let light = 0.55, radius = 1.15;
+    const spotGoal = goal;
+    if (c.phase === "enter" || c.phase === "travel") {
+      const u = Math.min(1, c.t / c.duration);
+      const e = easeInOut(u);
+      const a = (1 - e) * (1 - e), b = 2 * (1 - e) * e, d2 = e * e;
+      c.pos.set(
+        a * c.from.x + b * c.ctrl.x + d2 * c.to.x,
+        a * c.from.y + b * c.ctrl.y + d2 * c.to.y,
+        a * c.from.z + b * c.ctrl.z + d2 * c.to.z,
+      );
+      // Searching: the light sweeps ahead of the mascot over the canopy.
+      spotGoal.set(c.pos.x + Math.sin(t * 2.2) * 0.55, 0, c.pos.z + Math.cos(t * 1.6) * 0.4);
+      if (u > 0.8) wantPose = "search-hover";
+      else if (c.screen.vx > 30) { c.facing = 1; wantPose = "search-right"; }
+      else if (c.screen.vx < -30) { c.facing = -1; wantPose = "search-left"; }
+      else wantPose = c.facing > 0 ? "search-right" : "search-left";
+      if (u >= 1) { c.phase = "inspect"; c.t = 0; c.kind = target.kind; c.reveal = 0; }
+    } else {
+      // Hovering over the spot with a small living drift.
+      c.pos.set(c.to.x + Math.sin(t * 1.3) * 0.06, c.to.y + Math.sin(t * 2.1) * 0.05, c.to.z + Math.cos(t * 1.1) * 0.05);
+      spotGoal.set(target.x, 0, target.z);
+      light = 1; radius = SPOT_R;
+      for (const [at, pose, cardStep] of plan) if (c.t >= at) { wantPose = pose; step = cardStep; }
+      if (c.t > 0.7) c.reveal = Math.min(1, c.reveal + delta / 1.4);
+      if (c.t >= planEnd(plan)) {
+        c.phase = "travel";
+        c.index = (c.index + 1) % c.targets.length;
+        const next = c.targets[c.index];
+        goTo(next, c.pos, 2.6 + Math.hypot(next.x - c.pos.x, next.z - c.pos.z) * 0.16);
+      }
+    }
+    const inspecting = c.phase === "inspect";
+    const cardOpen = inspecting && step > 0;
+    c.mask = MathUtils.lerp(c.mask, cardOpen || (inspecting && c.t > 0.7 && c.t < planEnd(plan) - 0.2) ? 1 : 0, 1 - Math.exp(-delta * 4));
+    const ks = 1 - Math.exp(-delta * 3.2);
+    c.spot.x = MathUtils.lerp(c.spot.x, spotGoal.x, ks);
+    c.spot.y = MathUtils.lerp(c.spot.y, spotGoal.z, ks);
+    c.spot.z = MathUtils.lerp(c.spot.z, radius, ks);
+    c.spot.w = MathUtils.lerp(c.spot.w, since > 1.2 ? light : 0, ks);
+
     for (const m of [blades, ground]) {
       m.uniforms.uTime.value = t;
       m.uniforms.uGrow.value = grow;
-      m.uniforms.uScan.value = scan;
       m.uniforms.uPointer.value.copy(pointer);
       m.uniforms.uGust.value = s.gust;
+      m.uniforms.uSpot.value.copy(c.spot);
+      m.uniforms.uReveal.value = c.reveal;
+      m.uniforms.uMask.value = c.mask;
+      m.uniforms.uKind.value = c.kind;
     }
 
-    // Brackets follow their patches on screen and switch on once the scan has passed them.
-    PATCHES.forEach((patch, i) => {
-      const el = brackets.current[i];
-      if (!el) return;
-      tmp.set(patch.x, 0.7, patch.z).project(camera);
-      const x = (tmp.x * 0.5 + 0.5) * size.width;
-      const y = (-tmp.y * 0.5 + 0.5) * size.height;
-      const depth = camera.position.distanceTo(tmp.set(patch.x, 0.7, patch.z));
-      const scale = MathUtils.clamp(9 / depth, 0.78, 1.25);
-      const on = scan >= patch.z && cycle >= 0 && cycle <= SCAN_SWEEP + 1.6;
-      el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) scale(${scale.toFixed(3)})`;
-      el.classList.toggle("is-on", on && p < 0.5);
-    });
+    // ---- Drive the DOM mascot, cone and card ----
+    const rig = heroRig.current;
+    if (!rig) return;
+    const lens = project(c.pos);
+    if (!c.screen.ready) { c.screen.x = lens.x; c.screen.y = lens.y; c.screen.ready = true; }
+    const vx = (lens.x - c.screen.x) / Math.max(delta, 1e-3);
+    c.screen.ax = MathUtils.lerp(c.screen.ax, (vx - c.screen.vx) / Math.max(delta, 1e-3), 1 - Math.exp(-delta * 6));
+    c.screen.vx = MathUtils.lerp(c.screen.vx, vx, 1 - Math.exp(-delta * 8));
+    c.screen.x = lens.x; c.screen.y = lens.y;
+
+    // Bank into the motion, lean back while braking; critically damped so it never snaps.
+    const tiltGoal = MathUtils.clamp(c.screen.vx * 0.012 - c.screen.ax * 0.0035, -9, 9);
+    c.tilt += (tiltGoal - c.tilt) * (1 - Math.exp(-delta * 5));
+    // A pose change gives the body a small squash-and-settle, like it is shifting its weight.
+    if (wantPose !== c.pose) { c.pose = wantPose; c.squashV += 0.55; rig.pose(wantPose); }
+    c.squashV += (-170 * c.squash - 15 * c.squashV) * delta;
+    c.squash += c.squashV * delta;
+
+    const depth = camera.position.distanceTo(c.pos);
+    const body = (narrow ? 132 : 196) * MathUtils.clamp(10.5 / depth, 0.62, 1.25);
+    const fade = 1 - MathUtils.smoothstep(p, 0.3, 0.62);
+    const appear = MathUtils.smoothstep(since, 0.9, 1.8);
+    rig.place(lens.x, lens.y, body, c.tilt, c.squash, fade * appear);
+
+    // Light pool on the ground, as an ellipse in screen space.
+    const center = project(tmp.set(c.spot.x, 0.25, c.spot.y));
+    const east = project(tmp.set(c.spot.x + c.spot.z, 0.25, c.spot.y));
+    const near = project(tmp.set(c.spot.x, 0.25, c.spot.y + c.spot.z));
+    const rx = Math.abs(east.x - center.x), ry = Math.max(6, Math.abs(near.y - center.y));
+    rig.beam(lens.x, lens.y + body * 0.05, center.x, center.y, rx, ry, c.spot.w * fade * appear);
+    rig.card(lens.x, lens.y, body, center.x, center.y);
+    rig.step(target.finding, cardOpen ? step : 0);
   });
 
   return (
@@ -315,8 +475,7 @@ function Field({ density, brackets }: { density: number; brackets: React.Mutable
   );
 }
 
-export default function RiceField3D({ paused = false, density = 1 }: { paused?: boolean; density?: number }) {
-  const brackets = useRef<Bracket[]>([]);
+export default function RiceField3D({ paused = false, density = 1, narrow = false }: { paused?: boolean; density?: number; narrow?: boolean }) {
   return (
     <div className="lp-field3d">
       <Canvas
@@ -327,16 +486,8 @@ export default function RiceField3D({ paused = false, density = 1 }: { paused?: 
         gl={{ antialias: true, alpha: true, powerPreference: "high-performance", stencil: false }}
         aria-hidden="true"
       >
-        <Field density={density} brackets={brackets} />
+        <Field density={density} narrow={narrow} />
       </Canvas>
-      {PATCHES.map((patch, i) => (
-        <div key={i} ref={(el) => { brackets.current[i] = el; }} className="lp-anchor" aria-hidden="true">
-          <div className={`lp-detect ${patch.kind === 2 ? "is-bs" : "is-blb"}`}>
-            <i /><i /><i /><i />
-            <b>{patch.label}</b>
-          </div>
-        </div>
-      ))}
     </div>
   );
 }

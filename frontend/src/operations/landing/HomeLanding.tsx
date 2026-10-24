@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, ArrowUpRight, Check, MapPin, Menu, MessageSquareText, Play, ScanLine, ShieldCheck, X } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Check, MapPin, Menu, MessageSquareText, Play, ScanLine, ShieldCheck, Volume2, X } from "lucide-react";
 import { AssistantWidget } from "../Assistant";
 import { useSmsRegistrationStatus } from "../registrationStatus";
 import { bulletinMapPoint, usePublicPosts } from "../publicPosts";
@@ -11,9 +11,11 @@ import type { Bulletin } from "../domain";
 import { useSmoothScroll } from "@/components/motion/useSmoothScroll";
 import { heroInput } from "./heroInput";
 import { HeroMascot } from "./HeroMascot";
+import { HeroSky } from "./HeroSky";
 import "../operations.css";
 import "./landing.css";
 import "./landing-v4.css";
+import "./hero-v5.css";
 
 const RiceField3D = lazy(() => import("./RiceField3D"));
 
@@ -167,7 +169,6 @@ function LandingHeader({ smsPath, smsLabel }: { smsPath: string; smsLabel: strin
 
 function Hero({ latest, smsPath, smsLabel }: { latest?: Bulletin; smsPath: string; smsLabel: string }) {
   const section = useRef<HTMLElement>(null);
-  const photo = useRef<HTMLDivElement>(null);
   const copy = useRef<HTMLDivElement>(null);
   const reduced = useReducedMotion();
   const [visible, setVisible] = useState(true);
@@ -203,7 +204,6 @@ function Hero({ latest, smsPath, smsLabel }: { latest?: Bulletin; smsPath: strin
       heroInput.scroll = p;
       node.closest(".lp")?.classList.toggle("is-past-hero", p > 0.55);
       if (p >= 1) return;
-      if (photo.current) photo.current.style.transform = `translate3d(${(heroInput.x * -10).toFixed(1)}px, ${(p * height * 0.2).toFixed(1)}px, 0)`;
       if (copy.current) {
         copy.current.style.transform = `translate3d(0, ${(p * height * -0.12).toFixed(1)}px, 0)`;
         copy.current.style.opacity = String(Math.max(0, 1 - p * 1.5).toFixed(3));
@@ -233,18 +233,19 @@ function Hero({ latest, smsPath, smsLabel }: { latest?: Bulletin; smsPath: strin
   let wordIndex = 0;
   return (
     <section className="lp-hero" ref={section} aria-labelledby="lp-hero-title">
-      <div className="lp-hero-sky" ref={photo} aria-hidden="true"><span className="lp-sun" /></div>
+      <HeroSky paused={!visible || reduced} />
       <div className="lp-hero-stage" aria-hidden="true">
         {show3D ? (
           <SceneBoundary fallback={<img className="lp-hero-fallback" src="/images/field-hero-1600.webp" alt="" />}>
             <Suspense fallback={null}>
-              <RiceField3D paused={!visible || reduced} density={narrow ? 0.4 : 1} />
+              <RiceField3D paused={!visible || reduced} density={narrow ? 0.4 : 1} narrow={narrow} />
             </Suspense>
           </SceneBoundary>
         ) : null}
+        <div className="lp-hero-horizon" />
       </div>
       <div className="lp-hero-scrim" aria-hidden="true" />
-      <HeroMascot paused={!visible || reduced} narrow={narrow} />
+      <HeroMascot active={show3D && !reduced} />
       <div className="lp-hero-copy" ref={copy}>
         <h1 id="lp-hero-title">
           {headline.map((line, lineIndex) => (
@@ -315,28 +316,41 @@ function ProblemSection() {
       <p className="lp-statement">
         {words.map((word, index) => <span key={`${word}-${index}`} style={vars({ "--w": index / words.length })}>{word} </span>)}
       </p>
-      <div className="lp-disease-grid" data-reveal>
-        <TiltCard className="lp-disease">
-          <img data-parallax="0.06" src="/images/field/disease-blb-800.webp" alt="Rice leaves with yellow-to-white streaks running down from the tips" width="800" height="1000" loading="lazy" decoding="async" />
+      <div className="lp-plight" data-reveal data-live>
+        <TiltCard className="lp-pcard is-blb">
+          <figure>
+            <img src="/images/field/v2/blb-closeup.webp" alt="Rice leaves with yellow streaks running down from the tips" width="800" height="1000" loading="lazy" decoding="async" />
+            <img className="lp-pcard-mask" src="/images/field/v2/blb-closeup-mask.webp" alt="" width="800" height="1000" loading="lazy" decoding="async" />
+          </figure>
+          <span className="lp-pcard-chip"><i /> Model view</span>
           <div>
             <span className="lp-pill">Bacterial Leaf Blight</span>
             <h3>Streaks that start at the tip</h3>
-            <p>Wavy yellow-to-white stripes run down the leaf edge and dry out the blade.</p>
+            <p>Wavy yellow stripes run down the leaf edge and dry out the blade. Yellow is every pixel the model marks.</p>
           </div>
         </TiltCard>
-        <TiltCard className="lp-disease">
-          <img data-parallax="0.09" src="/images/field/disease-brownspot-800.webp" alt="Rice leaves dotted with small brown oval spots" width="800" height="1000" loading="lazy" decoding="async" />
+        <TiltCard className="lp-pcard is-bs">
+          <figure>
+            <img src="/images/field/v2/brownspot-macro.webp" alt="A rice leaf with oval brown lesions" width="1280" height="800" loading="lazy" decoding="async" />
+            <img className="lp-pcard-mask" src="/images/field/v2/brownspot-macro-mask.webp" alt="" width="1280" height="800" loading="lazy" decoding="async" />
+          </figure>
+          <span className="lp-pcard-chip"><i /> Model view</span>
           <div>
             <span className="lp-pill">Brown Spot</span>
             <h3>Specks that multiply</h3>
-            <p>Small oval brown spots with pale centres scatter across the leaves.</p>
+            <p>Oval brown lesions with pale centres. Red marks each lesion, not the whole leaf.</p>
           </div>
+          <small className="lp-pcard-credit">Photo: Donald Groth, LSU AgCenter · CC BY 3.0</small>
         </TiltCard>
-        <div className="lp-problem-note">
-          <ScanLine size={26} />
-          <h3>Too many hectares to walk</h3>
-          <p>Five provinces and thousands of paddies. A drone covers in minutes the ground that takes hours to walk.</p>
-          <a className="lp-text-link" href="#see">See what the drone sees <ArrowRight size={16} /></a>
+        <div className="lp-pcard is-farm">
+          <figure><img src="/images/field/v2/farmers-irri.webp" alt="Two farmers bent over a flooded paddy inspecting rice by hand" width="1200" height="900" loading="lazy" decoding="async" /></figure>
+          <div>
+            <ScanLine size={22} />
+            <h3>Too many hectares to walk</h3>
+            <p>Five provinces, thousands of paddies, checked by hand under the sun. A drone covers in minutes what takes a day on foot.</p>
+            <a className="lp-text-link" href="#see">See what the drone sees <ArrowRight size={16} /></a>
+          </div>
+          <small className="lp-pcard-credit">Photo: IRRI · CC BY 2.0</small>
         </div>
       </div>
     </section>
@@ -364,8 +378,8 @@ function CompareSlider() {
       onPointerUp={() => { dragging.current = false; }}
       onPointerCancel={() => { dragging.current = false; }}
     >
-      <img src="/images/field/compare-original-1600.webp" srcSet="/images/field/compare-original-960.webp 960w, /images/field/compare-original-1600.webp 1600w" sizes="(max-width: 900px) 100vw, 64vw" alt="Top-down drone photo of a rice canopy before analysis" width="1600" height="1067" loading="lazy" decoding="async" draggable={false} />
-      <img className="lp-compare-top" src="/images/field/compare-detected-1600.webp" srcSet="/images/field/compare-detected-960.webp 960w, /images/field/compare-detected-1600.webp 1600w" sizes="(max-width: 900px) 100vw, 64vw" alt="The same photo with leaf areas outlined by the disease models" width="1600" height="1067" loading="lazy" decoding="async" draggable={false} />
+      <img src="/images/field/latest-original-1600.webp" srcSet="/images/field/latest-original-960.webp 960w, /images/field/latest-original-1600.webp 1600w" sizes="(max-width: 900px) 100vw, 64vw" alt="Top-down drone photo of a flooded rice paddy before analysis" width="1600" height="900" loading="lazy" decoding="async" draggable={false} />
+      <img className="lp-compare-top" src="/images/field/latest-detected-1600.webp" srcSet="/images/field/latest-detected-960.webp 960w, /images/field/latest-detected-1600.webp 1600w" sizes="(max-width: 900px) 100vw, 64vw" alt="The same photo with Bacterial Leaf Blight lesions painted yellow by the model" width="1600" height="900" loading="lazy" decoding="async" draggable={false} />
       <span className="lp-compare-sweep" aria-hidden="true" />
       <span className="lp-compare-tag is-left">Model view</span>
       <span className="lp-compare-tag is-right">Original photo</span>
@@ -382,11 +396,11 @@ function SeeSection() {
       <div className="lp-see-inner">
         <div className="lp-see-copy" data-reveal>
                     <h2 id="lp-see-title">See what the models see</h2>
-          <p>Drag across a real drone photo from our September validation run. The outlines are exactly what the Bacterial Leaf Blight and Brown Spot models drew on it.</p>
+          <p>Drag across a real drone photo from our latest field test in Poblacion 1, Santa Maria, Isabela. Every yellow mark is a pixel the Bacterial Leaf Blight model flagged, later confirmed by a specialist.</p>
           <ul className="lp-see-facts">
-            <li><strong>2</strong> specialist models, one photo</li>
-            <li><strong>Full</strong> resolution, never a thumbnail</li>
-            <li><strong>Every</strong> outline open for a specialist to check</li>
+            <li><strong>6.2%</strong> of the leaf area hit, IRRI SES 3</li>
+            <li><strong>Minutes</strong> from upload to a published advisory</li>
+            <li><strong>Every</strong> mark open for a specialist to check</li>
           </ul>
         </div>
         <div className="lp-see-frame" data-reveal><div data-parallax="0.04"><CompareSlider /></div></div>
@@ -456,30 +470,75 @@ function useFilmAvailable() {
   return available;
 }
 
+/**
+ * The film plays by itself while at least half of it is on screen and pauses the moment it leaves
+ * (scrolling away, switching tabs or pages). There are no controls to pause or scrub. Browsers only
+ * allow sound after the visitor has interacted with the page, so it may start muted with a sound button.
+ */
 function FilmSection() {
   const hasFilm = useFilmAvailable();
   const video = useRef<HTMLVideoElement>(null);
-  const [playing, setPlaying] = useState(false);
+  const frame = useRef<HTMLDivElement>(null);
+  const [muted, setMuted] = useState(false);
   const src = hasFilm ? FILM_SRC : "/video/blb-prototype-preview.mp4";
   const poster = hasFilm ? FILM_POSTER : "/video/blb-prototype-poster.jpg";
-  const start = () => {
-    setPlaying(true);
-    requestAnimationFrame(() => void video.current?.play().catch(() => {}));
+
+  useEffect(() => {
+    const node = frame.current, el = video.current;
+    if (!node || !el) return;
+    let inView = false;
+    const play = async () => {
+      if (!inView || document.hidden) return;
+      if (el.ended) el.currentTime = 0;
+      try {
+        await el.play();
+      } catch {
+        // Sound needs a user gesture first: fall back to muted playback.
+        el.muted = true;
+        setMuted(true);
+        await el.play().catch(() => undefined);
+      }
+    };
+    const update = () => { if (inView && !document.hidden) void play(); else el.pause(); };
+    const observer = new IntersectionObserver(([entry]) => { inView = entry.intersectionRatio >= 0.5; update(); }, { threshold: [0, 0.5, 1] });
+    observer.observe(node);
+    // The first click or key press anywhere grants sound; turn it back on if we had to mute.
+    const grant = () => { if (el.muted) { el.muted = false; setMuted(false); } };
+    document.addEventListener("visibilitychange", update);
+    window.addEventListener("pointerdown", grant, { once: true });
+    window.addEventListener("keydown", grant, { once: true });
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", update);
+      window.removeEventListener("pointerdown", grant);
+      window.removeEventListener("keydown", grant);
+      el.pause();
+    };
+  }, [hasFilm, src]);
+
+  const unmute = () => {
+    const el = video.current;
+    if (!el) return;
+    el.muted = false;
+    setMuted(false);
+    void el.play().catch(() => undefined);
   };
+
   return (
     <section className="lp-section lp-film" id="film" aria-labelledby="lp-film-title">
       <h2 id="lp-film-title" className="sr-only">RiceGuardAI in one minute</h2>
-      <div className="lp-film-frame" data-reveal>
+      <div className="lp-film-frame" data-reveal ref={frame}>
         {hasFilm === null ? null : (
-          <video ref={video} key={src} controls={playing} playsInline preload="none" poster={poster} aria-label="RiceGuardAI explainer film">
+          <video ref={video} key={src} playsInline preload="metadata" poster={poster} disablePictureInPicture
+            controlsList="nodownload nofullscreen noplaybackrate noremoteplayback" onContextMenu={(event) => event.preventDefault()}
+            aria-label="RiceGuardAI explainer film">
             <source src={src} type="video/mp4" />
             Your browser cannot play this video.
           </video>
         )}
-        {!playing ? (
-          <button type="button" className="lp-film-play" onClick={start} aria-label="Play the RiceGuardAI film">
-            <span><Play size={30} fill="currentColor" /></span>
-            <small>{hasFilm ? "Play film · about 1 min" : "Play field preview"}</small>
+        {muted ? (
+          <button type="button" className="lp-film-sound" onClick={unmute} aria-label="Turn on sound">
+            <Volume2 size={18} /> Tap for sound
           </button>
         ) : null}
       </div>

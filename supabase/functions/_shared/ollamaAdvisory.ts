@@ -1,5 +1,8 @@
 // Automated advisory with Ollama Cloud (gemma4): look at the photos, plan searches, search the
 // web, then write a short Taglish advisory that cites only the sources it was given.
+// The latest OpenWeather reading and 24-hour forecast shape timing (drain, spray, fertilise).
+
+import { weatherBrief } from "./weatherContext.ts";
 
 export type Disease = "BLB" | "Brown Spot";
 
@@ -111,6 +114,9 @@ export async function generateAdvisory(input: {
 }): Promise<AdvisoryResult> {
   const { base, key, model, facts, images } = input;
   const diseaseList = facts.diseases.map((d) => DISEASE_NAMES[d]).join(" at ");
+  const weather = weatherBrief(facts.weather);
+  const point = (facts.weather as { point?: { lat: number; lng: number } } | null)?.point;
+  const findings = { ...facts, weather };
   const system = "Ikaw ay rice crop-protection adviser para sa mga magsasaka sa Cagayan Valley (Region II, Philippines). " +
     "Natural at diretso ang pananalita mo sa Taglish, parang extension worker na kausap ang magsasaka. Walang paligoy-ligoy.";
 
@@ -120,9 +126,10 @@ export async function generateAdvisory(input: {
     { role: "user", content: JSON.stringify({
       task: "Suriin ang mga larawan (una: orihinal, pangalawa: may kulay na marka ng AI; dilaw = BLB, pula = Brown Spot) at ang findings. " +
         "Ano ang nakikita mo sa palay (yugto ng tanim, kulay ng dahon, tubig, gaano kalawak ang marka)? " +
-        "Pagkatapos, gumawa ng 2-4 na search query (English) para malaman ang tamang gawin para sa sakit, yugto ng tanim at kalagayan ng bukid na ito. " +
+        "Tingnan din ang weather (ngayon at susunod na 24 oras): uulan ba, mahalumigmig, mahangin? " +
+        "Pagkatapos, gumawa ng 2-4 na search query (English) para malaman ang tamang gawin para sa sakit, yugto ng tanim, kalagayan ng bukid at panahong ito. " +
         "Unahin ang IRRI, PhilRice at DA. Return JSON {observations: string[], search_queries: string[]}.",
-      findings: facts,
+      findings,
     }), ...(images.length ? { images } : {}) },
   ], 60_000);
   const observations = strings(plan.observations, 6, 240);
@@ -154,6 +161,12 @@ export async function generateAdvisory(input: {
       excerpt: JSON.stringify(approved.guidance).slice(0, 1500), approved: true });
   }
 
+  if (weather && (weather.now || weather.next_24h)) {
+    sources.push({ n: sources.length + 1, title: "OpenWeather: lagay ng panahon ngayon at susunod na 24 oras",
+      url: point ? `https://openweathermap.org/weathermap?basemap=map&cities=true&layer=precipitation&lat=${point.lat}&lon=${point.lng}&zoom=10`
+        : "https://openweathermap.org/", publisher: "OpenWeather", excerpt: JSON.stringify(weather).slice(0, 1500) });
+  }
+
   // 3. Write, validate, and retry once with the validator's complaints.
   const ask = {
     task: `Isulat ang advisory para sa ${diseaseList}. Isipin mo muna: ano ang ibig sabihin ng findings at severity para sa bukid na ito, ` +
@@ -166,8 +179,11 @@ export async function generateAdvisory(input: {
       "Lagyan ng [S#] ang pahayag na galing sa source. Gamitin LANG ang numbered sources na ibinigay.",
       "Huwag magbigay ng pangalan ng kemikal o dosis kung hindi ito nakasulat sa isang source; kung meron, banggitin ang [S#].",
       "title: maikli, hal. 'BLB sa Brgy. X: katamtaman ang tama'.",
+      "Isaalang-alang ang weather kung may epekto ito: hal. kung uulan sa loob ng 24 oras, huwag mag-spray bago umulan at linisin ang kanal; " +
+        "kung mahalumigmig nang matagal o mahangin, sabihin kung bakit ito nagpapabilis ng sakit. Banggitin ang oras o dami (hal. 'mga 12 mm na ulan bukas ng hapon') " +
+        "at i-cite ang OpenWeather source. Kung walang weather data o walang epekto, huwag itong pilitin.",
     ],
-    findings: facts, what_the_model_saw: observations,
+    findings, what_the_model_saw: observations,
     sources: sources.map(({ n, title, publisher, excerpt }) => ({ n, title, publisher, excerpt })),
     return: "JSON {title, summary, actions: string[], watch_for: string[]}",
   };
