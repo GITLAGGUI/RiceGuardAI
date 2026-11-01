@@ -14,6 +14,8 @@ export default defineConfig({
     port: 5173,
     host: true,
   },
+  // The photo-classifier worker imports onnxruntime lazily, which needs ES-module workers.
+  worker: { format: "es" },
   build: {
     rollupOptions: {
       output: {
