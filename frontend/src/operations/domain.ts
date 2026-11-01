@@ -192,6 +192,8 @@ export interface Asset {
   duration_seconds: number | null;
   /** First-step classifier percentages saved when the photo was approved for upload. */
   classification?: { model: string; probs: Record<string, number>; top: string; uncertain: boolean; tiles: number | null } | null;
+  /** Gemma 4's pre-upload look at the photo: crop stage and likely conditions. */
+  llm_insight?: { model: string; crop_stage: string; conditions: Array<{ name: string; confidence: number }>; summary: string; is_rice_field: boolean; quality: string } | null;
 }
 export interface ProcessingJob {
   id: string;

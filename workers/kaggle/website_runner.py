@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import hashlib
 import re
 import shutil
 import subprocess
@@ -67,6 +68,65 @@ def callback(action: str, payload: dict | None = None, sequenced: bool = False) 
     except Exception:
         reason = "callback unavailable"
     raise RuntimeError(f"Worker callback {action} returned {response.status_code}: {reason}")
+
+
+CLASSIFIER_MANIFEST = "https://riceguardai.dev/models/photo-classifier-fp32/manifest.json"
+CLASSES = ("BLB", "Brown Spot", "Soil Nitrogen")
+
+
+def classify_photos(paths: dict[str, Path]) -> dict:
+    """The website's photo classifier (BLB / Brown Spot / Soil Nitrogen), run on this job's GPU so the
+    uploader's browser never has to. The published fp32 ONNX export is converted to PyTorch
+    (onnx2torch, logits match ONNX Runtime to 1e-6); tiling and averaging follow the browser contract."""
+    # Installed here, not with the specialists, so a failed install only skips this informative step.
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "onnx==1.23.2", "onnx2torch==1.5.15"])
+    import numpy as np
+    import onnx
+    import torch
+    from onnx2torch import convert
+    from PIL import Image
+
+    manifest = requests.get(CLASSIFIER_MANIFEST, timeout=30).json()
+    if tuple(manifest["classes"]) != CLASSES:
+        raise ValueError("Classifier classes changed")
+    base = CLASSIFIER_MANIFEST.rsplit("/", 1)[0] + "/"
+    data = b"".join(requests.get(base + part, timeout=180).content for part in manifest["parts"])
+    if hashlib.sha256(data).hexdigest() != manifest["sha256"]:
+        raise ValueError("Classifier model failed its integrity check")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    net = convert(onnx.load_from_string(data)).eval().to(device)
+    size, tile, stride, scale = manifest["input_size"], manifest["tile"], manifest["stride"], manifest["scale"]
+    mean, std = np.array([0.485, 0.456, 0.406], np.float32), np.array([0.229, 0.224, 0.225], np.float32)
+
+    def grid(length):
+        last = max(length - tile, 0)
+        starts = list(range(0, last + 1, stride))
+        return starts if starts[-1] == last else starts + [last]
+
+    out = {}
+    for asset_id, path in paths.items():
+        with Image.open(path) as opened:
+            image = opened.convert("RGB")
+        width, height = max(1, int(image.width * scale)), max(1, int(image.height * scale))
+        image = image.resize((width, height), Image.Resampling.BICUBIC)
+        boxes = [(x, y) for y in grid(height) for x in grid(width)]
+        limit = manifest.get("max_tiles") or 24
+        if len(boxes) > limit:
+            boxes = [boxes[int((i + 0.5) * len(boxes) / limit)] for i in range(limit)]
+        batch = np.stack([((np.asarray(image.crop((x, y, x + min(tile, width), y + min(tile, height)))
+                                       .resize((size, size), Image.Resampling.BICUBIC), np.float32) / 255 - mean) / std)
+                          .transpose(2, 0, 1) for x, y in boxes]).astype(np.float32)
+        with torch.no_grad():
+            probs = torch.cat([net(torch.from_numpy(batch[i:i + 8]).to(device)).float().softmax(1).cpu()
+                               for i in range(0, len(batch), 8)]).mean(0).numpy()
+        top = CLASSES[int(probs.argmax())]
+        out[asset_id] = {"model": manifest["model"], "probs": {c: round(float(v), 4) for c, v in zip(CLASSES, probs)},
+                         "top": top, "uncertain": bool(probs.max() < manifest.get("uncertain_below", 0.6)),
+                         "tiles": len(boxes)}
+    del net
+    if device == "cuda":
+        torch.cuda.empty_cache()
+    return out
 
 
 def download(url: str, destination: Path, expected_sha256: str | None = None):
@@ -141,6 +201,12 @@ def main():
     photo_receipts = run_photos([{**item, "path": str(local_by_id[item["id"]])} for item in photos],
                                 models, photo_results)
     callback("progress", {"progress": 35, "stage": "photos-complete"}, True)
+    # The photo classifier is informative only: a failure here never stops the job.
+    try:
+        classified = classify_photos({item["id"]: local_by_id[item["id"]] for item in photos})
+        callback("photo-classifications", {"classifications": classified})
+    except Exception as error:  # noqa: BLE001
+        print(json.dumps({"classifier_error": str(error)[:300]}), flush=True)
     video = next((item for item in sources if item["mime"] == "video/mp4"), None)
     video_summary = video_receipts = video_input_manifest = None
     video_root = None

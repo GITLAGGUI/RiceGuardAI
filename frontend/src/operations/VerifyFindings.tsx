@@ -7,6 +7,7 @@ import { DiseasePhoto, DISEASE_COLORS } from "./DiseasePhoto";
 import { VerificationBadge } from "./VerificationBadge";
 import { PipelineTimeline } from "./PipelineMonitor";
 import { PhotoClassBars } from "./PhotoClassBars";
+import { STAGE_LABEL } from "./photoInsight";
 import type { Disease, Survey } from "./domain";
 
 type Finding = { key: string; assetId: string; disease: Disease; kind: "image" | "video"; photo: number; percent: number | null };
@@ -77,6 +78,7 @@ export function VerifyWorkspace() {
   const accepted = findings.filter((f) => decisions[f.key]?.decision === "accepted").length;
   const uncertain = findings.filter((f) => decisions[f.key]?.decision === "uncertain").length;
   const classOf = (assetId: string) => data.assets.find((a) => a.id === assetId)?.classification || null;
+  const insightOf = (assetId: string) => data.assets.find((a) => a.id === assetId)?.llm_insight || null;
   const set = (key: string, change: Decision) => setDecisions((current) => ({ ...current, [key]: { ...current[key], ...change } }));
 
   const save = async () => {
@@ -212,6 +214,12 @@ export function VerifyWorkspace() {
                       ) : null}
                       {classOf(f.assetId) ? (
                         <div className="rg-finding-class"><PhotoClassBars compact classification={classOf(f.assetId)!} /></div>
+                      ) : null}
+                      {insightOf(f.assetId) ? (
+                        <p className="rg-gemma-insight">
+                          <b>Gemma 4 · {STAGE_LABEL[insightOf(f.assetId)!.crop_stage as keyof typeof STAGE_LABEL] || insightOf(f.assetId)!.crop_stage}</b>
+                          {insightOf(f.assetId)!.conditions.length ? <span>{insightOf(f.assetId)!.conditions.map((c) => `${c.name} ${Math.round(c.confidence * 100)}%`).join(" · ")}</span> : null}
+                        </p>
                       ) : null}
                       {needsReason(d) && d.reason === "other" ? (
                         <input aria-label="Pakisulat ang dahilan" placeholder="Pakisulat ang dahilan" maxLength={500}

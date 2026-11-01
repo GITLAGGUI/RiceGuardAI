@@ -25,8 +25,7 @@ import { fieldSeverityForSurvey, fieldSeverityLabel } from "./severityPresentati
 import { validatePrediction, type Prediction } from "./domain";
 import { findInterruptedSurveyMatch, findResumableSurvey } from "./uploadRecovery";
 import { photoMetadataTags, validPhotoCoordinates, surveyPhotoLocation } from "./photoLocation";
-import { PHOTO_CLASSES, classifyPhoto, loadPhotoClassifier, type PhotoClassification } from "./photoClassifier";
-import { PhotoClassBars } from "./PhotoClassBars";
+import { type PhotoClassification } from "./photoClassifier";
 import { STAGE_LABEL, photoInsight, suggestedFieldConditions, surveyStage, type CropStage, type PhotoInsight } from "./photoInsight";
 import { isNonRetryableDriveAuthorizationFailure, uploadOperationMessage } from "./fieldOperations";
 interface UploadFile {
@@ -176,7 +175,8 @@ async function inspect(file: File): Promise<UploadFile> {
     status: "Validated locally",
     progress: 0,
     preview: kind === "image" ? previewUrl(file) : undefined,
-    classify: kind === "image" ? "pending" : "done",
+    // The photo classifier now runs in the Kaggle job; the upload page uses only Gemma 4.
+    classify: "done",
     insightState: kind === "image" ? "pending" : "done",
   };
 }
@@ -237,31 +237,10 @@ export function UploadWorkspace() {
   const [pinSource, setPinSource] = useState<"photo_average" | "manual" | null>(null);
   const [place, setPlace] = useState<string | null>(null);
   const [camera, setCamera] = useState("auto");
-  // Step 1 is a human look at every photo (with the classifier's percentages) before upload.
+  // Step 1 is a human look at every photo (with Gemma 4's notes) before upload.
   const [reviewed, setReviewed] = useState(false);
   const [removedAfterReview, setRemovedAfterReview] = useState(0);
-  const [classifierNote, setClassifierNote] = useState<string | null>(null);
-  const classifying = useRef(false);
-  // Start downloading (or reading the cached) classifier as soon as the page opens.
-  useEffect(() => { void loadPhotoClassifier().catch(() => undefined); }, []);
-  useEffect(() => {
-    const next = files.find((f) => f.classify === "pending");
-    if (!next || classifying.current) return;
-    classifying.current = true;
-    setFiles((current) => current.map((f) => f.id === next.id ? { ...f, classify: "running" } : f));
-    void classifyPhoto(next.file).then((result) => {
-      setFiles((current) => current.map((f) => f.id === next.id
-        ? { ...f, classification: result, classify: result ? "done" : "unavailable" } : f));
-      if (!result) setClassifierNote("Wala pang naka-install na classifier sa website. Tingnan na lang nang mano-mano ang bawat larawan.");
-    }, (error: Error) => {
-      setFiles((current) => current.map((f) => f.id === next.id ? { ...f, classification: null, classify: "error" } : f));
-      setClassifierNote(`Hindi gumana ang classifier sa browser na ito (${error.message}). Ang Gemma 4 check sa ilalim ng bawat larawan ang gamitin, at tingnan din ang bawat larawan.`);
-    }).finally(() => {
-      classifying.current = false;
-      setFiles((current) => [...current]);
-    });
-  }, [files]);
-  // Gemma 4 looks at up to three photos at a time; it runs beside the browser classifier, not after it.
+  // Gemma 4 looks at up to three photos at a time.
   const insightsRunning = useRef(0);
   useEffect(() => {
     if (demo) return;
@@ -289,14 +268,9 @@ export function UploadWorkspace() {
     if (gone?.kind === "image") setRemovedAfterReview((n) => n + 1);
     return current.filter((x) => x.id !== id);
   });
-  // A photo is checked once either the Gemma 4 look or the browser classifier has answered;
-  // the slower one keeps running and is saved too if it finishes before the upload starts.
-  const busyCheck = (f: UploadFile) => f.classify === "pending" || f.classify === "running";
-  const stillClassifying = files.some((f) => f.kind === "image" && busyCheck(f) &&
-    (demo || f.insightState === "pending" || f.insightState === "running"));
+  const stillClassifying = !demo && files.some((f) => f.kind === "image" && (f.insightState === "pending" || f.insightState === "running"));
   const photoCount = files.filter((f) => f.kind === "image").length;
-  const flagged = files.filter((f) => f.classification &&
-    (f.classification.uncertain || (f.classification.top !== "BLB" && f.classification.top !== "Brown Spot"))).length;
+  const flagged = files.filter((f) => f.insight && (!f.insight.is_rice_field || f.insight.quality !== "good")).length;
   const photoLocation = useMemo(() => surveyPhotoLocation(files), [files]);
   // Every photo carries GPS (and they sit within 1 km): the pin is set for you.
   // One photo without GPS is enough to ask for a manual pin.
@@ -473,7 +447,7 @@ export function UploadWorkspace() {
           location_source: pinSource === "manual" ? "manual_pin" : pin ? "exif_median" : "none",
           crop_stage: shownStage,
           field_conditions: form.getAll("field_conditions").map(String) as ("standing_water" | "lodging" | "dry_or_cracked_soil" | "nutrient_stress_suspected" | "pest_damage_suspected")[],
-          pre_review: { approved: true, classifier: files.find((f) => f.classification)?.classification?.model || null,
+          pre_review: { approved: true, classifier: files.find((f) => f.insight)?.insight?.model || null,
             removed_photos: removedAfterReview },
         });
       }
@@ -684,9 +658,9 @@ export function UploadWorkspace() {
               <Eye size={18} />
               <div>
                 <strong>Suriin muna ang mga larawan bago i-upload</strong>
-                <p>{stillClassifying ? "Sinusuri ng Gemma 4 at ng classifier ang bawat larawan…" : classifierNote ||
-                  `Tingnan ang bawat larawan at ang tantiya ng classifier (${PHOTO_CLASSES.join(", ")}). Alisin ang hindi dapat isama.`}
-                  {flagged ? ` ${flagged} larawan ang hindi mukhang BLB o Brown Spot, o hindi sigurado ang classifier.` : ""}</p>
+                <p>{stillClassifying ? "Tinitingnan ng Gemma 4 ang bawat larawan…" :
+                  "Tingnan ang bawat larawan at ang tala ng Gemma 4 (yugto ng palay at posibleng problema). Alisin ang hindi dapat isama."}
+                  {flagged ? ` ${flagged} larawan ang mukhang hindi palayan o malabo.` : ""}</p>
               </div>
             </div>
           ) : null}
@@ -701,11 +675,7 @@ export function UploadWorkspace() {
                     {(f.file.size / 1048576).toFixed(1)} MB · {f.kind === "video" ? "video" : f.gps ? "may GPS" : "walang GPS"}
                   </small>
                   <small>{f.status}</small>
-                  {f.kind === "image" ? (
-                    f.classify === "pending" || f.classify === "running"
-                      ? <small className="rg-muted">{f.classify === "running" ? "Sinusuri ng classifier…" : "Naghihintay sa classifier…"}</small>
-                      : f.classification ? <PhotoClassBars classification={f.classification} /> : null
-                  ) : null}
+
                   {f.kind === "image" && !demo ? (
                     f.insight ? (
                       <span className="rg-gemma-insight">
@@ -851,7 +821,7 @@ export function UploadWorkspace() {
             <label className="rg-check rg-upload-approve">
               <input type="checkbox" checked={reviewed} disabled={busy || stillClassifying}
                 onChange={(event) => setReviewed(event.target.checked)} />
-              Nasuri ko na ang bawat larawan at ang tantiya ng classifier. Ituloy ang upload at automation.
+              Nasuri ko na ang bawat larawan at ang tala ng Gemma 4. Ituloy ang upload at automation.
             </label>
           ) : null}
           <button

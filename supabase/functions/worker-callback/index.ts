@@ -171,6 +171,27 @@ Deno.serve(async (req) => {
     if (new Date(job.worker_token_expires_at).getTime() < Date.now()) return json({ error: "Worker token expired" }, 401);
     if (!equal(await digest(token), job.worker_token_hash)) return json({ error: "Invalid worker token" }, 401);
 
+    // The worker's CPU run of the website photo classifier: informative percentages per photo,
+    // shown beside each finding in the specialist check.
+    if (body.action === "photo-classifications") {
+      if (job.provider !== "kaggle_yolo26" || !["Submitting", "Running", "Validating results"].includes(job.status))
+        return json({ error: "Job is not running" }, 409);
+      const allowed = new Set(((job.manifest?.assets || []) as Array<Record<string, unknown>>).map((asset) => String(asset.id)));
+      const classes = ["BLB", "Brown Spot", "Soil Nitrogen"];
+      let saved = 0;
+      for (const [assetId, value] of Object.entries((body.payload?.classifications || {}) as Record<string, Record<string, any>>)) {
+        const probs = value?.probs || {};
+        if (!allowed.has(assetId) || !classes.every((c) => Number.isFinite(probs[c]) && probs[c] >= 0 && probs[c] <= 1) ||
+          !classes.includes(value.top) || !Number.isInteger(value.tiles) || value.tiles < 1 || value.tiles > 64) continue;
+        const classification = { model: String(value.model || "").slice(0, 80), source: "kaggle_worker",
+          probs: Object.fromEntries(classes.map((c) => [c, Math.round(Number(probs[c]) * 10000) / 10000])),
+          top: value.top, uncertain: Boolean(value.uncertain), tiles: value.tiles };
+        const update = await db.from("rg_assets").update({ classification }).eq("id", assetId).eq("survey_id", job.survey_id);
+        if (!update.error) saved += 1;
+      }
+      return json({ accepted: true, saved });
+    }
+
     if (body.action === "prepare-advisory-media" || body.action === "complete-advisory-media") {
       if (Deno.env.get("RG_GEMINI_VISUAL_PREPARATION_ENABLED") !== "true") {
         return json({ error: "Advisory image preparation is not enabled" }, 503);

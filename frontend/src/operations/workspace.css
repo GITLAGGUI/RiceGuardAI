@@ -362,3 +362,5 @@
 .rg-gemma-insight { display: grid; gap: 2px; margin-top: 6px; padding: 8px 10px; border-radius: 8px; background: #eef4ea; font-size: 12.5px; color: #2b3f35; }
 .rg-gemma-insight b { font-size: 12.5px; color: #13291f; }
 .rg-gemma-insight small { font-size: 12px; color: #4d5f55; line-height: 1.45; }
+.rg-ops .rg-finding-body p.rg-gemma-insight { display: grid; gap: 2px; margin: 0; }
+.rg-ops .rg-finding-body p.rg-gemma-insight span { margin: 0; flex-basis: auto; white-space: normal; color: #2b3f35; }
