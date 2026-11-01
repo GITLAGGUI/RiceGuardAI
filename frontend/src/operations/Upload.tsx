@@ -25,6 +25,10 @@ import { fieldSeverityForSurvey, fieldSeverityLabel } from "./severityPresentati
 import { validatePrediction, type Prediction } from "./domain";
 import { findInterruptedSurveyMatch, findResumableSurvey } from "./uploadRecovery";
 import { photoMetadataTags, validPhotoCoordinates, surveyPhotoLocation } from "./photoLocation";
+import { PHOTO_CLASSES, classifyPhoto, loadPhotoClassifier, type PhotoClassification } from "./photoClassifier";
+import { PhotoClassBars } from "./PhotoClassBars";
+import { STAGE_LABEL, photoInsight, suggestedFieldConditions, surveyStage, type CropStage, type PhotoInsight } from "./photoInsight";
+import { isNonRetryableDriveAuthorizationFailure, uploadOperationMessage } from "./fieldOperations";
 interface UploadFile {
   id: string;
   file: File;
@@ -45,6 +49,14 @@ interface UploadFile {
   linkedPhotoLocalId: string;
   status: string;
   progress: number;
+  preview?: string;
+  classification?: PhotoClassification | null;
+  classify: "pending" | "running" | "done" | "unavailable" | "error";
+  insight?: PhotoInsight | null;
+  insightState: "pending" | "running" | "done" | "error";
+}
+function previewUrl(file: File) {
+  try { return URL.createObjectURL(file); } catch { return undefined; }
 }
 async function fileHashes(file: File) {
   const sha = await createSHA256();
@@ -163,6 +175,9 @@ async function inspect(file: File): Promise<UploadFile> {
     linkedPhotoLocalId: "",
     status: "Validated locally",
     progress: 0,
+    preview: kind === "image" ? previewUrl(file) : undefined,
+    classify: kind === "image" ? "pending" : "done",
+    insightState: kind === "image" ? "pending" : "done",
   };
 }
 
@@ -222,6 +237,66 @@ export function UploadWorkspace() {
   const [pinSource, setPinSource] = useState<"photo_average" | "manual" | null>(null);
   const [place, setPlace] = useState<string | null>(null);
   const [camera, setCamera] = useState("auto");
+  // Step 1 is a human look at every photo (with the classifier's percentages) before upload.
+  const [reviewed, setReviewed] = useState(false);
+  const [removedAfterReview, setRemovedAfterReview] = useState(0);
+  const [classifierNote, setClassifierNote] = useState<string | null>(null);
+  const classifying = useRef(false);
+  // Start downloading (or reading the cached) classifier as soon as the page opens.
+  useEffect(() => { void loadPhotoClassifier().catch(() => undefined); }, []);
+  useEffect(() => {
+    const next = files.find((f) => f.classify === "pending");
+    if (!next || classifying.current) return;
+    classifying.current = true;
+    setFiles((current) => current.map((f) => f.id === next.id ? { ...f, classify: "running" } : f));
+    void classifyPhoto(next.file).then((result) => {
+      setFiles((current) => current.map((f) => f.id === next.id
+        ? { ...f, classification: result, classify: result ? "done" : "unavailable" } : f));
+      if (!result) setClassifierNote("Wala pang naka-install na classifier sa website. Tingnan na lang nang mano-mano ang bawat larawan.");
+    }, (error: Error) => {
+      setFiles((current) => current.map((f) => f.id === next.id ? { ...f, classification: null, classify: "error" } : f));
+      setClassifierNote(`Hindi gumana ang classifier sa browser na ito (${error.message}). Ang Gemma 4 check sa ilalim ng bawat larawan ang gamitin, at tingnan din ang bawat larawan.`);
+    }).finally(() => {
+      classifying.current = false;
+      setFiles((current) => [...current]);
+    });
+  }, [files]);
+  // Gemma 4 looks at up to three photos at a time; it runs beside the browser classifier, not after it.
+  const insightsRunning = useRef(0);
+  useEffect(() => {
+    if (demo) return;
+    for (const next of files.filter((f) => f.insightState === "pending").slice(0, Math.max(0, 3 - insightsRunning.current))) {
+      insightsRunning.current += 1;
+      setFiles((current) => current.map((f) => f.id === next.id ? { ...f, insightState: "running" } : f));
+      void photoInsight(next.file).then(
+        (insight) => setFiles((current) => current.map((f) => f.id === next.id ? { ...f, insight, insightState: "done" } : f)),
+        () => setFiles((current) => current.map((f) => f.id === next.id ? { ...f, insight: null, insightState: "error" } : f)),
+      ).finally(() => { insightsRunning.current -= 1; setFiles((current) => [...current]); });
+    }
+  }, [files, demo]);
+  const insights = files.map((f) => f.insight);
+  const gemmaStage = surveyStage(insights);
+  const [cropStage, setCropStage] = useState<CropStage | null>(null);
+  const [fieldConditions, setFieldConditions] = useState<string[] | null>(null);
+  const shownStage: CropStage = cropStage ?? gemmaStage ?? "unknown";
+  const shownConditions = fieldConditions ?? suggestedFieldConditions(insights);
+  const latestFiles = useRef(files);
+  latestFiles.current = files;
+  useEffect(() => () => latestFiles.current.forEach((f) => f.preview && URL.revokeObjectURL(f.preview)), []);
+  const removeFile = (id: string) => setFiles((current) => {
+    const gone = current.find((x) => x.id === id);
+    if (gone?.preview) URL.revokeObjectURL(gone.preview);
+    if (gone?.kind === "image") setRemovedAfterReview((n) => n + 1);
+    return current.filter((x) => x.id !== id);
+  });
+  // A photo is checked once either the Gemma 4 look or the browser classifier has answered;
+  // the slower one keeps running and is saved too if it finishes before the upload starts.
+  const busyCheck = (f: UploadFile) => f.classify === "pending" || f.classify === "running";
+  const stillClassifying = files.some((f) => f.kind === "image" && busyCheck(f) &&
+    (demo || f.insightState === "pending" || f.insightState === "running"));
+  const photoCount = files.filter((f) => f.kind === "image").length;
+  const flagged = files.filter((f) => f.classification &&
+    (f.classification.uncertain || (f.classification.top !== "BLB" && f.classification.top !== "Brown Spot"))).length;
   const photoLocation = useMemo(() => surveyPhotoLocation(files), [files]);
   // Every photo carries GPS (and they sit within 1 km): the pin is set for you.
   // One photo without GPS is enough to ask for a manual pin.
@@ -317,6 +392,7 @@ export function UploadWorkspace() {
         ? { ...item, linkedPhotoLocalId: firstPhoto.id }
         : item);
       setFiles(prepared);
+      setReviewed(false);
       setErrors(failures);
     } finally {
       setBusy(false);
@@ -325,6 +401,10 @@ export function UploadWorkspace() {
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!files.length || (!resumableSurvey && !pin)) return;
+    if (!demo && !resumableSurvey && (!reviewed || stillClassifying)) {
+      toast.error("Tingnan muna ang bawat larawan at i-check ang “Nasuri ko na”.");
+      return;
+    }
     const photos = files.filter((item) => item.kind === "image");
     const videos = files.filter((item) => item.kind === "video");
     const eligiblePhotos = photos.length >= 1 && photos.length <= 4 && files.length === photos.length && files.every((item) =>
@@ -363,6 +443,18 @@ export function UploadWorkspace() {
       `${(place || "Rice field").replace(/^Brgy\. /, "")} · ${new Date(capturedAt).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}`;
     setBusy(true);
     try {
+      const needsDriveUpload = !resumableSurvey || files.some((file) =>
+        !resumableAssets.some((asset) => asset.checksum === file.hash && asset.status === "Verified"));
+      if (!demo && needsDriveUpload) {
+        try {
+          await operation("drive-preflight");
+        } catch (error) {
+          const message = uploadOperationMessage(error);
+          setFiles((current) => current.map((item) => ({ ...item, status: "Drive connection needs attention" })));
+          toast.error(message);
+          return;
+        }
+      }
       if (!resumableSurvey) {
         await addSurvey({
           id,
@@ -379,8 +471,10 @@ export function UploadWorkspace() {
           lng: pin?.lng ?? null,
           location_status: pin ? "verified" : "missing",
           location_source: pinSource === "manual" ? "manual_pin" : pin ? "exif_median" : "none",
-          crop_stage: String(form.get("crop_stage") || "unknown") as "unknown" | "seedling" | "vegetative" | "reproductive" | "ripening" | "post_harvest",
+          crop_stage: shownStage,
           field_conditions: form.getAll("field_conditions").map(String) as ("standing_water" | "lodging" | "dry_or_cracked_soil" | "nutrient_stress_suspected" | "pest_damage_suspected")[],
+          pre_review: { approved: true, classifier: files.find((f) => f.classification)?.classification?.model || null,
+            removed_photos: removedAfterReview },
         });
       }
       if (demo) {
@@ -408,6 +502,7 @@ export function UploadWorkspace() {
         let assetId = existing?.id || "";
         let lastError = "Upload failed";
         let complete = false;
+        let stopBatchForDriveAuth = false;
         for (let attempt = 1; attempt <= 3 && !complete; attempt += 1) {
           try {
             if (assetId) {
@@ -441,6 +536,8 @@ export function UploadWorkspace() {
               } : {}),
               exif_lat: f.gpsSource === "exif" ? f.gps?.latitude : undefined,
               exif_lng: f.gpsSource === "exif" ? f.gps?.longitude : undefined,
+              classification: f.classification || undefined,
+              llm_insight: f.insight || undefined,
             };
             const intent = await operation(existing || assetId ? "resume-upload-intent" : "upload-intent", payload) as UploadIntent;
             assetId = intent.asset_id;
@@ -465,6 +562,10 @@ export function UploadWorkspace() {
             }
           } catch (error) {
             lastError = (error as Error).message;
+            if (isNonRetryableDriveAuthorizationFailure(error)) {
+              stopBatchForDriveAuth = true;
+              break;
+            }
             if (assetId) {
               try {
                 const recovery = await operation("recover-upload", { asset_id: assetId }) as UploadRecovery;
@@ -486,10 +587,13 @@ export function UploadWorkspace() {
         } else {
           failures.push(`${f.file.name}: ${lastError}`);
           setFiles((current) => current.map((item) => item.id === f.id
-            ? { ...item, status: `${lastError}. Reselect this exact batch to resume.` } : item));
-          if (assetId) {
+            ? { ...item, status: stopBatchForDriveAuth
+              ? "Drive connection needs attention. Keep this batch selected and retry after reconnecting."
+              : `${lastError}. Reselect this exact batch to resume.` } : item));
+          if (assetId && !stopBatchForDriveAuth) {
             await operation("upload-failed", { asset_id: assetId, error: lastError }).catch(() => undefined);
           }
+          if (stopBatchForDriveAuth) break;
         }
       }
       await refresh();
@@ -502,7 +606,7 @@ export function UploadWorkspace() {
         navigate(`${base}/surveys`, { replace: true });
       }
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(uploadOperationMessage(e));
     } finally {
       setBusy(false);
     }
@@ -575,10 +679,21 @@ export function UploadWorkspace() {
               </div>
             </div>
           )}
+          {photoCount ? (
+            <div className="rg-notice rg-upload-review" role="status">
+              <Eye size={18} />
+              <div>
+                <strong>Suriin muna ang mga larawan bago i-upload</strong>
+                <p>{stillClassifying ? "Sinusuri ng Gemma 4 at ng classifier ang bawat larawan…" : classifierNote ||
+                  `Tingnan ang bawat larawan at ang tantiya ng classifier (${PHOTO_CLASSES.join(", ")}). Alisin ang hindi dapat isama.`}
+                  {flagged ? ` ${flagged} larawan ang hindi mukhang BLB o Brown Spot, o hindi sigurado ang classifier.` : ""}</p>
+              </div>
+            </div>
+          ) : null}
           <div className="rg-upload-files" aria-live="polite">
             {files.map((f) => (
-              <div key={f.id}>
-                <FileImage size={20} />
+              <div key={f.id} className={f.kind === "image" ? "rg-upload-photo" : undefined}>
+                {f.preview ? <img className="rg-upload-thumb" src={f.preview} alt={`Preview of ${f.file.name}`} /> : <FileImage size={20} />}
                 <span>
                   <strong>{f.file.name}</strong>
                   <small>
@@ -586,6 +701,22 @@ export function UploadWorkspace() {
                     {(f.file.size / 1048576).toFixed(1)} MB · {f.kind === "video" ? "video" : f.gps ? "may GPS" : "walang GPS"}
                   </small>
                   <small>{f.status}</small>
+                  {f.kind === "image" ? (
+                    f.classify === "pending" || f.classify === "running"
+                      ? <small className="rg-muted">{f.classify === "running" ? "Sinusuri ng classifier…" : "Naghihintay sa classifier…"}</small>
+                      : f.classification ? <PhotoClassBars classification={f.classification} /> : null
+                  ) : null}
+                  {f.kind === "image" && !demo ? (
+                    f.insight ? (
+                      <span className="rg-gemma-insight">
+                        <b>Gemma 4 · {STAGE_LABEL[f.insight.crop_stage]}</b>
+                        {f.insight.conditions.length ? <span>{f.insight.conditions.map((c) => `${c.name} ${Math.round(c.confidence * 100)}%`).join(" · ")}</span> : null}
+                        {f.insight.summary ? <small>{f.insight.summary}</small> : null}
+                        {!f.insight.is_rice_field || f.insight.quality !== "good" ? <small className="rg-inline-error">
+                          {!f.insight.is_rice_field ? "Mukhang hindi palayan ang larawan." : `Kalidad ng larawan: ${f.insight.quality.replace("_", " ")}.`}</small> : null}
+                      </span>
+                    ) : <small className="rg-muted">{f.insightState === "error" ? "Hindi natapos ang Gemma check (hindi nito pipigilan ang upload)." : "Tinitingnan ng Gemma 4…"}</small>
+                  ) : null}
                   {!demo && pinnedMediaEnabled && f.kind === "video" ? (
                     <div className="rg-form-grid">
                       <label>
@@ -623,7 +754,7 @@ export function UploadWorkspace() {
                   className="rg-icon-button"
                   aria-label={`Remove ${f.file.name}`}
                   disabled={busy}
-                  onClick={() => setFiles((fs) => fs.filter((x) => x.id !== f.id))}
+                  onClick={() => removeFile(f.id)}
                 >
                   ×
                 </button>
@@ -654,7 +785,8 @@ export function UploadWorkspace() {
               ) : null}
               <label>
                 Yugto ng palay
-                <select name="crop_stage" defaultValue="unknown">
+                {cropStage == null && gemmaStage ? <small className="rg-muted"> · mula sa Gemma 4</small> : null}
+                <select name="crop_stage" value={shownStage} onChange={(event) => setCropStage(event.target.value as CropStage)}>
                   <option value="unknown">Hindi sigurado</option>
                   <option value="seedling">Punla (seedling)</option>
                   <option value="vegetative">Nag-uusbong / tillering</option>
@@ -666,11 +798,11 @@ export function UploadWorkspace() {
             </div>
             <fieldset className="rg-field-conditions">
               <legend>Kalagayan ng bukid (lagyan ng check kung meron)</legend>
-              <label className="rg-check"><input type="checkbox" name="field_conditions" value="standing_water" />Nakababad sa tubig / baha</label>
-              <label className="rg-check"><input type="checkbox" name="field_conditions" value="lodging" />Nakadapa ang palay</label>
-              <label className="rg-check"><input type="checkbox" name="field_conditions" value="dry_or_cracked_soil" />Tuyo o bitak ang lupa</label>
-              <label className="rg-check"><input type="checkbox" name="field_conditions" value="nutrient_stress_suspected" />Mukhang kulang sa abono</label>
-              <label className="rg-check"><input type="checkbox" name="field_conditions" value="pest_damage_suspected" />May sira ng peste o hayop</label>
+              <label className="rg-check"><input type="checkbox" name="field_conditions" value="standing_water" checked={shownConditions.includes("standing_water")} onChange={(e) => setFieldConditions(e.target.checked ? [...shownConditions, "standing_water"] : shownConditions.filter((x) => x !== "standing_water"))} />Nakababad sa tubig / baha</label>
+              <label className="rg-check"><input type="checkbox" name="field_conditions" value="lodging" checked={shownConditions.includes("lodging")} onChange={(e) => setFieldConditions(e.target.checked ? [...shownConditions, "lodging"] : shownConditions.filter((x) => x !== "lodging"))} />Nakadapa ang palay</label>
+              <label className="rg-check"><input type="checkbox" name="field_conditions" value="dry_or_cracked_soil" checked={shownConditions.includes("dry_or_cracked_soil")} onChange={(e) => setFieldConditions(e.target.checked ? [...shownConditions, "dry_or_cracked_soil"] : shownConditions.filter((x) => x !== "dry_or_cracked_soil"))} />Tuyo o bitak ang lupa</label>
+              <label className="rg-check"><input type="checkbox" name="field_conditions" value="nutrient_stress_suspected" checked={shownConditions.includes("nutrient_stress_suspected")} onChange={(e) => setFieldConditions(e.target.checked ? [...shownConditions, "nutrient_stress_suspected"] : shownConditions.filter((x) => x !== "nutrient_stress_suspected"))} />Mukhang kulang sa abono</label>
+              <label className="rg-check"><input type="checkbox" name="field_conditions" value="pest_damage_suspected" checked={shownConditions.includes("pest_damage_suspected")} onChange={(e) => setFieldConditions(e.target.checked ? [...shownConditions, "pest_damage_suspected"] : shownConditions.filter((x) => x !== "pest_damage_suspected"))} />May sira ng peste o hayop</label>
             </fieldset>
           </details>
         </section>
@@ -715,9 +847,16 @@ export function UploadWorkspace() {
             </button>
           ) : null}
           {resumableSurvey ? <p role="status">Itutuloy ang dating survey gamit ang naunang lokasyon nito.</p> : null}
+          {!demo && !resumableSurvey && files.length ? (
+            <label className="rg-check rg-upload-approve">
+              <input type="checkbox" checked={reviewed} disabled={busy || stillClassifying}
+                onChange={(event) => setReviewed(event.target.checked)} />
+              Nasuri ko na ang bawat larawan at ang tantiya ng classifier. Ituloy ang upload at automation.
+            </label>
+          ) : null}
           <button
             className="rg-button rg-primary"
-            disabled={busy || !files.length || (!resumableSurvey && !pin)}
+            disabled={busy || !files.length || (!resumableSurvey && !pin) || (!demo && !resumableSurvey && (!reviewed || stillClassifying))}
             type="submit"
           >
             <UploadCloud size={18} />
@@ -726,7 +865,7 @@ export function UploadWorkspace() {
           <p className="rg-muted rg-upload-after">
             {busy
               ? "Huwag isara ang page habang nag-a-upload."
-              : "Pagkatapos nito, awtomatiko na ang detection, severity, payo, pag-post sa bulletin at SMS sa mga magsasaka."}
+              : "Pagkatapos mong aprubahan, awtomatiko na ang detection, severity, payo, pag-post sa bulletin at SMS sa mga magsasaka."}
           </p>
         </aside>
       </form>

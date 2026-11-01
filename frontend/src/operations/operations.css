@@ -5031,3 +5031,21 @@
   .rg-assistant-launcher span { animation: none; }
   .rg-tour-highlight, .rg-tour-replay { transition: none; }
 }
+
+/* Step 1 photo review: thumbnail + classifier percentages before upload */
+.rg-upload-files > div.rg-upload-photo { align-items: flex-start; }
+.rg-upload-thumb { width: 104px; height: 78px; flex: none; object-fit: cover; border-radius: 8px; background: #e9ede1; }
+.rg-upload-review { margin: 4px 0 8px; }
+.rg-upload-approve { margin: 4px 0 2px; font-size: 13px; line-height: 1.4; align-items: flex-start; }
+.rg-class-bars { display: grid; gap: 3px; margin-top: 6px; max-width: 340px; }
+.rg-class-verdict { margin: 0 0 2px; font-size: 12px; }
+.rg-class-uncertain { color: #9a5b00; }
+.rg-class-row { display: grid; grid-template-columns: 86px 1fr 38px; align-items: center; gap: 8px; font-size: 12px; }
+.rg-class-track { height: 7px; border-radius: 4px; background: #e9ede1; overflow: hidden; }
+.rg-class-track i { display: block; height: 100%; border-radius: 4px; }
+.rg-class-value { text-align: right; font-variant-numeric: tabular-nums; }
+.rg-class-bars.is-compact .rg-class-row { grid-template-columns: 80px 1fr 34px; font-size: 11px; }
+@media (max-width: 520px) {
+  .rg-upload-thumb { width: 72px; height: 56px; }
+  .rg-class-row { grid-template-columns: 72px 1fr 34px; }
+}

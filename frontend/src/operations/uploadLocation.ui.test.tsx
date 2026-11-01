@@ -7,6 +7,7 @@ import {OperationsContext,type Store} from './store';
 const fixture=vi.hoisted(()=>({gps:true,index:0}));
 vi.mock('exifr',()=>({parse:vi.fn(async(_file:File,tags:any)=>tags?.xmp ? null : fixture.gps ? {latitude:17.4+(fixture.index++)*0.001,longitude:121.7,Orientation:1} : null)}));
 vi.mock('hash-wasm',()=>({createSHA256:async()=>({update(){},digest:()=>`hash-${fixture.index++}`}),createMD5:async()=>({update(){},digest:()=>`md5-${fixture.index}`})}));
+vi.mock('./photoClassifier',async()=>({...(await vi.importActual<any>('./photoClassifier')),classifyPhoto:vi.fn(async()=>({model:'fixture-cls',probs:{BLB:0.7,'Brown Spot':0.1,'Soil Nitrogen':0.2},top:'BLB',uncertain:false,tiles:4}))}));
 vi.mock('./Map',()=>({FieldMap:({onPick,points}:any)=><div><output aria-label="Suggested pin">{JSON.stringify(points)}</output><button type="button" onClick={()=>onPick(17.5,121.8)}>Choose fixture field</button></div>}));
 import {UploadWorkspace} from './Upload';
 let store:Store;
@@ -23,13 +24,14 @@ async function upload(count=5){const user=userEvent.setup();await user.upload(do
 describe('automatic GPS location, manual pin only when GPS is missing',()=>{
  it('sets the pin from photo GPS and submits with no extra input',async()=>{
   const user=await upload();expect(screen.getByText('Awtomatiko ang lokasyon')).toBeTruthy();
+  await waitFor(()=>expect(screen.getAllByText('Mukhang BLB')).toHaveLength(5),{timeout:10000});expect(screen.getAllByText('70%').length).toBe(5);
   const pin=JSON.parse(screen.getByLabelText('Suggested pin').textContent!)[0];expect(pin.lat).toBeCloseTo(17.404);expect(pin.lng).toBeCloseTo(121.7);
   const submit=screen.getByRole('button',{name:'Create demo survey'}) as HTMLButtonElement;expect(submit.disabled).toBe(false);
   await user.click(submit);
   await waitFor(()=>expect(store.addSurvey).toHaveBeenCalledTimes(1));
   expect(vi.mocked(store.addSurvey).mock.calls[0][0]).toMatchObject({lat:17.404,location_status:'verified',location_source:'exif_median'});
   expect(vi.mocked(store.addSurvey).mock.calls[0][0].name).toMatch(/Rice field · /);
- });
+ },20000);
  it('asks for a pin when a photo has no GPS, then accepts the manual pin',async()=>{
   fixture.gps=false;const user=await upload(1);expect(screen.getByText('Kailangan ng pin')).toBeTruthy();expect(screen.getByLabelText('Suggested pin').textContent).toBe('[]');
   expect((screen.getByRole('button',{name:'Create demo survey'}) as HTMLButtonElement).disabled).toBe(true);

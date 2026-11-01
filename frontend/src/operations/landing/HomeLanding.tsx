@@ -662,7 +662,7 @@ function LandingFooter({ smsPath, registered }: { smsPath: string; registered: b
       <div className="lp-footer-cols">
         <div className="lp-footer-brand"><Wordmark light /><p>Drone imagery, two disease models and specialist checks, for rice farmers in Region II.</p></div>
         <div><strong>Public information</strong><Link to="/bulletin">Field advisories</Link><Link to="/map">Monitoring map</Link><Link to={smsPath}>{registered ? "SMS preferences" : "SMS registration"}</Link></div>
-        <div><strong>Account</strong><Link to="/preferences">Alert preferences</Link><Link to="/login">Authorized staff login</Link></div>
+        <div><strong>Account</strong><Link to="/preferences">Alert preferences</Link><Link to="/login">Authorized staff login</Link><a href="/privacy.html">Privacy notice</a><a href="/terms.html">Terms of use</a></div>
         <div><strong>Coverage</strong><span>Batanes, Cagayan, Isabela, Nueva Vizcaya and Quirino</span></div>
       </div>
       <svg className="lp-footer-word" viewBox="0 0 1000 150" role="img" aria-label="RiceGuardAI">

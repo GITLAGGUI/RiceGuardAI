@@ -105,6 +105,7 @@ export interface Survey {
   severity_detail?: SeverityDetail | null;
   location_source?: "exif_median" | "manual_pin" | "none";
   created_at?: string;
+  pre_review?: { approved: true; classifier?: string | null; removed_photos?: number; approved_at?: string } | null;
   field_assessment?: { basis: "manual_field_assessment" | "reviewed_severity_assessment"; model_calibrated: false; result_revision: number; bulletin_id?: string; evidence_key?: string; diseases: Record<string, { category: string; basis?: string; leaf_area_affected_pct?: number; sampled_leaves?: number; specialist: string; notes: string }> };
 }
 export interface Bulletin {
@@ -189,6 +190,8 @@ export interface Asset {
   width: number | null;
   height: number | null;
   duration_seconds: number | null;
+  /** First-step classifier percentages saved when the photo was approved for upload. */
+  classification?: { model: string; probs: Record<string, number>; top: string; uncertain: boolean; tiles: number | null } | null;
 }
 export interface ProcessingJob {
   id: string;

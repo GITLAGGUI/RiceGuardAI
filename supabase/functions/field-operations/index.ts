@@ -8,10 +8,12 @@ import { validateSeverityReview } from "../_shared/reviewWorkflow.ts";
 import { validateMediaSelection, validateVideoClipSelection, type SourceAsset } from "../_shared/mediaSelection.ts";
 import { PINNED_KAGGLE_WORKFLOW_SHA256 } from "../_shared/pinnedResult.ts";
 import { registerPingWebhook, smsGatewayHealth } from "../_shared/smsGatewayHealth.ts";
+import { photoInsight, storedInsight } from "../_shared/photoInsight.ts";
 import { smsAdvisoryMessage } from "../_shared/advisoryPresentation.ts";
 import { inferenceConfiguration } from "../_shared/systemReadiness.ts";
 import { smsSystemTestAction } from "../_shared/smsSystemTestAction.ts";
 import { gatewaySelection, isManilaQuietHour, nextManilaSixAm, smsSegments } from "../_shared/smsDelivery.ts";
+import { googleDriveApiFailure, googleOAuthFailure, type GoogleDriveFailureCode } from "../_shared/googleDriveAuthorization.ts";
 
 const db = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -35,6 +37,7 @@ type ErrorCode =
   | "INVALID_LOCATION"
   | "CONTACT_CONFLICT"
   | "PILOT_LIMIT_REACHED"
+  | GoogleDriveFailureCode
   | "VALIDATION_ERROR";
 const requiredText = (value: unknown, max = 500) => {
   if (typeof value !== "string" || !value.trim() || value.length > max)
@@ -74,27 +77,95 @@ async function smsGatewayStatus() {
 }
 
 let driveToken: { value: string; expires: number } | null = null;
-async function googleAccessToken() {
-  if (driveToken && driveToken.expires > Date.now() + 60_000) return driveToken.value;
+class GoogleDriveAuthorizationError extends Error {
+  constructor(readonly code: GoogleDriveFailureCode, message: string, readonly status = 503) {
+    super(message);
+    this.name = "GoogleDriveAuthorizationError";
+  }
+}
+
+async function googleAccessToken(forceRefresh = false) {
+  if (!forceRefresh && driveToken && driveToken.expires > Date.now() + 60_000) return driveToken.value;
   const clientId = Deno.env.get("GOOGLE_DRIVE_CLIENT_ID");
   const clientSecret = Deno.env.get("GOOGLE_DRIVE_CLIENT_SECRET");
   const refreshToken = Deno.env.get("GOOGLE_DRIVE_REFRESH_TOKEN");
-  if (!clientId || !clientSecret || !refreshToken)
-    throw new Error("Google Drive application storage is not configured");
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: refreshToken,
-      grant_type: "refresh_token",
-    }),
-  });
-  if (!response.ok) throw new Error("Google Drive authorization failed");
-  const body = await response.json();
+  if (!clientId || !clientSecret || !refreshToken) {
+    const failure = googleOAuthFailure("missing_configuration", 500);
+    throw new GoogleDriveAuthorizationError(failure.code, failure.message, failure.status);
+  }
+  let response: Response;
+  try {
+    response = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
+        grant_type: "refresh_token",
+      }),
+    });
+  } catch {
+    const failure = googleOAuthFailure("network_error", 503);
+    throw new GoogleDriveAuthorizationError(failure.code, failure.message, failure.status);
+  }
+  const body = await response.json().catch(() => ({})) as { access_token?: string; expires_in?: number; error?: string };
+  if (!response.ok || !body.access_token) {
+    driveToken = null;
+    const failure = googleOAuthFailure(body.error, response.status);
+    throw new GoogleDriveAuthorizationError(failure.code, failure.message, failure.status);
+  }
   driveToken = { value: body.access_token, expires: Date.now() + Number(body.expires_in || 3600) * 1000 };
   return driveToken.value;
+}
+
+async function driveAuthorizedFetch(url: string, init: RequestInit = {}) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const token = await googleAccessToken(attempt === 1);
+    const requestHeaders = new Headers(init.headers);
+    requestHeaders.set("Authorization", `Bearer ${token}`);
+    let response: Response;
+    try {
+      response = await fetch(url, { ...init, headers: requestHeaders });
+    } catch {
+      const failure = googleDriveApiFailure(503);
+      throw new GoogleDriveAuthorizationError(failure.code, failure.message, failure.status);
+    }
+    if (response.status === 401 && attempt === 0) {
+      driveToken = null;
+      continue;
+    }
+    return response;
+  }
+  throw new Error("Google Drive request could not be completed");
+}
+
+async function assertGoogleDriveReady() {
+  const folderId = Deno.env.get("GOOGLE_DRIVE_APP_FOLDER_ID");
+  if (!folderId) {
+    throw new GoogleDriveAuthorizationError(
+      "DRIVE_CONFIGURATION_ERROR",
+      "Google Drive private folder is not configured. An administrator must restore the existing folder setting.",
+    );
+  }
+  const url = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(folderId)}`);
+  url.searchParams.set("fields", "id,mimeType,trashed,capabilities(canAddChildren)");
+  url.searchParams.set("supportsAllDrives", "true");
+  const response = await driveAuthorizedFetch(url.toString());
+  if (!response.ok) {
+    let reason = "";
+    try {
+      const body = await response.json() as { error?: { errors?: Array<{ reason?: string }> } };
+      reason = body.error?.errors?.[0]?.reason || "";
+    } catch { /* status is enough to classify without exposing provider details */ }
+    const failure = googleDriveApiFailure(response.status, reason);
+    throw new GoogleDriveAuthorizationError(failure.code, failure.message, failure.status);
+  }
+  const folder = await response.json() as { id?: string; mimeType?: string; trashed?: boolean; capabilities?: { canAddChildren?: boolean } };
+  if (!folder.id || folder.mimeType !== "application/vnd.google-apps.folder" || folder.trashed || folder.capabilities?.canAddChildren === false) {
+    const failure = googleDriveApiFailure(folder.id ? 403 : 404, folder.id ? "insufficientFilePermissions" : "notFound");
+    throw new GoogleDriveAuthorizationError(failure.code, failure.message, failure.status);
+  }
 }
 
 async function startDriveUpload(input: {
@@ -106,14 +177,15 @@ async function startDriveUpload(input: {
   checksum: string;
 }) {
   const parent = Deno.env.get("GOOGLE_DRIVE_APP_FOLDER_ID");
-  if (!parent) throw new Error("Google Drive application folder is not configured");
-  const token = await googleAccessToken();
-  const response = await fetch(
+  if (!parent) {
+    const failure = googleOAuthFailure("missing_configuration", 400);
+    throw new GoogleDriveAuthorizationError(failure.code, failure.message, failure.status);
+  }
+  const response = await driveAuthorizedFetch(
     "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true",
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json; charset=UTF-8",
         "X-Upload-Content-Type": input.mime,
         "X-Upload-Content-Length": String(input.bytes),
@@ -131,14 +203,15 @@ async function startDriveUpload(input: {
   );
   const uploadUrl = response.headers.get("location");
   if (!response.ok || !uploadUrl) {
-    let reason = `HTTP ${response.status}`;
+    let reason = "";
     try {
       const body = await response.json() as { error?: { errors?: Array<{ reason?: string }> } };
-      reason = body.error?.errors?.[0]?.reason || reason;
+      reason = body.error?.errors?.[0]?.reason || "";
     } catch {
-      // Keep the status-only reason when Google does not return JSON.
+      // Classify by HTTP status when Google does not return JSON.
     }
-    throw new Error(`Private Drive upload session failed (${reason})`);
+    const failure = googleDriveApiFailure(response.status, reason);
+    throw new GoogleDriveAuthorizationError(failure.code, failure.message, failure.status);
   }
   return uploadUrl;
 }
@@ -162,8 +235,10 @@ async function recoverUploadedDriveFile(asset: {
   md5_checksum: string;
 }) {
   const parent = Deno.env.get("GOOGLE_DRIVE_APP_FOLDER_ID");
-  if (!parent) throw new Error("Google Drive application folder is not configured");
-  const token = await googleAccessToken();
+  if (!parent) {
+    const failure = googleOAuthFailure("missing_configuration", 400);
+    throw new GoogleDriveAuthorizationError(failure.code, failure.message, failure.status);
+  }
   const query = [
     "trashed = false",
     `appProperties has { key='riceguard_asset_id' and value='${asset.id}' }`,
@@ -178,10 +253,11 @@ async function recoverUploadedDriveFile(asset: {
     supportsAllDrives: "true",
     includeItemsFromAllDrives: "true",
   });
-  const response = await fetch(`https://www.googleapis.com/drive/v3/files?${params}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!response.ok) throw new Error("Uploaded Drive file could not be recovered");
+  const response = await driveAuthorizedFetch(`https://www.googleapis.com/drive/v3/files?${params}`);
+  if (!response.ok) {
+    const failure = googleDriveApiFailure(response.status);
+    throw new GoogleDriveAuthorizationError(failure.code, failure.message, failure.status);
+  }
   const body = await response.json() as { files?: DriveFileMetadata[] };
   return (body.files || []).find((metadata) =>
     metadata.appProperties?.riceguard_asset_id === asset.id &&
@@ -433,6 +509,27 @@ async function stageLegacyPublicMedia(bulletin: Record<string, unknown>) {
   if (saved.error) throw new Error("Approved public media could not be attached to the draft");
 }
 
+const PHOTO_CLASSES = ["BLB", "Brown Spot", "Soil Nitrogen"];
+
+/** Validates the browser classifier's output for one photo; anything malformed is dropped, never trusted. */
+function photoClassification(value: unknown) {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  const raw = v.probs as Record<string, unknown> | undefined;
+  if (!raw || typeof raw !== "object") return null;
+  const probs: Record<string, number> = {};
+  for (const name of PHOTO_CLASSES) {
+    const n = Number(raw[name]);
+    if (!Number.isFinite(n) || n < 0 || n > 1) return null;
+    probs[name] = Math.round(n * 10000) / 10000;
+  }
+  const total = Object.values(probs).reduce((a, b) => a + b, 0);
+  if (Math.abs(total - 1) > 0.02) return null;
+  const top = PHOTO_CLASSES.reduce((a, b) => (probs[b] > probs[a] ? b : a));
+  return { model: optionalText(v.model, 80) || "unknown", probs, top, uncertain: probs[top] < 0.6,
+    tiles: Number.isInteger(v.tiles) ? Math.max(1, Math.min(400, Number(v.tiles))) : null };
+}
+
 Deno.serve(async (req) => {
   const requestId = req.headers.get("x-request-id")?.slice(0, 100) || crypto.randomUUID();
   const failure = (message: string, status = 400, code: ErrorCode = "VALIDATION_ERROR") =>
@@ -449,10 +546,16 @@ Deno.serve(async (req) => {
   let requestAction = "";
   try {
     const raw = await req.text();
-    if (raw.length > 120_000) return failure("Request too large", 413);
+    // A Gemma photo check carries one downscaled JPEG; everything else stays small.
+    if (raw.length > (raw.includes('"action":"photo-insight"') ? 600_000 : 120_000)) return failure("Request too large", 413);
     const { action, payload: p = {} } = JSON.parse(raw);
     requestAction = String(action || "");
     const user = auth.user;
+
+    if (action === "drive-preflight") {
+      await assertGoogleDriveReady();
+      return reply({ ready: true });
+    }
 
     if (action === "registration-status") {
       const contact = check(await db
@@ -557,7 +660,7 @@ Deno.serve(async (req) => {
         db.from("rg_contacts").select("id,name,phone,location,consent,verified").limit(100),
         db.from("rg_farms").select("id,contact_id,geometry"),
         db.rpc("rg_sms_campaign_stats"),
-        db.from("rg_assets").select("id,survey_id,filename,mime,bytes,state,preview_url,drive_file_id,checksum,width,height,duration_seconds,rg_surveys!inner(archived_at)").is("rg_surveys.archived_at", null).order("created_at", { ascending: false }).limit(1000),
+        db.from("rg_assets").select("id,survey_id,filename,mime,bytes,state,preview_url,drive_file_id,checksum,width,height,duration_seconds,classification,llm_insight,rg_surveys!inner(archived_at)").is("rg_surveys.archived_at", null).order("created_at", { ascending: false }).limit(1000),
         db.from("rg_processing_jobs").select("id,survey_id,status,progress,provider,kaggle_kernel_ref,aws_job_ref,run_id,error,result_manifest,created_at,updated_at,dispatched_at,started_at,completed_at,provider_state,provider_checked_at,rg_surveys!inner(archived_at)").is("rg_surveys.archived_at", null).order("created_at", { ascending: false }).limit(500),
         db.from("rg_model_registry").select("id,disease,version,architecture,encoder,input_size,overlap,threshold,minimum_component_pixels,active,validation_summary").order("disease"),
         smsGatewayHealth(db),
@@ -665,6 +768,14 @@ Deno.serve(async (req) => {
       const rawFieldConditions: unknown[] = Array.isArray(p.field_conditions) ? p.field_conditions : [];
       const fieldConditions = [...new Set(rawFieldConditions.map(String))];
       if (fieldConditions.some((item) => !allowedConditions.includes(item))) throw new Error("Unsupported field condition");
+      // Live surveys start only after the uploader reviewed every photo (and its classifier result).
+      const preReview = p.pre_review && typeof p.pre_review === "object" && p.pre_review.approved === true ? {
+        approved: true, approved_by: user.id, approved_at: new Date().toISOString(),
+        classifier: optionalText(p.pre_review.classifier, 80) || null,
+        removed_photos: Number.isInteger(p.pre_review.removed_photos) ? Math.max(0, Math.min(250, p.pre_review.removed_photos)) : 0,
+      } : null;
+      if (provider === "kaggle_yolo26" && !preReview)
+        return failure("Review and approve the photos before uploading", 409);
       const locationSource = ["exif_median", "manual_pin"].includes(String(p.location_source)) ? String(p.location_source) : lat == null ? "none" : "manual_pin";
       const place = lat == null ? null : check(await db.rpc("rg_reverse_geocode", { p_lat: lat, p_lng: lng }));
       const inserted = requireResult(await db.from("rg_surveys").insert({
@@ -685,6 +796,7 @@ Deno.serve(async (req) => {
         inference_provider: provider,
         crop_stage: cropStage,
         field_conditions: fieldConditions,
+        pre_review: preReview,
       }).select("id").single());
       return reply({ id: inserted.id }, 201);
     }
@@ -753,6 +865,8 @@ Deno.serve(async (req) => {
         capture_time: p.capture_time || null,
         exif_lat: p.exif_lat ?? null,
         exif_lng: p.exif_lng ?? null,
+        classification: photoClassification(p.classification),
+        llm_insight: storedInsight(p.llm_insight),
         state: "Uploading",
       }));
       const sessionId = crypto.randomUUID();
@@ -881,9 +995,11 @@ Deno.serve(async (req) => {
       const assetId = uuid(p.asset_id);
       const driveFileId = requiredText(p.drive_file_id, 200);
       const asset = requireResult(await db.from("rg_assets").select("*,rg_upload_sessions!inner(id,state)").eq("id", assetId).single());
-      const token = await googleAccessToken();
-      const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(driveFileId)}?fields=id,name,mimeType,size,md5Checksum,appProperties,parents&supportsAllDrives=true`, { headers: { Authorization: `Bearer ${token}` } });
-      if (!response.ok) throw new Error("Uploaded Drive file could not be verified");
+      const response = await driveAuthorizedFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(driveFileId)}?fields=id,name,mimeType,size,md5Checksum,appProperties,parents&supportsAllDrives=true`);
+      if (!response.ok) {
+        const failure = googleDriveApiFailure(response.status);
+        throw new GoogleDriveAuthorizationError(failure.code, failure.message, failure.status);
+      }
       const metadata = await response.json();
       if (
         metadata.appProperties?.riceguard_asset_id !== assetId ||
@@ -906,10 +1022,12 @@ Deno.serve(async (req) => {
       const job = requireResult(await db.from("rg_processing_jobs").select("id")
         .eq("survey_id", surveyId).eq("provider", "kaggle_yolo26").in("status", ["Needs review", "Reviewed"])
         .order("created_at", { ascending: false }).limit(1).single());
-      if (!Array.isArray(p.reviews)) return failure("Choose Tama or Mali for every finding", 400);
+      if (!Array.isArray(p.reviews) || p.reviews.some((item: unknown) => !item || typeof item !== "object" ||
+          !["accepted", "rejected", "uncertain"].includes(String((item as Record<string, unknown>).decision))))
+        return failure("Choose Tama, Hindi sigurado or Mali for every finding", 400);
       const reviews = p.reviews.map((item: Record<string, unknown>) => ({
         source_asset_id: uuid(item.source_asset_id), disease: requiredText(item.disease, 20),
-        decision: item.decision === "accepted" ? "accepted" : "rejected",
+        decision: item.decision === "accepted" ? "accepted" : item.decision === "uncertain" ? "uncertain" : "rejected",
         ...(item.decision === "accepted" ? {} : { reason: requiredText(item.reason, 20), note: optionalText(item.note, 500) }),
       }));
       const result = check(await db.rpc("rg_verify_findings", { p_job: job.id, p_actor: user.id, p_reviews: reviews }));
@@ -1046,6 +1164,16 @@ Deno.serve(async (req) => {
       return reply({ correction_draft: true, advisory_revision: updated.advisory_revision });
     }
 
+    if (action === "photo-insight") {
+      const image = String(p.image || "");
+      const detail = p.detail == null ? undefined : String(p.detail);
+      if (!/^[A-Za-z0-9+/=]{1000,280000}$/.test(image) || (detail !== undefined && !/^[A-Za-z0-9+/=]{1000,280000}$/.test(detail)))
+        throw new Error("Send JPEGs under 200 KB each");
+      const key = Deno.env.get("OLLAMA_API_KEY");
+      if (!key) return failure("Gemma photo check is not configured", 503, "CONFIGURATION_REQUIRED");
+      return reply(await photoInsight({ base: Deno.env.get("OLLAMA_BASE_URL") || "https://ollama.com/api", key,
+        model: Deno.env.get("PHOTO_INSIGHT_MODEL") || Deno.env.get("AUTO_ADVISORY_MODEL") || "gemma4:31b", image, detail }));
+    }
     if (action === "sms-gateway-health") return reply(await smsGatewayHealth(db));
     if (action === "sms-gateway-register-ping") {
       const token = Deno.env.get("SMS_GATE_WEBHOOK_TOKEN");
@@ -1165,6 +1293,8 @@ Deno.serve(async (req) => {
   } catch (error) {
     const detail = error instanceof Error ? error.message : "Operation failed";
     console.error(JSON.stringify({ request_id: requestId, error: detail.slice(0, 1000) }));
+    if (error instanceof GoogleDriveAuthorizationError)
+      return failure(error.message, error.status, error.code);
     if (/Stale|changed|unreviewed|Create a correction|Complete images|Advisory unavailable|Survey unavailable|Contact unavailable|Withdraw the published|Wait until processing|Confirm the deletion/i.test(detail)) return failure(detail, 409, "VALIDATION_ERROR");
     if (/Active admin role required/i.test(detail)) return failure("Active administrator approval is required", 403);
     if (["save-severity-review","save-location"].includes(requestAction)) return failure(detail, 400, "VALIDATION_ERROR");
@@ -1176,7 +1306,7 @@ Deno.serve(async (req) => {
       return failure("Pilot contact limit reached", 409, "PILOT_LIMIT_REACHED");
     if (/Private Drive upload session failed/i.test(detail))
       return failure(detail, 503, "VALIDATION_ERROR");
-    if (["upload-intent", "resume-upload-intent", "recover-upload", "upload-complete"].includes(requestAction))
+    if (["drive-preflight", "upload-intent", "resume-upload-intent", "recover-upload", "upload-complete"].includes(requestAction))
       return failure(`Upload preparation failed: ${detail}`, 400, "VALIDATION_ERROR");
     if (/Invalid required text|Invalid identifier|Unexpected token|JSON/i.test(detail))
       return failure("Invalid request data", 400, "VALIDATION_ERROR");

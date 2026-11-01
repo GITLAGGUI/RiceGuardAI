@@ -25,6 +25,7 @@
     "leaflet": "^1.9.4",
     "lenis": "^1.1.13",
     "lucide-react": "^0.460.0",
+    "onnxruntime-web": "1.22.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.53.2",

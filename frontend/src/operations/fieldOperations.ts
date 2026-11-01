@@ -7,6 +7,10 @@ export type FieldOperationErrorCode =
   | "INVALID_LOCATION"
   | "CONTACT_CONFLICT"
   | "PILOT_LIMIT_REACHED"
+  | "DRIVE_REAUTH_REQUIRED"
+  | "DRIVE_CONFIGURATION_ERROR"
+  | "DRIVE_FOLDER_ACCESS"
+  | "DRIVE_TEMPORARY_ERROR"
   | "VALIDATION_ERROR";
 
 export type FieldOperationErrorPayload = {
@@ -26,6 +30,31 @@ export class FieldOperationError extends Error {
     this.code = payload.code;
     this.requestId = payload.request_id;
     this.status = status;
+  }
+}
+
+export function isNonRetryableDriveAuthorizationFailure(error: unknown): boolean {
+  return error instanceof FieldOperationError && [
+    "DRIVE_REAUTH_REQUIRED",
+    "DRIVE_CONFIGURATION_ERROR",
+    "DRIVE_FOLDER_ACCESS",
+  ].includes(error.code || "");
+}
+
+export function uploadOperationMessage(error: unknown): string {
+  if (!(error instanceof FieldOperationError))
+    return error instanceof Error ? error.message : "Hindi nakumpleto ang upload.";
+  switch (error.code) {
+    case "DRIVE_REAUTH_REQUIRED":
+      return "Expired o na-revoke ang Google Drive authorization. Kailangang i-reconnect ng admin ang kasalukuyang Google account. Nananatili rito ang napiling files; subukan ulit pagkatapos ma-reconnect.";
+    case "DRIVE_CONFIGURATION_ERROR":
+      return "May mali sa Google Drive OAuth configuration. Kailangang ipa-check sa admin ang OAuth client at authorization grant. Nananatili rito ang napiling files.";
+    case "DRIVE_FOLDER_ACCESS":
+      return "Hindi ma-access ng RiceGuardAI ang naka-configure na private Drive folder. Kailangang ibalik ng admin ang folder access. Nananatili rito ang napiling files.";
+    case "DRIVE_TEMPORARY_ERROR":
+      return "Pansamantalang hindi ma-contact ang Google Drive. Nananatili rito ang napiling files; subukan ulit mamaya.";
+    default:
+      return error.message;
   }
 }
 
