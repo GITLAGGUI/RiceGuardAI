@@ -3,9 +3,10 @@ import { validateResultV2, type ModelBundle, type ResultV2 } from "../../../shar
 // This hash includes every packaged Kaggle worker/adapter source and the
 // private two-specialist bundle. Changing any source requires a new pin.
 // New jobs use the lesion bundle (b10 UNet ConvNeXt-B for BLB, YOLO26l for Brown Spot).
-export const PINNED_KAGGLE_WORKFLOW_SHA256 = "39f09b61117106fa6d5bf21a7e85f26d8e3d74f7c2d2c03de90eb3909f2ed90e";
+export const PINNED_KAGGLE_WORKFLOW_SHA256 = "88ca18dc32cdd0dc92f16bfa14462316e045e21bf5c6426f74880d12d2634c42";
 // Earlier lesion-bundle worker sources; their finished jobs still validate.
 export const PREVIOUS_LESION_WORKFLOWS = [
+  "39f09b61117106fa6d5bf21a7e85f26d8e3d74f7c2d2c03de90eb3909f2ed90e",
   "88fe3e4eef70dbc8ed4470e6ea7e904d14fd6d031fc4b7dd6d7d3730b1d005e0",
   "20d3fc452a6f4575791162fbf28a21a592cf7b9ea8992852940e165459b03eb2",
 ];

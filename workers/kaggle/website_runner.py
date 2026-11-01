@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import hashlib
 import re
+import threading
 import shutil
 import subprocess
 import sys
@@ -74,17 +75,15 @@ CLASSIFIER_MANIFEST = "https://riceguardai.dev/models/photo-classifier-fp32/mani
 CLASSES = ("BLB", "Brown Spot", "Soil Nitrogen")
 
 
-def classify_photos(paths: dict[str, Path]) -> dict:
-    """The website's photo classifier (BLB / Brown Spot / Soil Nitrogen), run on this job's GPU so the
-    uploader's browser never has to. The published fp32 ONNX export is converted to PyTorch
-    (onnx2torch, logits match ONNX Runtime to 1e-6); tiling and averaging follow the browser contract."""
+def load_classifier() -> tuple:
+    """The website's photo classifier (BLB / Brown Spot / Soil Nitrogen), prepared for this job's GPU so
+    the uploader's browser never has to run it. The published fp32 ONNX export is converted to PyTorch
+    (onnx2torch, logits match ONNX Runtime to 1e-6). Runs in a background thread while inputs download."""
     # Installed here, not with the specialists, so a failed install only skips this informative step.
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "onnx==1.23.2", "onnx2torch==1.5.15"])
-    import numpy as np
     import onnx
     import torch
     from onnx2torch import convert
-    from PIL import Image
 
     manifest = requests.get(CLASSIFIER_MANIFEST, timeout=30).json()
     if tuple(manifest["classes"]) != CLASSES:
@@ -94,7 +93,16 @@ def classify_photos(paths: dict[str, Path]) -> dict:
     if hashlib.sha256(data).hexdigest() != manifest["sha256"]:
         raise ValueError("Classifier model failed its integrity check")
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    net = convert(onnx.load_from_string(data)).eval().to(device)
+    return convert(onnx.load_from_string(data)).eval().to(device), manifest, device
+
+
+def classify_photos(paths: dict[str, Path], loaded: tuple) -> dict:
+    """Tiling and averaging follow the browser contract (photoClassifier.ts)."""
+    import numpy as np
+    import torch
+    from PIL import Image
+
+    net, manifest, device = loaded
     size, tile, stride, scale = manifest["input_size"], manifest["tile"], manifest["stride"], manifest["scale"]
     mean, std = np.array([0.485, 0.456, 0.406], np.float32), np.array([0.229, 0.224, 0.225], np.float32)
 
@@ -123,9 +131,6 @@ def classify_photos(paths: dict[str, Path]) -> dict:
         out[asset_id] = {"model": manifest["model"], "probs": {c: round(float(v), 4) for c, v in zip(CLASSES, probs)},
                          "top": top, "uncertain": bool(probs.max() < manifest.get("uncertain_below", 0.6)),
                          "tiles": len(boxes)}
-    del net
-    if device == "cuda":
-        torch.cuda.empty_cache()
     return out
 
 
@@ -173,6 +178,17 @@ def main():
     inputs, photo_results, video_results = root / "inputs", root / "photos", root / "video"
     inputs.mkdir()
     callback("progress", {"progress": 2, "stage": "downloading-pinned-inputs"}, True)
+    # The informative photo classifier is installed, downloaded and converted in the background.
+    classifier: dict = {}
+
+    def prepare_classifier():
+        try:
+            classifier["loaded"] = load_classifier()
+        except Exception as error:  # noqa: BLE001
+            classifier["error"] = str(error)[:300]
+
+    preparing = threading.Thread(target=prepare_classifier, daemon=True)
+    preparing.start()
     # Models and Drive originals download in parallel; each is still checksum-verified.
     sources = []
     local_by_id = {}
@@ -203,7 +219,10 @@ def main():
     callback("progress", {"progress": 35, "stage": "photos-complete"}, True)
     # The photo classifier is informative only: a failure here never stops the job.
     try:
-        classified = classify_photos({item["id"]: local_by_id[item["id"]] for item in photos})
+        preparing.join(timeout=180)
+        if "loaded" not in classifier:
+            raise RuntimeError(classifier.get("error", "classifier was not ready in time"))
+        classified = classify_photos({item["id"]: local_by_id[item["id"]] for item in photos}, classifier.pop("loaded"))
         callback("photo-classifications", {"classifications": classified})
     except Exception as error:  # noqa: BLE001
         print(json.dumps({"classifier_error": str(error)[:300]}), flush=True)
