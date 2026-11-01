@@ -93,7 +93,8 @@ Deno.serve(async (req) => {
       error: null,
       updated_at: new Date().toISOString(),
     }).eq("id", job.id);
-    await db.from("rg_surveys").update({ status: "Running", progress: 1, stage_updated_at: new Date().toISOString() }).eq("id", job.survey_id);
+    // Kaggle accepted the run but may queue it for a GPU; the first worker callback flips this to Running.
+    await db.from("rg_surveys").update({ status: "Waiting for GPU", progress: 1, stage_updated_at: new Date().toISOString() }).eq("id", job.survey_id);
     await db.from("rg_outbox").update({ state: "complete", last_error: null }).eq("kind", "kaggle-dispatch").eq("entity_id", job.id);
     return json({ status: "submitted", job_id: job.id, kernel_ref: result.kernel_ref });
   } catch (dispatchError) {
