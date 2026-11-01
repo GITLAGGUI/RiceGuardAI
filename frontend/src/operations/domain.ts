@@ -206,6 +206,10 @@ export interface ProcessingJob {
   finding_reviews?: { source_asset_id: string; disease: Disease; decision: "accepted" | "rejected" | "uncertain"; reason?: string | null; note?: string | null }[];
   created_at: string;
   updated_at: string;
+  dispatched_at?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  provider_state?: string | null;
 }
 export interface ProviderStatus {
   inference?: "ready" | "configuration_required" | "waiting_for_allowance";

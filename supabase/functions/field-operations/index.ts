@@ -7,6 +7,7 @@ import { validateFieldSeverity } from "../_shared/fieldSeverity.ts";
 import { validateSeverityReview } from "../_shared/reviewWorkflow.ts";
 import { validateMediaSelection, validateVideoClipSelection, type SourceAsset } from "../_shared/mediaSelection.ts";
 import { PINNED_KAGGLE_WORKFLOW_SHA256 } from "../_shared/pinnedResult.ts";
+import { registerPingWebhook, smsGatewayHealth } from "../_shared/smsGatewayHealth.ts";
 import { smsAdvisoryMessage } from "../_shared/advisoryPresentation.ts";
 import { inferenceConfiguration } from "../_shared/systemReadiness.ts";
 import { smsSystemTestAction } from "../_shared/smsSystemTestAction.ts";
@@ -67,26 +68,9 @@ const assuranceLevel = (token: string) => {
   }
 };
 
-async function smsGatewayStatus(): Promise<"connected" | "offline" | "credentials_present" | "configuration_required" | "error"> {
-  const user = Deno.env.get("SMS_GATE_USER");
-  const pass = Deno.env.get("SMS_GATE_PASS");
-  if (!user || !pass) return Deno.env.get("SMS_GATE_TOKEN") ? "credentials_present" : "configuration_required";
-  try {
-    const response = await fetch("https://api.sms-gate.app/3rdparty/v1/devices", {
-      headers: { Authorization: `Basic ${btoa(`${user}:${pass}`)}` },
-      signal: AbortSignal.timeout(5_000),
-    });
-    if (response.status === 401 || response.status === 403) return "error";
-    if (!response.ok) return "offline";
-    const devices = await response.json();
-    if (!Array.isArray(devices)) return "credentials_present";
-    return devices.some((device) => {
-      const seen = Date.parse(String(device.lastSeen || ""));
-      return (!Deno.env.get("SMS_GATE_DEVICE_ID") || device.id === Deno.env.get("SMS_GATE_DEVICE_ID")) && Number.isFinite(seen) && Date.now() - seen < 10 * 60_000;
-    }) ? "connected" : "offline";
-  } catch {
-    return "offline";
-  }
+// Phone heartbeat (webhooks) or the SMS Gate cloud's lastSeen, whichever is newer.
+async function smsGatewayStatus() {
+  return (await smsGatewayHealth(db)).state;
 }
 
 let driveToken: { value: string; expires: number } | null = null;
@@ -574,9 +558,9 @@ Deno.serve(async (req) => {
         db.from("rg_farms").select("id,contact_id,geometry"),
         db.rpc("rg_sms_campaign_stats"),
         db.from("rg_assets").select("id,survey_id,filename,mime,bytes,state,preview_url,drive_file_id,checksum,width,height,duration_seconds,rg_surveys!inner(archived_at)").is("rg_surveys.archived_at", null).order("created_at", { ascending: false }).limit(1000),
-        db.from("rg_processing_jobs").select("id,survey_id,status,progress,provider,kaggle_kernel_ref,aws_job_ref,run_id,error,result_manifest,created_at,updated_at,rg_surveys!inner(archived_at)").is("rg_surveys.archived_at", null).order("created_at", { ascending: false }).limit(500),
+        db.from("rg_processing_jobs").select("id,survey_id,status,progress,provider,kaggle_kernel_ref,aws_job_ref,run_id,error,result_manifest,created_at,updated_at,dispatched_at,started_at,completed_at,provider_state,provider_checked_at,rg_surveys!inner(archived_at)").is("rg_surveys.archived_at", null).order("created_at", { ascending: false }).limit(500),
         db.from("rg_model_registry").select("id,disease,version,architecture,encoder,input_size,overlap,threshold,minimum_component_pixels,active,validation_summary").order("disease"),
-        smsGatewayStatus(),
+        smsGatewayHealth(db),
       ]);
       [surveys, bulletins, contacts, farms, campaigns, assets, jobs, models].forEach((r) => { if (r.error) throw new Error(r.error.message); });
       const farmRows = farms.data || [];
@@ -645,10 +629,11 @@ Deno.serve(async (req) => {
         assets: (assets.data || []).map((asset) => ({ ...asset, name: asset.filename, status: asset.state })),
         jobs: jobRows,
         models: models.data || [],
+        sms_health: smsStatus,
         providers: {
           drive: Deno.env.get("GOOGLE_DRIVE_REFRESH_TOKEN") ? "connected" : "configuration_required",
           kaggle: Deno.env.get("KAGGLE_DISPATCH_URL") && Deno.env.get("KAGGLE_DISPATCH_SECRET") ? "connected" : "configuration_required",
-          sms: smsStatus,
+          sms: smsStatus.state,
           advisory: Deno.env.get("OLLAMA_API_KEY") ? "connected" : "configuration_required",
         },
       });
@@ -1061,6 +1046,13 @@ Deno.serve(async (req) => {
       return reply({ correction_draft: true, advisory_revision: updated.advisory_revision });
     }
 
+    if (action === "sms-gateway-health") return reply(await smsGatewayHealth(db));
+    if (action === "sms-gateway-register-ping") {
+      const token = Deno.env.get("SMS_GATE_WEBHOOK_TOKEN");
+      if (!token) return failure("The SMS webhook token is not configured", 503, "CONFIGURATION_REQUIRED");
+      return reply(await registerPingWebhook(`${Deno.env.get("SUPABASE_URL")}/functions/v1/sms-webhook?token=${encodeURIComponent(token)}`));
+    }
+
     if (action === "sms-preview" || action === "sms-enqueue" || action === "sms-status") {
       if (action === "sms-status") {
         return reply({ campaigns: check(await db.rpc("rg_sms_campaign_stats")), gateway: await smsGatewayStatus(), dispatch_enabled: Deno.env.get("SMS_DISPATCH_ENABLED") === "true" });
@@ -1136,6 +1128,24 @@ Deno.serve(async (req) => {
         public_path: readiness.public_path, map_eligible: readiness.map_eligible });
     }
 
+    if (action === "update-contact") {
+      const phone = requiredText(p.phone, 20);
+      return reply(check(await db.rpc("rg_update_contact", { p_contact: uuid(p.id), p_actor: user.id,
+        p_name: requiredText(p.name, 120), p_phone: phone, p_location: optionalText(p.location, 240) || "" })));
+    }
+    if (action === "delete-contact") {
+      if (p.confirmed !== true) throw new Error("Confirm the deletion first");
+      return reply(check(await db.rpc("rg_delete_contact", { p_contact: uuid(p.id), p_actor: user.id })));
+    }
+    if (action === "update-survey") {
+      return reply(check(await db.rpc("rg_update_survey", { p_survey: uuid(p.id), p_actor: user.id,
+        p_name: requiredText(p.name, 160), p_note: optionalText(p.note, 1000) || "" })));
+    }
+    if (action === "archive-survey") {
+      if (p.confirmed !== true) throw new Error("Confirm the deletion first");
+      return reply(check(await db.rpc("rg_archive_survey", { p_survey: uuid(p.id), p_actor: user.id })));
+    }
+
     if (action === "create-contact") {
       const phone = requiredText(p.phone, 20);
       if (!/^\+639\d{9}$/.test(phone)) throw new Error("Invalid Philippine mobile number");
@@ -1155,7 +1165,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     const detail = error instanceof Error ? error.message : "Operation failed";
     console.error(JSON.stringify({ request_id: requestId, error: detail.slice(0, 1000) }));
-    if (/Stale|changed|unreviewed|Create a correction|Complete images|Advisory unavailable|Survey unavailable|Approve the exact/i.test(detail)) return failure(detail, 409, "VALIDATION_ERROR");
+    if (/Stale|changed|unreviewed|Create a correction|Complete images|Advisory unavailable|Survey unavailable|Contact unavailable|Withdraw the published|Wait until processing|Confirm the deletion/i.test(detail)) return failure(detail, 409, "VALIDATION_ERROR");
     if (/Active admin role required/i.test(detail)) return failure("Active administrator approval is required", 403);
     if (["save-severity-review","save-location"].includes(requestAction)) return failure(detail, 400, "VALIDATION_ERROR");
     if (/Select a valid current Region II barangay/i.test(detail))

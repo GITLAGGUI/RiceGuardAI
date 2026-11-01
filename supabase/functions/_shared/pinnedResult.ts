@@ -3,14 +3,18 @@ import { validateResultV2, type ModelBundle, type ResultV2 } from "../../../shar
 // This hash includes every packaged Kaggle worker/adapter source and the
 // private two-specialist bundle. Changing any source requires a new pin.
 // New jobs use the lesion bundle (b10 UNet ConvNeXt-B for BLB, YOLO26l for Brown Spot).
-export const PINNED_KAGGLE_WORKFLOW_SHA256 = "20d3fc452a6f4575791162fbf28a21a592cf7b9ea8992852940e165459b03eb2";
+export const PINNED_KAGGLE_WORKFLOW_SHA256 = "88fe3e4eef70dbc8ed4470e6ea7e904d14fd6d031fc4b7dd6d7d3730b1d005e0";
+// Earlier lesion-bundle worker sources; their finished jobs still validate.
+export const PREVIOUS_LESION_WORKFLOWS = ["20d3fc452a6f4575791162fbf28a21a592cf7b9ea8992852940e165459b03eb2"];
+const isLesionWorkflow = (hash: unknown) =>
+  hash === PINNED_KAGGLE_WORKFLOW_SHA256 || PREVIOUS_LESION_WORKFLOWS.includes(hash as string);
 export const YOLO26M_WORKFLOWS = [
   "df3d156e64d778ea818fdb34005a340570661d40e0d9a306ec891087f68a35de",
   "09533f998a7e51ad8f44703aef1d7dee8eb91b4251681a538cabe881b5bec5b0",
   "7695ca57f8d093c05fe73c916bb9c13315b615b6210ef76343dae0423a84ab62",
 ];
 export const isSupportedPinnedWorkflow = (hash: unknown): hash is string =>
-  hash === PINNED_KAGGLE_WORKFLOW_SHA256 || YOLO26M_WORKFLOWS.includes(hash as string);
+  isLesionWorkflow(hash) || YOLO26M_WORKFLOWS.includes(hash as string);
 export const LESION_BUNDLE = {
   id: "riceguard-b10unet-yolo26l-20261023",
   models: {
@@ -26,7 +30,7 @@ const YOLO26M_BUNDLE = {
   },
 } as const;
 export const expectedBundle = (workflow: unknown) =>
-  workflow === PINNED_KAGGLE_WORKFLOW_SHA256 ? LESION_BUNDLE : YOLO26M_BUNDLE;
+  isLesionWorkflow(workflow) ? LESION_BUNDLE : YOLO26M_BUNDLE;
 
 export interface PinnedJob {
   provider: string;

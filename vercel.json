@@ -4,7 +4,7 @@
   "framework": null,
   "installCommand": "echo skipped",
   "functions": {
-    "api/kaggle.py": { "maxDuration": 60 }
+    "api/kaggle.py": { "maxDuration": 60, "excludeFiles": "{frontend/**,docs/**,qa/**,supabase/**,tools/**,output/**,*.png,*.md}" }
   },
   "rewrites": [
     { "source": "/.well-known/oauth-protected-resource/api/advisory-mcp", "destination": "https://pekowozxnyyeskymjxyx.supabase.co/functions/v1/advisory-mcp/metadata/resource" },

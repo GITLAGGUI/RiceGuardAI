@@ -306,9 +306,11 @@ Deno.serve(async (req) => {
           job_id: job.id, run_id: job.run_id, artifacts });
         const response = await signedAwsPost(requestBody, awsSettings());
         const signed = await response.json().catch(() => null);
+        // 503 lets the worker retry the same request; the reason is kept for the job log.
         if (!response.ok || !signed?.private_uploads ||
           Object.keys(signed.private_uploads).length !== Object.keys(artifacts).length)
-          throw new Error("Private upload URLs are unavailable");
+          return json({ error: `Private upload URLs are unavailable (${response.status}${
+            typeof signed?.error === "string" ? `: ${signed.error.slice(0, 160)}` : ""})` }, 503);
         Object.assign(privateUploads, signed.private_uploads);
       }
       if (Object.keys(privateUploads).length !== Object.keys(verified.artifacts!).length)
@@ -378,7 +380,8 @@ Deno.serve(async (req) => {
 
     if (body.action === "progress") {
       const progress = Math.max(1, Math.min(99, Math.round(Number(body.payload?.progress || 1))));
-      await db.from("rg_processing_jobs").update({ callback_sequence: sequence, progress, status: "Running", updated_at: new Date().toISOString() }).eq("id", job.id);
+      await db.from("rg_processing_jobs").update({ callback_sequence: sequence, progress, status: "Running", provider_state: "running", updated_at: new Date().toISOString() }).eq("id", job.id);
+      await db.from("rg_processing_jobs").update({ started_at: new Date().toISOString() }).eq("id", job.id).is("started_at", null);
       await db.from("rg_surveys").update({ progress, status: "Running", stage_updated_at: new Date().toISOString() }).eq("id", job.survey_id);
       return json({ accepted: true });
     }

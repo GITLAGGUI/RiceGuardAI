@@ -73,6 +73,13 @@ Deno.serve(async (req) => {
   if (!event.id || !/^[\w-]{8,100}$/.test(event.id) || !event.payload || !event.event) {
     return json({ error: "Invalid event" }, 400);
   }
+  // Heartbeat from the phone: keep only the latest one, it is what the website reads as "online".
+  if (event.event === "system:ping") {
+    const removed = await db.from("rg_events").delete().eq("kind", "system:ping");
+    const ping = await db.from("rg_events").insert({ external_id: `sms-gate:${event.id}`, kind: "system:ping", entity_id: "sms-gate" });
+    if (removed.error || (ping.error && ping.error.code !== "23505")) return json({ error: "Could not record heartbeat" }, 500);
+    return json({ accepted: true });
+  }
   const allowed = ["sms:received", "sms:sent", "sms:delivered", "sms:failed"];
   if (!allowed.includes(event.event)) return json({ accepted: true });
   const externalId = `sms-gate:${event.id}`;

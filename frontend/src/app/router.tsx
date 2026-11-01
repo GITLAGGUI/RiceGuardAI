@@ -24,6 +24,12 @@ const OperationsPage = lazy(() =>
 const GeminiConnectionPage = lazy(() =>
   import("@/operations/GeminiConnection").then((m) => ({ default: m.GeminiConnectionPage })),
 );
+// `npm run dev` only: the workspace with synthetic data at /demo, for layout work without a login.
+const DevDemo = lazy(() =>
+  Promise.all([import("@/operations/Admin"), import("@/operations/devFixture")]).then(([admin, fixture]) => ({
+    default: () => <admin.OperationsRoot demo fixture={fixture.devFixture} />,
+  })),
+);
 const deferred = (children: ReactNode) => (
   <Suspense
     fallback={
@@ -59,7 +65,9 @@ const router = createBrowserRouter([
   { path: "/farmer/map", element: <Navigate to="/map" replace /> },
   { path: "/farmer/profile", element: <Navigate to="/preferences" replace /> },
   { path: "/farmer/*", element: <Navigate to="/bulletin" replace /> },
-  { path: "/demo/*", element: <Navigate to="/login" replace /> },
+  import.meta.env.DEV
+    ? { path: "/demo", element: deferred(<DevDemo />), children: [{ index: true, element: <Navigate to="overview" replace /> }, ...operations] }
+    : { path: "/demo/*", element: <Navigate to="/login" replace /> },
   {
     element: <ProtectedRoute role="admin" />,
     children: [

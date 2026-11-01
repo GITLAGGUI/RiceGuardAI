@@ -54,13 +54,17 @@ export async function operation(action: string, payload: unknown = {}) {
 }
 export function OperationsProvider({
   demo,
+  fixture,
   children,
 }: {
   demo: boolean;
+  /** Dev-only: demo data to show instead of the bundled sample (never persisted). */
+  fixture?: OperationsData;
   children: ReactNode;
 }) {
   const [data, setData] = useState<OperationsData>(() => {
     if (!demo) return empty;
+    if (fixture) return structuredClone(fixture);
     try {
       return (
         JSON.parse(localStorage.getItem(key) || "null") ||
@@ -147,8 +151,8 @@ export function OperationsProvider({
     return () => { clearTimeout(timer); void supabase.removeChannel(channel); };
   }, [demo, refresh]);
   useEffect(() => {
-    if (demo) localStorage.setItem(key, JSON.stringify(data));
-  }, [data, demo]);
+    if (demo && !fixture) localStorage.setItem(key, JSON.stringify(data));
+  }, [data, demo, fixture]);
   const live = async (action: string, payload: unknown) => {
     const response = await operation(action, payload);
     await refresh();

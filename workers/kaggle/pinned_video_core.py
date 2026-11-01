@@ -6,6 +6,7 @@ private checkpoint files. This module performs no network calls or publication.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 from pathlib import Path
@@ -75,45 +76,56 @@ def pack_private_masks(output_dir: Path, receipts: list[dict]) -> tuple[str, str
     return archive.name, digest(archive)
 
 
-def run(input_dir: Path, output_dir: Path) -> dict:
+def run(input_dir: Path, output_dir: Path, loaded: tuple | None = None) -> dict:
     started = time.monotonic()
     manifest = validate_input(input_dir)
     if output_dir.exists():
         raise FileExistsError("Private result path already exists; no output was overwritten")
-    models, environment = load_models(input_dir)
+    # Reuse the photo run's verified specialists instead of loading them twice.
+    models, environment = loaded or load_models(input_dir)
     masks_dir, frames_dir = output_dir / "masks", output_dir / "review_frames"
     masks_dir.mkdir(parents=True)
     frames_dir.mkdir()
     receipts = []
-    for item in manifest["frames"]:
-        index = item["index"]
-        source = input_dir / "frames" / item["name"]
-        if digest(source) != item["sha256"]:
-            raise ValueError(f"Original extracted frame hash mismatch: {index}")
-        with Image.open(source) as opened:
-            if opened.format != "JPEG" or opened.size != (manifest["width"], manifest["height"]) or opened.getexif():
-                raise ValueError(f"Changed or unsanitized source frame: {index}")
-            frame = opened.convert("RGB")
-        masks = {disease: stitch(frame, model) for disease, model in models.items()}
-        mask_paths = {}
-        predicted = {}
+
+    def short(disease: str) -> str:
+        return "blb" if disease == "BLB" else "brownspot"
+
+    def write_frame(index: int, frame: Image.Image, masks: dict) -> None:
         for disease, mask in masks.items():
-            short = "blb" if disease == "BLB" else "brownspot"
-            path = masks_dir / f"frame_{index + 1:06d}_{short}.png"
-            Image.fromarray(mask.astype(np.uint8) * 255).save(path)
-            mask_paths[disease] = path.relative_to(output_dir).as_posix()
-            predicted[disease] = int(mask.sum())
-        preview_path = frames_dir / f"frame_{index + 1:06d}.jpg"
-        if not cv2.imwrite(str(preview_path), cv2.cvtColor(render(frame, masks), cv2.COLOR_RGB2BGR),
+            Image.fromarray(mask.astype(np.uint8) * 255).save(masks_dir / f"frame_{index + 1:06d}_{short(disease)}.png")
+        if not cv2.imwrite(str(frames_dir / f"frame_{index + 1:06d}.jpg"),
+                           cv2.cvtColor(render(frame, masks), cv2.COLOR_RGB2BGR),
                            [cv2.IMWRITE_JPEG_QUALITY, 92]):
             raise RuntimeError("Could not encode review frame")
-        receipts.append({"index": index, "source_time_seconds": item["source_time_seconds"],
-                         "source_sha256": item["sha256"], "mask_paths": mask_paths,
-                         "predicted_pixels": predicted,
-                         "review_frame_path": preview_path.relative_to(output_dir).as_posix()})
-        if (index + 1) % 30 == 0 or index + 1 == len(manifest["frames"]):
-            (output_dir / "progress.json").write_text(json.dumps({"frames_done": index + 1,
-                "frames_total": len(manifest["frames"])}), encoding="utf-8")
+
+    pending = []
+    # Frame encoding runs beside GPU inference of the following frames.
+    with ThreadPoolExecutor(max_workers=3) as writer:
+        for item in manifest["frames"]:
+            index = item["index"]
+            source = input_dir / "frames" / item["name"]
+            if digest(source) != item["sha256"]:
+                raise ValueError(f"Original extracted frame hash mismatch: {index}")
+            with Image.open(source) as opened:
+                if opened.format != "JPEG" or opened.size != (manifest["width"], manifest["height"]) or opened.getexif():
+                    raise ValueError(f"Changed or unsanitized source frame: {index}")
+                frame = opened.convert("RGB")
+            masks = {disease: stitch(frame, model) for disease, model in models.items()}
+            pending.append(writer.submit(write_frame, index, frame, masks))
+            if len(pending) > 6:
+                pending.pop(0).result()
+            receipts.append({"index": index, "source_time_seconds": item["source_time_seconds"],
+                             "source_sha256": item["sha256"],
+                             "mask_paths": {disease: f"masks/frame_{index + 1:06d}_{short(disease)}.png"
+                                            for disease in masks},
+                             "predicted_pixels": {disease: int(mask.sum()) for disease, mask in masks.items()},
+                             "review_frame_path": f"review_frames/frame_{index + 1:06d}.jpg"})
+            if (index + 1) % 30 == 0 or index + 1 == len(manifest["frames"]):
+                (output_dir / "progress.json").write_text(json.dumps({"frames_done": index + 1,
+                    "frames_total": len(manifest["frames"])}), encoding="utf-8")
+        for future in pending:
+            future.result()
     (output_dir / "frame_receipts.json").write_text(json.dumps(receipts, indent=2), encoding="utf-8")
     archive_name, archive_hash = pack_private_masks(output_dir, receipts)
     video = output_dir / "review.mp4"

@@ -85,6 +85,8 @@ Deno.serve(async (req) => {
       status: "Running",
       kaggle_kernel_ref: result.kernel_ref,
       kaggle_version: result.version || null,
+      dispatched_at: new Date().toISOString(),
+      provider_state: "queued",
       progress: 1,
       lease_owner: null,
       lease_expires_at: null,

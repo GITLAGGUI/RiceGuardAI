@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 subprocess.check_call([sys.executable, "-m", "pip", "install", "-q",
                        "ultralytics==8.4.115", "segmentation-models-pytorch==0.5.0", "timm==1.0.30",
@@ -36,6 +37,8 @@ NATIVE_COMPLETED = False
 
 
 def callback(action: str, payload: dict | None = None, sequenced: bool = False) -> dict:
+    """POST one worker event. Transient failures are retried with the same body and
+    sequence, which the callback treats as an idempotent replay."""
     global SEQUENCE
     body = {"job_id": JOB_ID, "action": action}
     if sequenced:
@@ -43,13 +46,20 @@ def callback(action: str, payload: dict | None = None, sequenced: bool = False) 
         body["sequence"] = SEQUENCE
     if payload is not None:
         body["payload"] = payload
-    attempts = 5 if action == "manifest-pinned" and not sequenced else 1
+    attempts = 5
     response = None
     for attempt in range(attempts):
-        response = requests.post(CALLBACK_URL, headers=HEADERS, json=body, timeout=180)
+        try:
+            response = requests.post(CALLBACK_URL, headers=HEADERS, json=body, timeout=180)
+        except requests.RequestException:
+            response = None
+            if attempt + 1 >= attempts:
+                raise RuntimeError(f"Worker callback {action} was unreachable")
+            time.sleep(2 ** (attempt + 1))
+            continue
         if response.ok:
             return response.json()
-        if response.status_code not in (429, 502, 503, 504) or attempt + 1 >= attempts:
+        if response.status_code not in (429, 500, 502, 503, 504) or attempt + 1 >= attempts:
             break
         time.sleep(2 ** (attempt + 1))
     try:
@@ -103,23 +113,29 @@ def main():
     inputs, photo_results, video_results = root / "inputs", root / "photos", root / "video"
     inputs.mkdir()
     callback("progress", {"progress": 2, "stage": "downloading-pinned-inputs"}, True)
-    for disease, filename in (("BLB", "blb.pt"), ("Brown Spot", "brownspot.pt")):
-        model = context["bundle"]["models"][disease]
-        download(context["model_downloads"][disease], inputs / filename, model["sha256"])
-    models, runtime = load_specialists(inputs)
-    callback("progress", {"progress": 7, "stage": "models-verified", "runtime": runtime}, True)
-
+    # Models and Drive originals download in parallel; each is still checksum-verified.
     sources = []
     local_by_id = {}
-    for asset in manifest["assets"]:
-        local = inputs / f"{asset['id']}{Path(asset['filename']).suffix.lower()}"
-        drive_download(asset["drive_file_id"], local, context["drive_access_token"], asset["checksum"])
-        local_by_id[asset["id"]] = local
-        sources.append({"id": asset["id"], "mime": asset["mime"], "width": asset["width"],
-                        "height": asset["height"], "sha256": asset["checksum"],
-                        "clip_start_seconds": asset.get("clip_start_seconds"),
-                        "clip_duration_seconds": asset.get("clip_duration_seconds"),
-                        "linked_photo_asset_id": asset.get("linked_photo_asset_id")})
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        pending = []
+        for disease, filename in (("BLB", "blb.pt"), ("Brown Spot", "brownspot.pt")):
+            model = context["bundle"]["models"][disease]
+            pending.append(pool.submit(download, context["model_downloads"][disease], inputs / filename,
+                                       model["sha256"]))
+        for asset in manifest["assets"]:
+            local = inputs / f"{asset['id']}{Path(asset['filename']).suffix.lower()}"
+            pending.append(pool.submit(drive_download, asset["drive_file_id"], local,
+                                       context["drive_access_token"], asset["checksum"]))
+            local_by_id[asset["id"]] = local
+            sources.append({"id": asset["id"], "mime": asset["mime"], "width": asset["width"],
+                            "height": asset["height"], "sha256": asset["checksum"],
+                            "clip_start_seconds": asset.get("clip_start_seconds"),
+                            "clip_duration_seconds": asset.get("clip_duration_seconds"),
+                            "linked_photo_asset_id": asset.get("linked_photo_asset_id")})
+        for future in pending:
+            future.result()
+    models, runtime = load_specialists(inputs)
+    callback("progress", {"progress": 7, "stage": "models-verified", "runtime": runtime}, True)
 
     photos = [item for item in sources if item["mime"] in ("image/jpeg", "image/png")]
     photo_receipts = run_photos([{**item, "path": str(local_by_id[item["id"]])} for item in photos],
@@ -136,7 +152,7 @@ def main():
         for filename in ("blb.pt", "brownspot.pt"):
             shutil.copyfile(inputs / filename, video_input / filename)
         video_root = video_results
-        video_summary = run_video(video_input, video_root)
+        video_summary = run_video(video_input, video_root, loaded=(models, runtime))
         video_receipts = json.loads((video_root / "frame_receipts.json").read_text(encoding="utf-8"))
         callback("progress", {"progress": 85, "stage": "video-complete",
                               "frames": len(video_receipts)}, True)

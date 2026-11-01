@@ -26,6 +26,8 @@ Deno.serve(async (req) => {
       const provider = await response.json();
       const state = String(provider.status || provider.state || "").toLowerCase();
       const providerStateIsStale = Date.now() - new Date(job.updated_at).getTime() > 20 * 60_000;
+      // Kept separately from status so the website can say "waiting for a Kaggle GPU".
+      await db.from("rg_processing_jobs").update({ provider_state: state || null, provider_checked_at: new Date().toISOString() }).eq("id", job.id);
       if (["error", "failed", "canceled", "cancelled"].includes(state) ||
         (state === "cancel_acknowledged" && providerStateIsStale)) {
         await db.from("rg_processing_jobs").update({ status: "Failed", error: `Kaggle run ended with status ${state}`, completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", job.id);

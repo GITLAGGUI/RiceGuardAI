@@ -92,7 +92,6 @@ export function VerifyWorkspace() {
     <div className="rg-verify">
       <div className="rg-page-heading">
         <div>
-          <div className="rg-eyebrow">SPECIALIST CHECK</div>
           <h1>I-verify ang mga nakita ng AI</h1>
           <p>Naka-post na at naipadala na ang payo. Tingnan lang ang bawat marka: <b>Tama</b> o <b>Mali</b>.</p>
         </div>
@@ -125,18 +124,24 @@ export function VerifyWorkspace() {
         {survey ? (
           <section className="rg-verify-detail">
             <header className="rg-panel rg-verify-summary">
-              <div>
-                <h2>{survey.name}</h2>
-                <p>{survey.place?.label || survey.location}</p>
+              <div className="rg-verify-title">
+                <h2>{survey.name.split(" · ")[0]}</h2>
+                <p>
+                  {survey.place?.label || survey.location}
+                  {survey.name.includes(" · ") ? <> · {survey.name.split(" · ").slice(1).join(" · ")}</> : null}
+                  {bulletin ? <span className="rg-nowrap"><VerificationBadge status={bulletin.verification_status} size="sm" /></span> : null}
+                </p>
               </div>
-              <div className="rg-verify-summary-meta">
-                {survey.severity_detail ? Object.entries(survey.severity_detail.diseases).map(([d, s]) => (
-                  <span key={d} className="rg-chip"><i style={{ background: DISEASE_COLORS[d as Disease] }} />{d} · {LEVEL[s!.category]} ({s!.percent}%)</span>
-                )) : null}
-                {bulletin?.status === "published" && bulletin.verification_status !== "retracted"
-                  ? <Link className="rg-button rg-secondary" to={`/advisories/${bulletin.slug}`} target="_blank"><ExternalLink size={15} /> Tingnan ang post</Link>
-                  : null}
-              </div>
+              {survey.severity_detail ? (
+                <ul className="rg-verify-severity" aria-label="Severity">
+                  {Object.entries(survey.severity_detail.diseases).map(([d, s]) => (
+                    <li key={d}><i style={{ background: DISEASE_COLORS[d as Disease] }} /><b>{d}</b><span>{LEVEL[s!.category]} · {s!.percent}%</span></li>
+                  ))}
+                </ul>
+              ) : null}
+              {bulletin?.status === "published" && bulletin.verification_status !== "retracted"
+                ? <Link className="rg-button rg-secondary rg-verify-open" to={`/advisories/${bulletin.slug}`} target="_blank"><ExternalLink size={15} /> Tingnan ang post</Link>
+                : null}
             </header>
             {survey.status === "Failed" ? (
               <div className="rg-notice rg-notice-error"><CircleAlert size={18} />

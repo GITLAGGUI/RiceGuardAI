@@ -1,6 +1,6 @@
 // Automation after inference: severity -> place name -> public media -> Ollama advisory ->
 // provisional publication -> SMS. Runs again in "verify" mode after a specialist decides.
-// Triggered by worker-callback and by a 2-minute cron sweeper (CRON_SECRET bearer).
+// Triggered by worker-callback, by its own short retry kick and by a 1-minute cron sweeper (CRON_SECRET bearer).
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { awsSettings, signedAwsPost } from "../_shared/awsSigV4.ts";
 import { computeSeverity, photosFromManifest, type Disease, type SeverityDetail } from "../_shared/autoSeverity.ts";
@@ -31,6 +31,20 @@ async function step(survey: Survey, name: string, status: "running" | "done" | "
   await db.from("rg_pipeline_steps").insert({ survey_id: survey.id, step: name, status, detail, attempt: survey.auto_attempts });
 }
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Retry a transient network or storage step (for example a storage 502 HTML page) before failing the run. */
+async function withRetry<T>(work: () => Promise<T>, tries = 3): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await work();
+    } catch (error) {
+      if (attempt >= tries) throw error;
+      await sleep(1_500 * attempt);
+    }
+  }
+}
+
 const median = (values: number[]) => {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
@@ -57,10 +71,12 @@ async function resolvePlace(survey: Survey, assets: Asset[]) {
 async function signedLinks(job: Record<string, any>, paths: string[]) {
   const links: Record<string, string> = {};
   for (let offset = 0; offset < paths.length; offset += 40) {
-    const response = await signedAwsPost(JSON.stringify({ action: "signed-pinned-review", job_id: job.id, run_id: job.run_id,
-      paths: paths.slice(offset, offset + 40) }), awsSettings());
-    if (!response.ok) throw new Error("Private result signing is unavailable");
-    Object.assign(links, await response.json());
+    Object.assign(links, await withRetry(async () => {
+      const response = await signedAwsPost(JSON.stringify({ action: "signed-pinned-review", job_id: job.id, run_id: job.run_id,
+        paths: paths.slice(offset, offset + 40) }), awsSettings());
+      if (!response.ok) throw new Error("Private result signing is unavailable");
+      return await response.json();
+    }));
   }
   return links;
 }
@@ -78,16 +94,20 @@ async function publishMedia(job: Record<string, any>, survey: Survey, revision: 
   const links = await signedLinks(job, wanted.map(([, , path]) => path));
   const stored: Record<string, string> = {};
   await Promise.all(wanted.map(async ([assetId, variant, path]) => {
-    const response = await fetch(links[path], { signal: AbortSignal.timeout(60_000) });
-    if (!response.ok) throw new Error(`Private media download failed (${response.status})`);
-    const bytes = new Uint8Array(await response.arrayBuffer());
+    const bytes = await withRetry(async () => {
+      const response = await fetch(links[path], { signal: AbortSignal.timeout(60_000) });
+      if (!response.ok) throw new Error(`Private media download failed (${response.status})`);
+      return new Uint8Array(await response.arrayBuffer());
+    });
     const png = path.endsWith(".png");
     const signatureOk = png ? bytes[0] === 0x89 && bytes[1] === 0x50 : bytes[0] === 0xff && bytes[1] === 0xd8;
     if (!signatureOk || bytes.length > 15_000_000) throw new Error("Public media failed verification");
     const target = `${survey.id}/${job.id}/auto-r${revision}/${assetId}-${variant.toLowerCase().replace(/[ _]/g, "-")}.${png ? "png" : "jpg"}`;
-    const upload = await db.storage.from("rg-public-previews").upload(target, bytes,
-      { contentType: png ? "image/png" : "image/jpeg", upsert: true, cacheControl: "31536000" });
-    if (upload.error) throw new Error(`Public media upload failed: ${upload.error.message}`);
+    await withRetry(async () => {
+      const upload = await db.storage.from("rg-public-previews").upload(target, bytes,
+        { contentType: png ? "image/png" : "image/jpeg", upsert: true, cacheControl: "31536000" });
+      if (upload.error) throw new Error(`Public media upload failed: ${upload.error.message}`);
+    });
     stored[`${assetId}|${variant}`] = db.storage.from("rg-public-previews").getPublicUrl(target).data.publicUrl;
   }));
   return ordered.map(({ asset, diseases }, index) => {
@@ -240,9 +260,17 @@ async function processSurvey(survey: Survey) {
   } catch (error) {
     const message = String(error instanceof Error ? error.message : error).slice(0, 500);
     const failed = survey.auto_attempts >= MAX_ATTEMPTS;
+    // 15 s, 30 s, 1 min, 2 min, 4 min: a transient fault clears without waiting for the sweeper.
+    const delay = 15_000 * 2 ** (survey.auto_attempts - 1);
     await db.from("rg_surveys").update({ auto_status: failed ? "failed" : "retry", auto_error: message,
-      auto_next_at: failed ? null : new Date(Date.now() + 2 ** survey.auto_attempts * 60_000).toISOString() }).eq("id", survey.id);
-    await step(survey, "error", "failed", { error: message, will_retry: !failed });
+      auto_next_at: failed ? null : new Date(Date.now() + delay).toISOString() }).eq("id", survey.id);
+    await step(survey, "error", "failed", { error: message, will_retry: !failed, retry_in_seconds: failed ? null : delay / 1000 });
+    if (!failed && delay <= 60_000) {
+      await sleep(delay + 1_000);
+      await fetch(`${url}/functions/v1/auto-pipeline`, { method: "POST",
+        headers: { Authorization: `Bearer ${Deno.env.get("CRON_SECRET")}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ survey_id: survey.id }), signal: AbortSignal.timeout(10_000) }).catch(() => undefined);
+    }
   }
 }
 
