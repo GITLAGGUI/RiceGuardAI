@@ -65,7 +65,7 @@ chekthis.png
 .env*
 
 # Model weights and datasets: documented in README "Models used", never committed
-frontend/public/models/
+frontend/public/models/photo-classifier*/
 *.pt
 *.onnx
 *.bin
