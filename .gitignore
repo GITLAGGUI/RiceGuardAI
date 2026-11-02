@@ -63,3 +63,15 @@ chekthis.png
 # Netlify (legacy hosting, not used anymore)
 .netlify
 .env*
+
+# Model weights and datasets: documented in README "Models used", never committed
+frontend/public/models/
+*.pt
+*.onnx
+*.bin
+datasets/
+
+# Local tool output
+.taste-skill/
+.playwright-cli/
+graphify-out/

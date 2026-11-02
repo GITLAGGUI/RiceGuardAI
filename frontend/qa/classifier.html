@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>RiceGuardAI local classifier check</title>
+<style>body{font:16px system-ui;max-width:900px;margin:40px auto;background:#f6f8f3;color:#153e2c}pre{white-space:pre-wrap;background:white;padding:20px;border:1px solid #ccd6c8}img{max-width:220px;max-height:160px;object-fit:contain}section{margin:20px 0}</style>
+<h1>Local classifier verification</h1>
+<p>Runs the actual website classifier. Photos stay in this browser. This is a local QA page.</p>
+<input id="photos" type="file" multiple accept="image/*"><pre id="status">Choose photos</pre><div id="results"></div>
+<script type="module">
+import { classifyPhoto } from '/src/operations/photoClassifier.ts';
+window.rgInferenceReport = {state:'waiting',results:[]};
+document.querySelector('#photos').addEventListener('change', async event => {
+  const report = window.rgInferenceReport = {state:'running',results:[]};
+  for (const file of event.target.files) {
+    document.querySelector('#status').textContent = `Processing ${file.name}`;
+    const started = performance.now();
+    try {
+      const result = await classifyPhoto(file);
+      report.results.push({file:file.name,seconds:(performance.now()-started)/1000,result});
+      const section=document.createElement('section'),img=document.createElement('img'),pre=document.createElement('pre');
+      img.src=URL.createObjectURL(file);pre.textContent=JSON.stringify(report.results.at(-1),null,2);
+      section.append(img,pre);document.querySelector('#results').append(section);
+    } catch(error) {
+      report.results.push({file:file.name,error:String(error)});
+    }
+  }
+  report.state='complete';document.querySelector('#status').textContent=JSON.stringify(report,null,2);
+});
+</script></html>

@@ -129,6 +129,33 @@ not prove current GPU availability or successful execution.
 - Video frame masks are timestamp aligned; repeated views are not summed into
   a field-area estimate.
 
+## Models used (not stored in this repository)
+
+Model weights and training datasets are kept out of git (see `.gitignore`).
+Each model is identified by its SHA-256 so a deployment can be checked.
+
+| Model | Role | Where it runs | Identity |
+| --- | --- | --- | --- |
+| BLB specialist: U-Net ConvNeXt-B (DINOv3), smp 0.5.0 / timm 1.0.30 | Lesion mask for Bacterial Leaf Blight | Kaggle Tesla T4, 1024 px tiles, stride 768 | `blb.pt`, SHA-256 `7006f33bf08cdfe291a2e3907b28e9e71107289ad6ea81299c9c9b17e98bdf17` |
+| Brown Spot specialist: YOLO26l semantic, ultralytics 8.4.115 | Lesion mask for Brown Spot | Kaggle Tesla T4, same tiling | `brownspot.pt`, SHA-256 `b311478a6c47e353c353b9ec060a3e885ad431394d7dade04b6972fd59060b33` |
+| Photo classifier: ConvNeXt-Small (DINOv3), 3 classes (BLB, Brown Spot, Soil Nitrogen) | Informative per-photo percentages shown in Verify findings | Kaggle T4 inside the same job (ONNX fp32 converted with onnx2torch), 24 tiles of 512 px at half resolution, input 384 | `riceguard-photo-classifier-20261026-fp32`, SHA-256 `aa85bf51dcc656347c21d01048b85314a9ea2e0fd02ad10228efb328a9c44c77` |
+| Gemma 4 (`gemma4:31b`, Ollama Cloud) | Pre-upload photo check (crop stage, likely diseases, pests and nutrient conditions, photo quality) and the automated advisory text | Server side, `field-operations` `photo-insight` and `auto-pipeline` | Hosted model; no weights in this project |
+
+- The two specialist checkpoints live in the private S3 bucket under
+  `website-inference/v2/models/<sha256>.pt` and are handed to each Kaggle run
+  as short-lived signed URLs after a hash check.
+- The photo classifier is served to the Kaggle worker from
+  `frontend/public/models/photo-classifier-fp32/` on the deployed site
+  (manifest plus parts, checked by SHA-256). Those files are not committed;
+  copy them into that folder before deploying. An int8 export
+  (`riceguard-photo-classifier-20261026-int8`, SHA-256
+  `5becaac075045ce7b468edba7029972ad78c4b5b47f690698a7ed32073da6568`, 57 MB)
+  exists but browsers no longer run the classifier.
+- Durable copies: `OneDrive/AI-Assets/RiceGuardAI/2026-11-01/models/`.
+- The classifier and Gemma 4 are informative only. Measured findings,
+  severity and publication come from the two pinned specialists and the
+  specialist's Tama / Mali / Hindi sigurado decisions.
+
 ## Release verification
 
 The local SMS hook is disabled by default so linked read-only CLI checks do
