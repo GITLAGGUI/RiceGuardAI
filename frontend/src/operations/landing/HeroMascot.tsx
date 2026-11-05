@@ -27,7 +27,7 @@ const FINDINGS: Record<Finding, { name: string; risk: string; measure: string; i
  * The hero mascot. RiceField3D owns the choreography (where it flies, when it stops, what it found)
  * and writes positions through the rig every frame; React only renders when the card's step changes.
  */
-export function HeroMascot({ active }: { active: boolean }) {
+export function HeroMascot({ active, still }: { active: boolean; still: boolean }) {
   const root = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
   const layerA = useRef<HTMLImageElement>(null);
@@ -37,7 +37,6 @@ export function HeroMascot({ active }: { active: boolean }) {
   const link = useRef<HTMLDivElement>(null);
   const dot = useRef<HTMLDivElement>(null);
   const cardEl = useRef<HTMLDivElement>(null);
-  // The card stays closed until the choreography places it; opened early it sat at the hero's top-left corner.
   const [card, setCard] = useState<{ finding: Finding; step: number }>({ finding: "blb", step: 0 });
 
   useEffect(() => {
@@ -123,9 +122,12 @@ export function HeroMascot({ active }: { active: boolean }) {
   }, [active]);
 
   const f = FINDINGS[card.finding];
-  const open = card.step > 0;
+  // With reduced motion the finished card sits where CSS puts it. Otherwise it stays closed until the
+  // choreography has placed it; opened early it sat at the hero's top-left corner while the 3D loaded.
+  const step = still ? 5 : card.step;
+  const open = step > 0;
   return (
-    <div className={`lp-rig ${active ? "" : "is-static"}`} aria-hidden="true">
+    <div className={`lp-rig ${still ? "is-static" : ""}`} aria-hidden="true">
       <div className="lp-rig-light">
         <div ref={beamEl} className="lp-beam" />
         <div ref={pool} className="lp-pool" />
@@ -134,24 +136,24 @@ export function HeroMascot({ active }: { active: boolean }) {
       </div>
       <div className="lp-mascot" ref={root}>
         <div className="lp-mascot-body" ref={body}>
-          <img ref={layerA} className="is-on" src={src(active ? "search-right" : "confirmed")} alt="" width={BODY_PX} height={BODY_PX} draggable={false} />
+          <img ref={layerA} className="is-on" src={src(still ? "confirmed" : "search-right")} alt="" width={BODY_PX} height={BODY_PX} draggable={false} />
           <img ref={layerB} src={src("search-left")} alt="" width={BODY_PX} height={BODY_PX} draggable={false} />
         </div>
       </div>
-      <div ref={cardEl} className={`lp-find is-${card.finding} step-${card.step} ${open ? "is-open" : ""}`}>
+      <div ref={cardEl} className={`lp-find is-${card.finding} step-${step} ${open ? "is-open" : ""}`}>
         <figure>
           <img src={`${f.image}.webp`} alt="" width={112} height={112} />
           <img className="lp-find-mask" src={`${f.image}-mask.webp`} alt="" width={112} height={112} />
           <i className="lp-find-scan" />
         </figure>
         <div className="lp-find-text">
-          <small>{card.step >= 5 ? "Checked by RiceGuardAI" : "Checking the leaves…"}</small>
+          <small>{step >= 5 ? "Checked by RiceGuardAI" : "Checking the leaves…"}</small>
           <h3>{f.name}</h3>
-          <span className="lp-find-pill">{card.step >= 5 ? f.risk : <><i />Scanning</>}</span>
-          {card.step >= 5 ? <p>{f.measure}</p> : (
+          <span className="lp-find-pill">{step >= 5 ? f.risk : <><i />Scanning</>}</span>
+          {step >= 5 ? <p>{f.measure}</p> : (
             <ul>
               {f.checks.map((check, i) => (
-                <li key={check} className={card.step >= i + 2 ? "is-done" : ""}><span><Check size={11} strokeWidth={3.2} /></span>{check}</li>
+                <li key={check} className={step >= i + 2 ? "is-done" : ""}><span><Check size={11} strokeWidth={3.2} /></span>{check}</li>
               ))}
             </ul>
           )}

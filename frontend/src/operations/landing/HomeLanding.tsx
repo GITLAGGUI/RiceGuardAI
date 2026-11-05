@@ -263,7 +263,7 @@ function Hero({ latest, smsPath, smsLabel }: { latest?: Bulletin; smsPath: strin
         <div className="lp-hero-horizon" />
       </div>
       <div className="lp-hero-scrim" aria-hidden="true" />
-      <HeroMascot active={show3D && !reduced} />
+      <HeroMascot active={show3D && !reduced} still={reduced} />
       <div className="lp-hero-copy" ref={copy}>
         <h1 id="lp-hero-title">
           {headline.map((line, lineIndex) => (
