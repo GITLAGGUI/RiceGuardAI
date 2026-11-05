@@ -35,6 +35,8 @@ PINNED_MODELS = {
     "BLB": ("7006f33bf08cdfe291a2e3907b28e9e71107289ad6ea81299c9c9b17e98bdf17", "unet-convnext-b-dinov3"),
     "Brown Spot": ("b311478a6c47e353c353b9ec060a3e885ad431394d7dade04b6972fd59060b33", "yolo26l-semantic"),
 }
+# Photo classifier (ConvNeXt-Small, fp32 ONNX) for the informative per-photo percentages.
+CLASSIFIER_SHA256 = "aa85bf51dcc656347c21d01048b85314a9ea2e0fd02ad10228efb328a9c44c77"
 MAX_SOURCE = 200_000_000
 s3 = boto3.client("s3")
 presign_s3 = boto3.client("s3", config=Config(signature_version="s3v4"))
@@ -296,7 +298,26 @@ def signed_pinned_models(body):
             raise ValueError("Private model object verification failed")
         downloads[disease] = presign_s3.generate_presigned_url(
             "get_object", Params={"Bucket": BUCKET, "Key": key}, ExpiresIn=900)
-    return {"bundle": bundle, "model_downloads": downloads, "expires_in_seconds": 900}
+    return {"bundle": bundle, "model_downloads": downloads, "classifier": signed_classifier(),
+            "expires_in_seconds": 900}
+
+
+def signed_classifier():
+    """The informative photo classifier: optional, so a missing object never blocks the specialists."""
+    key = f"{PREFIX}/models/{CLASSIFIER_SHA256}.onnx"
+    try:
+        manifest = json.loads(s3.get_object(Bucket=BUCKET, Key=f"{PREFIX}/models/{CLASSIFIER_SHA256}.json")["Body"].read())
+        head = s3.head_object(Bucket=BUCKET, Key=key)
+        if (manifest.get("sha256") != CLASSIFIER_SHA256 or manifest.get("key") != key or
+                head.get("ContentLength") != manifest.get("bytes") or
+                head.get("Metadata", {}).get("sha256") != CLASSIFIER_SHA256):
+            raise ValueError("Unpinned classifier object")
+    except Exception:  # noqa: BLE001
+        import traceback
+        traceback.print_exc()
+        return None
+    return {"manifest": manifest, "download": presign_s3.generate_presigned_url(
+        "get_object", Params={"Bucket": BUCKET, "Key": key}, ExpiresIn=900)}
 
 
 def pinned_artifact_receipts(body):

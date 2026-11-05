@@ -71,26 +71,30 @@ def callback(action: str, payload: dict | None = None, sequenced: bool = False) 
     raise RuntimeError(f"Worker callback {action} returned {response.status_code}: {reason}")
 
 
-CLASSIFIER_MANIFEST = "https://riceguardai.dev/models/photo-classifier-fp32/manifest.json"
+CLASSIFIER_SHA256 = "aa85bf51dcc656347c21d01048b85314a9ea2e0fd02ad10228efb328a9c44c77"
 CLASSES = ("BLB", "Brown Spot", "Soil Nitrogen")
 
 
-def load_classifier() -> tuple:
+def load_classifier(signed: dict | None) -> tuple:
     """The website's photo classifier (BLB / Brown Spot / Soil Nitrogen), prepared for this job's GPU so
-    the uploader's browser never has to run it. The published fp32 ONNX export is converted to PyTorch
+    the uploader's browser never has to run it. The fp32 ONNX export lives in the private model bucket
+    next to the specialists and arrives as a short-lived signed URL; it is converted to PyTorch
     (onnx2torch, logits match ONNX Runtime to 1e-6). Runs in a background thread while inputs download."""
+    if not signed or not signed.get("download") or not isinstance(signed.get("manifest"), dict):
+        raise RuntimeError("Classifier download was not provided")
+    manifest = signed["manifest"]
+    if manifest.get("sha256") != CLASSIFIER_SHA256 or tuple(manifest.get("classes", ())) != CLASSES:
+        raise ValueError("Unpinned classifier")
     # Installed here, not with the specialists, so a failed install only skips this informative step.
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "onnx==1.23.2", "onnx2torch==1.5.15"])
     import onnx
     import torch
     from onnx2torch import convert
 
-    manifest = requests.get(CLASSIFIER_MANIFEST, timeout=30).json()
-    if tuple(manifest["classes"]) != CLASSES:
-        raise ValueError("Classifier classes changed")
-    base = CLASSIFIER_MANIFEST.rsplit("/", 1)[0] + "/"
-    data = b"".join(requests.get(base + part, timeout=180).content for part in manifest["parts"])
-    if hashlib.sha256(data).hexdigest() != manifest["sha256"]:
+    response = requests.get(signed["download"], timeout=300)
+    response.raise_for_status()
+    data = response.content
+    if hashlib.sha256(data).hexdigest() != CLASSIFIER_SHA256:
         raise ValueError("Classifier model failed its integrity check")
     device = "cuda" if torch.cuda.is_available() else "cpu"
     return convert(onnx.load_from_string(data)).eval().to(device), manifest, device
@@ -183,7 +187,7 @@ def main():
 
     def prepare_classifier():
         try:
-            classifier["loaded"] = load_classifier()
+            classifier["loaded"] = load_classifier(context.get("classifier"))
         except Exception as error:  # noqa: BLE001
             classifier["error"] = str(error)[:300]
 

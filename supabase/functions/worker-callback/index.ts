@@ -264,6 +264,8 @@ Deno.serve(async (req) => {
         survey_id: job.survey_id,
         advisory_media_enabled: Deno.env.get("RG_GEMINI_VISUAL_PREPARATION_ENABLED") === "true",
         model_downloads: modelContext.model_downloads,
+        // Informative photo classifier from the same private bucket; the worker checks its pinned hash.
+        classifier: modelContext.classifier ?? null,
         download_expires_in_seconds: modelContext.expires_in_seconds,
       });
     }
