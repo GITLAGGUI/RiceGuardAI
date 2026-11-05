@@ -1,3 +1,6 @@
+// GABAY: Ang landing page ("/"). Hero (3D palayan + mascot), "How it works", film section ("What is RiceGuardAI?"),
+// advisories at footer. Styles: landing.css, landing-v4.css at hero-v5.css (hero at film).
+// Para palitan ang film: FILM_SRC sa ibaba at ang file sa frontend/public/video/.
 import { Component, lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, ArrowUpRight, Check, MapPin, Menu, MessageSquareText, Play, ScanLine, ShieldCheck, Volume2, X } from "lucide-react";

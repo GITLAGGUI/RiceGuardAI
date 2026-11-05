@@ -1,3 +1,4 @@
+// GABAY: Ang Leaflet na mapa (public /map at staff map). Pins, kulay ng severity at Region II boundary.
 import { useEffect, useMemo, useState } from "react";
 import {
   MapContainer,

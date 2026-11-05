@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
-import { supabase, supabaseConfigured } from "@/lib/supabase";
+import { localSkipMfa, supabase, supabaseConfigured } from "@/lib/supabase";
 import type { Profile, UserRole } from "@/types/database";
 
 interface AuthContextValue {
@@ -29,6 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshAal = async () => {
     if (!supabaseConfigured) return;
+    if (localSkipMfa) { setAal("aal2"); return; } // local debugging lang (tingnan ang lib/supabase.ts)
     const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     setAal((data?.currentLevel as "aal1" | "aal2" | null) || null);
   };

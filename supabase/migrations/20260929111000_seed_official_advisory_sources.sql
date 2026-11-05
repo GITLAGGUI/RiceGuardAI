@@ -7,7 +7,9 @@ declare
 begin
   select id into reviewer from public.profiles
     where role='admin' and is_active order by created_at asc limit 1;
-  if reviewer is null then raise exception 'An active administrator is required to install advisory sources'; end if;
+  -- Bagong (local) database na wala pang admin: laktawan muna. Ang supabase/seed.sql ang gagawa ng local admin
+  -- at patatakbuhin ulit ang file na ito (tingnan ang [db.seed] sa config.toml). Na-apply na ito sa production.
+  if reviewer is null then raise notice 'No active administrator yet; advisory sources skipped'; return; end if;
 
   insert into public.rg_advisory_sources(
     id,disease,title,version,guidance,source_reference,reviewed_by,approved_at,active

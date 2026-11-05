@@ -1,3 +1,4 @@
+// GABAY: Ang chat assistant (mascot sa kanang ibaba ng public pages). Tumatawag sa edge function na public-assistant.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, ArrowRight, HelpCircle, Send, Sparkles, X } from "lucide-react";

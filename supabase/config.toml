@@ -12,6 +12,16 @@ port = 54322
 shadow_port = 54320
 major_version = 17
 
+[db.seed]
+enabled = true
+# GABAY: seed.sql muna (gumagawa ng local admin), tapos ang dalawang migration na nangangailangan ng admin para
+# mailagay ang official advisory sources sa bagong local database. Hindi ito tumatakbo sa production.
+sql_paths = [
+  "./seed.sql",
+  "./migrations/20260929111000_seed_official_advisory_sources.sql",
+  "./migrations/20260930110000_context_aware_advisories.sql",
+]
+
 [studio]
 enabled = true
 port = 54323
@@ -27,10 +37,18 @@ file_size_limit = "50MiB"
 [auth]
 enabled = true
 site_url = "http://localhost:5173"
-additional_redirect_urls = ["https://riceguard.vercel.app"]
+additional_redirect_urls = ["https://riceguard.vercel.app", "http://localhost:5181"]
 jwt_expiry = 3600
 enable_signup = true
 enable_anonymous_sign_ins = false
+
+[auth.mfa]
+# GABAY: Gaya sa production, kailangan ng authenticator app (TOTP) ang admin bago makapag-edit/delete/upload.
+max_enrolled_factors = 10
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
 
 [auth.sms]
 enable_signup = true
@@ -97,3 +115,7 @@ verify_jwt = false
 
 [functions.auto-pipeline]
 verify_jwt = false
+
+[analytics]
+# GABAY: Naka-off sa local. Sa Windows, kailangan nito ang Docker sa tcp://localhost:2375 at madalas itong nagpapabagal o nagpapapalya sa `supabase start`.
+enabled = false

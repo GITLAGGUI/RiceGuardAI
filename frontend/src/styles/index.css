@@ -1,3 +1,6 @@
+/*
+  GABAY: Global CSS (Tailwind at base styles ng buong site). Para sa kulay ng isang page, mas madalas ay nasa CSS ng page mismo.
+*/
 @import "tailwindcss";
 
 @theme {

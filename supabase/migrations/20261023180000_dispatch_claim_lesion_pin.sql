@@ -28,5 +28,5 @@ begin
 end $function$;
 -- Dispatch every minute; uploads also kick the dispatcher directly.
 select cron.alter_job((select jobid from cron.job where jobname='riceguard-dispatch'), schedule := '* * * * *');
-insert into supabase_migrations.schema_migrations(version,name) values('20261023180000','dispatch_claim_lesion_pin') on conflict do nothing;
+-- Inalis: ang Supabase CLI na mismo ang nagtatala ng migration na ito; ang manu-manong insert ay nagpapapalya sa `supabase start`.
 select private.rg_invoke_edge('job-dispatcher');

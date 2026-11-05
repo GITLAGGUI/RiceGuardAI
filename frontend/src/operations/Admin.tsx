@@ -1,3 +1,8 @@
+// GABAY: Ang staff workspace (/admin/...). Sidebar, header at karamihan ng pages ay nandito:
+//   OperationsShell = sidebar + header + bell, OverviewPage = /admin/overview, SurveysPage = /admin/surveys,
+//   MapPage = /admin/map, AdvisoryDesk = /admin/advisories, FarmersPage = /admin/farmers, SettingsPage = /admin/settings.
+// Ang "Upload at suriin" ay nasa Upload.tsx, ang "Verify findings" ay nasa VerifyFindings.tsx.
+// Kulay at layout: workspace.css (bagong disenyo) at operations.css. Data: useOperations() galing sa store.tsx.
 import { useEffect, useState, type ReactNode, type FormEvent } from "react";
 import { inferenceConfigurationLabel, type InferenceConfiguration } from "../../../supabase/functions/_shared/systemReadiness";
 import {

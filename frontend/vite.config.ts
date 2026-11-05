@@ -2,9 +2,16 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
+import { codeInspectorPlugin } from "code-inspector-plugin";
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    // `npm run dev` lang: pindutin ang Alt+Shift sa browser at i-click ang kahit anong bahagi ng page
+    // para buksan sa VS Code ang mismong file at linya. Hindi ito kasama sa production build.
+    codeInspectorPlugin({ bundler: "vite", editor: "code" }),
+    react(),
+    tailwindcss(),
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

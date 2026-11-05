@@ -1,3 +1,7 @@
+/*
+  GABAY: Bagong disenyo ng staff workspace (sidebar, header, tables, dialogs, Verify findings). Nauuna itong i-edit kaysa operations.css
+  para sa /admin pages, dahil ito ang huling naglo-load at ito ang nananaig.
+*/
 /* Workspace redesign (2026-11-01). Loaded after operations.css and bulletin.css.
    Flat surfaces separated by one tone step or a 1px line, colour kept for data and decisions,
    type doing the hierarchy: 26px page titles, 17px panel titles, 14px text, 12.5px notes. */

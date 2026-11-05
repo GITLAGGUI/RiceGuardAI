@@ -1,3 +1,5 @@
+// GABAY: Mga TypeScript type ng data (Survey, Asset, Bulletin, Contact...). Kapag nagdagdag ka ng column sa database,
+// idagdag din dito ang field para makita ito ng frontend.
 export type Disease = "BLB" | "Brown Spot";
 export type Severity =
   | "low"

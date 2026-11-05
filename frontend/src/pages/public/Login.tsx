@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, KeyRound, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase";
+import { localSkipMfa, supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { safeAdminReturnPath } from "@/operations/geminiConnector";
 
@@ -37,6 +37,11 @@ export function Login() {
   }, [loading, profileLoading, session, profile, aal, step, destination, navigate]);
 
   const prepareMfa = async () => {
+    if (localSkipMfa) { // local debugging lang: diretso sa workspace nang walang authenticator app
+      await refreshAal();
+      navigate(destination, { replace: true });
+      return;
+    }
     const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     if (aalData?.currentLevel === "aal2") {
       await refreshAal();
@@ -154,7 +159,7 @@ export function Login() {
             <form onSubmit={signIn} className="mt-7 space-y-4">
               <p className="text-stone-500">Sign in with the email and password issued to an active administrator.</p>
               <label className="block text-sm font-semibold text-stone-700"><span className="flex items-center gap-2 mb-2"><Mail size={16} /> Email</span><input className="w-full rounded-xl border border-stone-300 px-4 py-3.5" type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-              <label className="block text-sm font-semibold text-stone-700"><span className="flex items-center gap-2 mb-2"><KeyRound size={16} /> Password</span><input className="w-full rounded-xl border border-stone-300 px-4 py-3.5" type="password" autoComplete="current-password" required minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+              <label className="block text-sm font-semibold text-stone-700"><span className="flex items-center gap-2 mb-2"><KeyRound size={16} /> Password</span><input className="w-full rounded-xl border border-stone-300 px-4 py-3.5" type="password" autoComplete="current-password" required minLength={localSkipMfa ? 6 : 8} value={password} onChange={(event) => setPassword(event.target.value)} /></label>
               <button className="w-full rounded-xl bg-[#153e2f] py-4 text-white font-bold disabled:opacity-50" disabled={busy}>{busy ? "Verifying…" : "Continue securely"}</button>
               <button type="button" className="w-full text-sm font-semibold text-emerald-800 underline" onClick={() => setStep("recovery")}>Need a new setup link?</button>
             </form>

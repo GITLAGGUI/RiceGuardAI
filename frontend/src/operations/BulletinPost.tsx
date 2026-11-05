@@ -1,3 +1,4 @@
+// GABAY: Isang post sa field advisories feed (photo, disease, payo, lokasyon).
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, MapPin, Play } from "lucide-react";

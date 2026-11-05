@@ -1,3 +1,5 @@
+// GABAY: Mga piraso na ginagamit sa maraming staff page: Dialog, ConfirmDialog ("Sigurado ka ba?"), EditDialog,
+// NotificationBell (bell sa header) at SmsGatewayCard (online/offline ng SMS phone).
 // Shared workspace pieces: confirm and edit dialogs, the bell's to-do list and the SMS gateway card.
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";

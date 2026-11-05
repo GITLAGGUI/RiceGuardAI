@@ -1,3 +1,5 @@
+// GABAY: Page na "Verify findings" (/admin/review). Dito pinipili ng specialist ang Tama / Mali / Hindi sigurado
+// sa bawat photo. Ipinapakita rin ang classifier percentages at ang Gemma 4 insight. Styles: workspace.css.
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Check, CircleAlert, CircleHelp, ExternalLink, RotateCcw, X } from "lucide-react";

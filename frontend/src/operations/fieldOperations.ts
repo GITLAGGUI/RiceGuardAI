@@ -1,3 +1,5 @@
+// GABAY: Iisang daan ng frontend papunta sa edge function na field-operations (supabase/functions/field-operations/index.ts).
+// Bawat `action` dito ay may katapat na `if (action === "...")` doon. Kung may error na "Unknown operation", hindi pa deployed ang action sa server.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
 

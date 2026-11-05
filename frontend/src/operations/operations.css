@@ -1,3 +1,7 @@
+/*
+  GABAY: Lumang pangunahing CSS ng public at staff pages. Mga kulay sa itaas (--rg-ink, --rg-bg, --rg-green...).
+  Palitan ang value ng variable para magbago ang kulay sa lahat ng gumagamit nito. Hanapin ang class name (Ctrl+F) mula sa Inspect.
+*/
 .rg-public,
 .rg-ops {
   --rg-ink: #203d32;

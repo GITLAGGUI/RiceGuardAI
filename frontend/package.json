@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:local": "node scripts/local-db-env.mjs && vite --mode localdb",
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "preview": "vite preview",
@@ -48,6 +49,7 @@
     "@types/react-dom": "^19.0.0",
     "@types/three": "0.185.4",
     "@vitejs/plugin-react": "^4.3.4",
+    "code-inspector-plugin": "^2.0.9",
     "eslint": "^9.15.0",
     "eslint-plugin-react-hooks": "^7.0.1",
     "globals": "^16.4.0",

@@ -1,3 +1,6 @@
+// GABAY: Page na "Upload at suriin" (/admin/surveys/new). Pagpili ng photo/video, Gemma 4 photo check,
+// lokasyon (EXIF o pin sa mapa), yugto ng palay, tapos upload papunta sa storage at pila ng Kaggle job.
+// Ang tawag sa server ay sa fieldOperations.ts -> edge function supabase/functions/field-operations.
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {

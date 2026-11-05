@@ -62,7 +62,11 @@ const randomToken = () => {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   return btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 };
+// GABAY: Local debugging lang. Sa local Docker (SUPABASE_URL na http://kong:8000) at LOCAL_SKIP_MFA=true sa
+// supabase/functions/.env, tinatanggap ang admin kahit walang MFA. Wala ang dalawang ito sa production.
+const localSkipMfa = Deno.env.get("LOCAL_SKIP_MFA") === "true" && /^http:\/\/kong:8000\/?$/.test(Deno.env.get("SUPABASE_URL") ?? "");
 const assuranceLevel = (token: string) => {
+  if (localSkipMfa) return "aal2";
   try {
     const part = token.split(".")[1].replaceAll("-", "+").replaceAll("_", "/");
     return JSON.parse(atob(part.padEnd(Math.ceil(part.length / 4) * 4, "="))).aal as string;

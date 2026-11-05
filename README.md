@@ -48,6 +48,10 @@ copy .env.example .env.local
 npm run dev
 ```
 
+For debugging against a local PostgreSQL in Docker (`supabase start`, then
+`npm run dev:local`), and for finding which file to edit, see
+[`docs/DEBUGGING_GUIDE.md`](docs/DEBUGGING_GUIDE.md) (Taglish).
+
 The browser receives only `VITE_SUPABASE_URL` and the public anon key. Never put
 Kaggle, Google Drive, SMS Gate, Ollama, service-role, or worker credentials in a
 `VITE_` variable.

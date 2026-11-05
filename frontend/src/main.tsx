@@ -1,3 +1,5 @@
+// GABAY: Simula ng buong website. Dito naglo-load ang global CSS (styles/index.css) at ang boot loader bago lumabas ang page.
+// Kung blangko ang page, tingnan muna ang Console (F12) at ang terminal ng `npm run dev`.
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { Providers } from "@/app/providers";

@@ -1,3 +1,6 @@
+// GABAY: Listahan ng lahat ng URL ng website at kung aling component ang lumalabas sa bawat isa.
+// Hal. "/" = HomePage (landing), "/bulletin" = BulletinPage, "/admin/review" = OperationsPage (VerifyFindings).
+// Magdagdag ng bagong page dito: gumawa ng component, tapos idagdag ang { path, element } sa ibaba.
 import {
   createBrowserRouter,
   RouterProvider,

@@ -1,3 +1,4 @@
+// GABAY: SMS registration at preferences ng magsasaka (/register at /preferences).
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { Smartphone, ShieldCheck, ArrowRight, MapPin } from "lucide-react";

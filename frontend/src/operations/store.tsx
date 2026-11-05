@@ -1,3 +1,5 @@
+// GABAY: Ang "memory" ng staff workspace. Kinukuha ang data mula sa field-operations (snapshot) at
+// ibinibigay sa lahat ng page sa pamamagitan ng useOperations(). Kung mali ang lumalabas na data, simulan dito.
 import {
   createContext,
   useCallback,

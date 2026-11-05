@@ -1,3 +1,6 @@
+/*
+  GABAY: CSS ng field advisories (bulletin feed, post, photo viewer).
+*/
 /* Field Bulletin v3: denser multi-column feed, disease photo viewer, verification badge.
    Loaded after operations.css; overrides the older single-column feed.
    Type scale: 24 / 16 / 14 / 12. One panel radius (12px), controls 8px, pills round. */

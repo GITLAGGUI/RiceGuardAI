@@ -1,3 +1,4 @@
+// GABAY: Timeline ng automation (Upload -> GPU -> Resulta -> Advisory -> SMS) at gaano katagal ang bawat yugto.
 import "./operations.css";
 import "./bulletin.css";
 import { Link } from "react-router-dom";

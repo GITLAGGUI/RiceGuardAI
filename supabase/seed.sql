@@ -55,3 +55,33 @@ select p.id, true, true, false
 from public.profiles p
 where p.role = 'farmer'
 on conflict (farmer_id) do nothing;
+
+-- GABAY: Local admin para sa debugging (local Docker database LANG; hindi ito tumatakbo sa production).
+-- Login sa http://localhost:5173/login habang naka-`npm run dev:local`:
+--   email:    local-admin@riceguard.test
+--   password: 123456
+-- Walang MFA sa local (LOCAL_SKIP_MFA). Sa production, kailangan pa rin ng authenticator app.
+do $$
+declare
+  v_uid uuid := '00000000-0000-4000-8000-00000000ad01';
+begin
+  insert into auth.users (id, instance_id, email, encrypted_password, email_confirmed_at, aud, role,
+                          created_at, updated_at, raw_app_meta_data, raw_user_meta_data)
+  values (v_uid, '00000000-0000-0000-0000-000000000000', 'local-admin@riceguard.test',
+          extensions.crypt('123456', extensions.gen_salt('bf')), now(), 'authenticated', 'authenticated',
+          now(), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"full_name":"Local Dev Admin"}'::jsonb)
+  on conflict (id) do nothing;
+  -- Kailangang '' (hindi NULL) ang mga token column na ito, kung hindi ay "Database error querying schema" sa login.
+  update auth.users set confirmation_token = '', recovery_token = '', email_change = '', email_change_token_new = '',
+    email_change_token_current = '', phone_change = '', phone_change_token = '', reauthentication_token = ''
+  where id = v_uid;
+
+  insert into auth.identities (id, user_id, provider_id, provider, identity_data, created_at, updated_at)
+  values (gen_random_uuid(), v_uid, v_uid::text, 'email',
+          jsonb_build_object('sub', v_uid::text, 'email', 'local-admin@riceguard.test', 'email_verified', true), now(), now())
+  on conflict do nothing;
+
+  insert into public.profiles (id, phone, full_name, role, is_active)
+  values (v_uid, '+639170000099', 'Local Dev Admin', 'admin', true)
+  on conflict (id) do update set role = 'admin', is_active = true;
+end $$;

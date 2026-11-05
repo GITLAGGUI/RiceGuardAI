@@ -1,3 +1,5 @@
+// GABAY: Mga public page: HomePage ("/", gamit ang landing/HomeLanding.tsx), BulletinPage ("/bulletin"),
+// AdvisoryPage ("/advisories/:slug") at PublicMapPage ("/map"). Styles: bulletin.css, bulletin-feed.css, fit-pages.css.
 import {
   useEffect,
   useMemo,

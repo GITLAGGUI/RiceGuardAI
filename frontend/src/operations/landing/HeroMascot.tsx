@@ -1,3 +1,4 @@
+// GABAY: Ang lumilipad na mascot at ang "Checked by RiceGuardAI" card sa hero. Ang galaw ay galing sa RiceField3D.tsx.
 import { useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { heroRig, type Finding, type MascotRig, type Pose } from "./heroInput";
