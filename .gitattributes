@@ -1,0 +1,13 @@
+# The Kaggle worker sources are pinned by SHA-256 over their exact bytes (api/kaggle.py and
+# PINNED_KAGGLE_WORKFLOW_SHA256 in supabase/functions/_shared/pinnedResult.ts). Fix their line endings so a
+# Windows checkout and Vercel's Linux checkout produce the same workflow hash. Changing a line here changes the pin.
+workers/kaggle/pinned_photo_core.py text eol=crlf
+workers/kaggle/pinned_video_core.py text eol=crlf
+workers/kaggle/severity.py text eol=crlf
+workers/kaggle/website_adapter.py text eol=crlf
+workers/kaggle/prepare_clip.py text eol=lf
+workers/kaggle/private_upload.py text eol=lf
+workers/kaggle/specialists.py text eol=lf
+workers/kaggle/website_runner.py text eol=lf
+workers/aws/inference_core.py text eol=lf
+workers/aws/website_adapter.py text eol=lf
