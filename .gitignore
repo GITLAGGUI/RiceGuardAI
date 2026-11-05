@@ -38,6 +38,8 @@ _legacy/
 *.pdf
 *.drawio
 *.mp4
+# The landing film ships with the site; git-triggered Vercel builds only see committed files.
+!frontend/public/video/riceguardai-film-v2.mp4
 pdf_text.txt
 research.txt
 error.txt

@@ -37,7 +37,8 @@ export function HeroMascot({ active }: { active: boolean }) {
   const link = useRef<HTMLDivElement>(null);
   const dot = useRef<HTMLDivElement>(null);
   const cardEl = useRef<HTMLDivElement>(null);
-  const [card, setCard] = useState<{ finding: Finding; step: number }>({ finding: "blb", step: active ? 0 : 5 });
+  // The card stays closed until the choreography places it; opened early it sat at the hero's top-left corner.
+  const [card, setCard] = useState<{ finding: Finding; step: number }>({ finding: "blb", step: 0 });
 
   useEffect(() => {
     // Decode every pose up front so a swap never shows an empty frame.
