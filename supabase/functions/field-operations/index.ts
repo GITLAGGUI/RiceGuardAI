@@ -1164,6 +1164,36 @@ Deno.serve(async (req) => {
       return reply({ correction_draft: true, advisory_revision: updated.advisory_revision });
     }
 
+    // Staff edit of an advisory's wording. A published advisory keeps its public post; the change bumps the
+    // revision, records why it was corrected, and leaves the old and new text in the audit log.
+    if (action === "update-advisory") {
+      const bulletinId = uuid(p.id);
+      const current = requireResult(await db.from("rg_bulletins")
+        .select("id,status,advisory_revision,title,body,action,limitations").eq("id", bulletinId).is("archived_at", null).single());
+      if (p.advisory_revision != null && p.advisory_revision !== current.advisory_revision)
+        return failure("The advisory changed; reload before editing", 409);
+      const next = {
+        title: requiredText(p.title, 200),
+        body: requiredText(p.body, 4000),
+        action: requiredText(p.action, 4000),
+        limitations: optionalText(p.limitations, 1000),
+      };
+      const published = current.status === "published";
+      const correctionNote = published ? requiredText(p.correction_note, 500) : optionalText(p.correction_note, 500);
+      const updated = requireResult(await db.from("rg_bulletins").update({
+        ...next,
+        advisory_revision: current.advisory_revision + 1,
+        ...(published ? { correction_note: correctionNote, verification_status: "corrected" } : {}),
+        updated_at: new Date().toISOString(),
+      }).eq("id", bulletinId).eq("advisory_revision", current.advisory_revision).select("advisory_revision").single());
+      check(await db.from("rg_events").insert({
+        kind: published ? "advisory-corrected" : "advisory-draft-edited", entity_id: bulletinId, actor_id: user.id,
+        detail: { advisory_revision: updated.advisory_revision, correction_note: correctionNote,
+          before: { title: current.title, body: current.body, action: current.action, limitations: current.limitations }, after: next },
+      }));
+      return reply({ updated: true, advisory_revision: updated.advisory_revision });
+    }
+
     if (action === "photo-insight") {
       const image = String(p.image || "");
       const detail = p.detail == null ? undefined : String(p.detail);

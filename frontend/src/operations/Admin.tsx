@@ -53,7 +53,6 @@ import { LivePipeline, duration } from "./PipelineMonitor";
 import { ConfirmDialog, EditDialog, NotificationBell, SmsGatewayCard } from "./WorkspaceUi";
 import { supabase } from "@/lib/supabase";
 import { reviewedDiseaseLabel, advisoryActionSteps } from "./advisoryPresentation";
-import { reviewHref } from "./ReviewJourney";
 import { SmsDelivery } from "./SmsDelivery";
 import "./operations.css";
 import "./workspace.css";
@@ -582,6 +581,7 @@ export function AdvisoryDesk() {
   const { data, demo, refresh } = useOperations();
   const [params, setParams] = useSearchParams();
   const [deleting, setDeleting] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState("");
   const requested = params.get("advisory");
@@ -592,7 +592,7 @@ export function AdvisoryDesk() {
   const verification: Record<string, string> = { unverified: "Hindi pa verified", verified: "Verified", corrected: "Inayos ng specialist", retracted: "Binawi" };
   return (
     <>
-      <PageHeading title="Advisory desk" text="Lahat ng payo: draft, naka-post at binawi. Pumili ng isa para basahin, i-edit sa guided review, o bawiin." />
+      <PageHeading title="Advisory desk" text="Lahat ng payo: draft, naka-post at binawi. Pumili ng isa para basahin, i-edit o bawiin." />
       <div className="rg-desk-grid rg-desk-guided">
         <aside className="rg-panel rg-draft-list" aria-label="Mga payo">
           <label className="rg-search"><Search size={16} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Hanapin ang payo" aria-label="Hanapin ang payo" /></label>
@@ -624,13 +624,32 @@ export function AdvisoryDesk() {
             </div>
             <aside>
               <p>{b.status === "published" ? "Naka-post. Ang pagbabago ay dumadaan sa correction para may tala." : "Draft. Walang public post o SMS hangga't hindi naaprubahan."}</p>
-              {b.survey_id ? <Link className="rg-button rg-primary" to={reviewHref(b.survey_id, b.id, b.status === "published" ? "publish" : "images")}>
-                <Pencil size={16} /> {b.status === "published" ? "I-edit / gumawa ng correction" : "Ituloy ang review"}</Link>
-                : <p role="alert">Walang survey ang payong ito; hindi ito maipo-post.</p>}
+              {!demo ? <button type="button" className="rg-button rg-primary" onClick={() => setEditing(true)}>
+                <Pencil size={16} /> {b.status === "published" ? "I-edit / gumawa ng correction" : "I-edit ang payo"}</button> : null}
+              {!b.survey_id ? <p role="alert">Walang survey ang payong ito; hindi ito maipo-post.</p> : null}
               {b.status === "published" ? <Link className="rg-button rg-secondary" to={`/advisories/${b.slug}`} target="_blank"><ExternalLink size={16} /> Tingnan ang post</Link> : null}
               {b.survey_id ? <Link className="rg-button rg-secondary" to={`${useBaseStatic(demo)}/review?survey=${b.survey_id}`}><ClipboardCheck size={16} /> Specialist check</Link> : null}
               {!demo ? <button type="button" className="rg-button rg-secondary rg-danger-text" onClick={() => setDeleting(true)}><Trash2 size={16} /> Bawiin / burahin</button> : null}
             </aside>
+            <EditDialog key={`${b.id}-${b.advisory_revision}`} open={editing} busy={busy} onClose={() => setEditing(false)}
+              title={b.status === "published" ? "I-edit ang naka-post na payo" : "I-edit ang payo"}
+              fields={[
+                { name: "title", label: "Pamagat", value: b.title, required: true, maxLength: 200 },
+                { name: "body", label: "Laman ng payo", value: b.body, required: true, maxLength: 4000, multiline: true },
+                { name: "action", label: "Mga dapat gawin (isang hakbang bawat linya)", value: b.action, required: true, maxLength: 4000, multiline: true },
+                { name: "limitations", label: "Limitasyon (optional)", value: b.limitations || "", maxLength: 1000, multiline: true },
+                ...(b.status === "published"
+                  ? [{ name: "correction_note", label: "Bakit binago?", value: "", required: true, maxLength: 500,
+                      hint: "Makikita ito sa tala ng correction. Mananatiling naka-post ang payo." }]
+                  : []),
+              ]}
+              onSave={async (values) => {
+                setBusy(true);
+                try {
+                  await operation("update-advisory", { id: b.id, advisory_revision: b.advisory_revision, ...values });
+                  setEditing(false); await refresh(); toast.success("Na-save ang payo.");
+                } catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
+              }} />
             <ConfirmDialog open={deleting} title="Bawiin ang payo?" busy={busy} confirmLabel="Bawiin" onClose={() => setDeleting(false)}
               onConfirm={async () => {
                 setBusy(true);
