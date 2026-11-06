@@ -82,6 +82,27 @@ order by r.reviewed_at desc
 limit 20;
 
 
+-- ---------- 3b. Patubig at barayti laban sa nakumpirmang sakit ----------
+-- Ilang photo ang kinumpirma ng specialist (Tama) sa bawat sakit, hinati ayon sa patubig at barayti.
+-- Para makita kung may kaugnayan ang irrigated/rainfed o ang barayti sa BLB at Brown Spot.
+select s.irrigation, coalesce(s.rice_variety, '(walang barayti)') as rice_variety, r.disease,
+       count(*) filter (where r.decision = 'accepted') as confirmed,
+       count(*) filter (where r.decision = 'rejected') as rejected,
+       count(distinct s.id) as surveys
+from rg_finding_reviews r
+join rg_processing_jobs j on j.id = r.job_id
+join rg_surveys s on s.id = j.survey_id
+where s.archived_at is null
+group by 1, 2, 3
+order by 1, 2, 3;
+
+-- Lahat ng survey na may patubig at barayti
+select id, name, irrigation, rice_variety, crop_stage, created_at
+from rg_surveys
+where archived_at is null
+order by created_at desc;
+
+
 -- ---------- 4. Advisories at SMS ----------
 
 -- Mga advisory (bulletin) at kung published na
