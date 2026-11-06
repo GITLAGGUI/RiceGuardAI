@@ -43,7 +43,7 @@ async function prepareInitialView() {
 
   const assets = [
     window.innerWidth <= 960 ? "/images/field-hero-960.avif" : "/images/field-hero-1600.avif",
-    "/images/mascot/field-companion.png",
+    "/images/mascot/field-companion-192.webp",
   ];
 
   const fontsReady = document.fonts?.ready ?? Promise.resolve();

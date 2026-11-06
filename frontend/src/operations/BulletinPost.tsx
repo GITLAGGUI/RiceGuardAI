@@ -114,7 +114,7 @@ export function BulletinCard({ item }: { item: Bulletin }) {
   const [viewing, setViewing] = useState<number | null>(null);
   return (
     <article className="rg-xpost">
-      <img className="rg-xpost-avatar" src="/images/mascot/field-companion.png" alt="" width={40} height={40} loading="lazy" />
+      <img className="rg-xpost-avatar" src="/images/mascot/field-companion-192.webp" alt="" width={40} height={40} loading="lazy" />
       <div className="rg-xpost-main">
         <header className="rg-xpost-head">
           <b>RiceGuardAI</b>

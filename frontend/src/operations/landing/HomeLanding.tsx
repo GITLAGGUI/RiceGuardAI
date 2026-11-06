@@ -127,7 +127,7 @@ function useNearViewport<T extends HTMLElement>(margin = "600px") {
 function Wordmark({ light = false }: { light?: boolean }) {
   return (
     <Link to="/" className={`lp-wordmark ${light ? "is-light" : ""}`} aria-label="RiceGuardAI home">
-      <img src="/images/mascot/field-companion.png" alt="" width="40" height="40" />
+      <img src="/images/mascot/field-companion-192.webp" alt="" width="40" height="40" />
       <span>RiceGuard<b>AI</b></span>
     </Link>
   );

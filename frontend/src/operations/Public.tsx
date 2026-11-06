@@ -54,7 +54,7 @@ import "./fit-pages.css";
 export function Brand({ light = false }: { light?: boolean }) {
   return (
     <Link to="/" className={`rg-brand ${light ? "light" : ""}`}>
-      <span><img src="/images/mascot/field-companion.png" alt="" /></span>
+      <span><img src="/images/mascot/field-companion-192.webp" alt="" /></span>
       RiceGuard<span className="rg-brand-ai">AI</span>
     </Link>
   );
