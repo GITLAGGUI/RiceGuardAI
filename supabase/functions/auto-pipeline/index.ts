@@ -151,7 +151,9 @@ async function writeAdvisory(survey: Survey, diseases: Disease[], severity: Seve
     severity: Object.fromEntries(Object.entries(severity.diseases).map(([d, s]) => [d, {
       percent: s!.percent, ses_score: s!.ses_score, category: s!.category, photo_number: s!.photo_number, affected_photos: s!.affected_photos }])),
     crop_stage: survey.crop_stage && survey.crop_stage !== "unknown" ? survey.crop_stage : null,
-    field_conditions: survey.field_conditions || [], weather: await nearbyWeather(lat, lng),
+    field_conditions: survey.field_conditions || [],
+    irrigation: survey.irrigation && survey.irrigation !== "unknown" ? survey.irrigation : null,
+    rice_variety: survey.rice_variety || null, weather: await nearbyWeather(lat, lng),
   };
   if (OLLAMA_KEY) {
     try {

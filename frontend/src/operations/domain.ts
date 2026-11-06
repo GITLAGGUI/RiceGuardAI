@@ -99,6 +99,9 @@ export interface Survey {
   note?: string;
   crop_stage?: "unknown" | "seedling" | "vegetative" | "reproductive" | "ripening" | "post_harvest";
   field_conditions?: ("standing_water" | "lodging" | "dry_or_cracked_soil" | "nutrient_stress_suspected" | "pest_damage_suspected")[];
+  /** Kung may patubig (irrigated) o umaasa sa ulan (rainfed); nire-record sa upload. */
+  irrigation?: "unknown" | "irrigated" | "rainfed";
+  rice_variety?: string | null;
   auto_status?: AutoStatus | null;
   auto_mode?: "initial" | "verify";
   auto_error?: string | null;
@@ -371,3 +374,12 @@ export function isQuietHour(date: Date) {
   );
   return hour >= 20 || hour < 6;
 }
+
+export const IRRIGATION_LABEL: Record<NonNullable<Survey["irrigation"]>, string> = {
+  unknown: "Hindi alam", irrigated: "May patubig (irrigated)", rainfed: "Umaasa sa ulan (rainfed)",
+};
+/** Karaniwang barayti sa Region II; puwedeng mag-type ng iba. */
+export const COMMON_RICE_VARIETIES = [
+  "NSIC Rc 222", "NSIC Rc 216", "NSIC Rc 160", "NSIC Rc 480", "NSIC Rc 402", "NSIC Rc 354",
+  "PSB Rc 18", "PSB Rc 82", "Hybrid (SL-8H, Mestiso, atbp.)", "Inbred (hindi alam ang pangalan)",
+];

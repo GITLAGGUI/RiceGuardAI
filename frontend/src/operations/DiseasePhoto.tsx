@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import type { Disease } from "./domain";
 
-export const DISEASE_COLORS: Record<Disease, string> = { BLB: "#FFD400", "Brown Spot": "#E5262B" };
+export const DISEASE_COLORS: Record<Disease, string> = { BLB: "#FFD400", "Brown Spot": "#00E676" };
 export const DISEASE_NAMES: Record<Disease, string> = { BLB: "Bacterial Leaf Blight", "Brown Spot": "Brown Spot" };
 
 type Props = {

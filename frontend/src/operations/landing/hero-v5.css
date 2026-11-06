@@ -63,7 +63,7 @@
 .lp-link.is-on { opacity: 1; }
 .lp-link-dot { width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: #fff; transition: opacity 260ms ease; }
 .lp-link-dot.is-blb { box-shadow: 0 0 0 4px rgba(255, 212, 0, .55); }
-.lp-link-dot.is-brownspot { box-shadow: 0 0 0 4px rgba(229, 38, 43, .5); }
+.lp-link-dot.is-brownspot { box-shadow: 0 0 0 4px rgba(0, 230, 118, .5); }
 .lp-link-dot.is-healthy { box-shadow: 0 0 0 4px rgba(120, 220, 140, .55); }
 .lp-link-dot.is-on { opacity: 1; }
 
@@ -141,7 +141,7 @@
 @media (max-width: 1100px) { .lp-problem > .lp-credits { grid-column: 1; } }
 .lp-pcard-chip { position: absolute; left: 12px; top: 12px; z-index: 3; display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: rgba(5, 26, 19, .62); color: #fff; font-size: 11.5px; font-weight: 700; backdrop-filter: blur(6px); }
 .lp-pcard-chip i { width: 8px; height: 8px; border-radius: 50%; background: #ffd400; }
-.lp-pcard.is-bs .lp-pcard-chip i { background: #e5262b; }
+.lp-pcard.is-bs .lp-pcard-chip i { background: #00e676; }
 /* The mask sweeps in and out on its own; hovering holds it on. */
 .lp-pcard-mask { clip-path: inset(0 100% 0 0); }
 .lp-plight.is-live .lp-pcard-mask { animation: lp-mask-cycle 8s cubic-bezier(.65, 0, .35, 1) infinite; }

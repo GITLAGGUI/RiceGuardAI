@@ -141,14 +141,14 @@ def stitch(image, predict, cache_get=None, cache_put=None, progress=None):
     return votes * 2 >= coverage
 
 
-COLORS = {"BLB": (255, 212, 0), "Brown Spot": (229, 38, 43)}
+COLORS = {"BLB": (255, 212, 0), "Brown Spot": (0, 230, 118)}
 WEB_MAX_SIDE = 2048
 
 
 def overlay(image, masks, alpha=0.45, *, show_boxes=False, show_outlines=True):
     """Display-only tint and outline per disease; the website draws the legend.
 
-    BLB is yellow and Brown Spot red. No text or boxes are burned into pixels.
+    BLB is yellow and Brown Spot bright green. No text or boxes are burned into pixels.
     `show_boxes` is accepted for older callers and ignored.
     """
     del show_boxes

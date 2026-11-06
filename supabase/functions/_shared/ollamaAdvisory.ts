@@ -14,6 +14,9 @@ export interface AdvisoryFacts {
   place: string;
   crop_stage: string | null;
   field_conditions: string[];
+  /** "irrigated" or "rainfed" when the uploader knew it. */
+  irrigation?: string | null;
+  rice_variety?: string | null;
   weather: unknown;
 }
 

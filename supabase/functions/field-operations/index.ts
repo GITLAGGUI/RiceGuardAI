@@ -659,7 +659,7 @@ Deno.serve(async (req) => {
 
     if (action === "snapshot") {
       const [surveys, bulletins, contacts, farms, campaigns, assets, jobs, models, smsStatus] = await Promise.all([
-        db.from("rg_surveys").select("id,name,location,captured_at,camera,status,photos,expected_assets,severity,lat,lng,location_status,progress,stage_updated_at,active_result_revision,approved_result_revision,note,crop_stage,field_conditions,field_assessment,auto_status,auto_mode,auto_error,auto_attempts,place,severity_detail,location_source,created_at").is("archived_at", null).order("created_at", { ascending: false }).limit(500),
+        db.from("rg_surveys").select("id,name,location,captured_at,camera,status,photos,expected_assets,severity,lat,lng,location_status,progress,stage_updated_at,active_result_revision,approved_result_revision,note,crop_stage,field_conditions,irrigation,rice_variety,field_assessment,auto_status,auto_mode,auto_error,auto_attempts,place,severity_detail,location_source,created_at").is("archived_at", null).order("created_at", { ascending: false }).limit(500),
         db.from("rg_bulletins").select("id,survey_id,slug,title,location,disease,diseases,severity,severity_recommendation,body,action,limitations,advisory_source_ids,date,status,image,public_media,reviewer,sample,lat,lng,public_location_approved,location_review,context_review_required,media_approved,published_at,updated_at,revision,advisory_revision,result_revision,verification_status,verified_at,auto_generated,severity_detail,advisory_sources,place").is("archived_at", null).order("created_at", { ascending: false }).limit(500),
         db.from("rg_contacts").select("id,name,phone,location,consent,verified").limit(100),
         db.from("rg_farms").select("id,contact_id,geometry"),
@@ -772,6 +772,8 @@ Deno.serve(async (req) => {
       const rawFieldConditions: unknown[] = Array.isArray(p.field_conditions) ? p.field_conditions : [];
       const fieldConditions = [...new Set(rawFieldConditions.map(String))];
       if (fieldConditions.some((item) => !allowedConditions.includes(item))) throw new Error("Unsupported field condition");
+      const irrigation = String(p.irrigation || "unknown");
+      if (!["unknown", "irrigated", "rainfed"].includes(irrigation)) throw new Error("Unsupported irrigation value");
       // Live surveys start only after the uploader reviewed every photo (and its classifier result).
       const preReview = p.pre_review && typeof p.pre_review === "object" && p.pre_review.approved === true ? {
         approved: true, approved_by: user.id, approved_at: new Date().toISOString(),
@@ -800,6 +802,8 @@ Deno.serve(async (req) => {
         inference_provider: provider,
         crop_stage: cropStage,
         field_conditions: fieldConditions,
+        irrigation,
+        rice_variety: optionalText(p.rice_variety, 120) || null,
         pre_review: preReview,
       }).select("id").single());
       return reply({ id: inserted.id }, 201);
@@ -1301,7 +1305,8 @@ Deno.serve(async (req) => {
     }
     if (action === "update-survey") {
       return reply(check(await db.rpc("rg_update_survey", { p_survey: uuid(p.id), p_actor: user.id,
-        p_name: requiredText(p.name, 160), p_note: optionalText(p.note, 1000) || "" })));
+        p_name: requiredText(p.name, 160), p_note: optionalText(p.note, 1000) || "",
+        p_irrigation: String(p.irrigation || "unknown"), p_rice_variety: optionalText(p.rice_variety, 120) || "" })));
     }
     if (action === "archive-survey") {
       if (p.confirmed !== true) throw new Error("Confirm the deletion first");

@@ -29,7 +29,7 @@ def test_blb_is_yellow_and_brown_spot_is_red():
     image, masks = fixture()
     pixels = np.asarray(core.overlay(image, masks, alpha=1.0, show_outlines=False))
     assert tuple(pixels[20, 30]) == core.COLORS["BLB"] == (255, 212, 0)
-    assert tuple(pixels[60, 90]) == core.COLORS["Brown Spot"] == (229, 38, 43)
+    assert tuple(pixels[60, 90]) == core.COLORS["Brown Spot"] == (0, 230, 118)
     assert tuple(pixels[5, 100]) == (40, 120, 40)
 
 

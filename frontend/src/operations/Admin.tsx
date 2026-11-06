@@ -51,6 +51,8 @@ import {
   type Contact,
   type OperationsData,
   type Survey,
+  COMMON_RICE_VARIETIES,
+  IRRIGATION_LABEL,
 } from "./domain";
 import { UploadWorkspace } from "./Upload";
 import { VerifyWorkspace } from "./VerifyFindings";
@@ -470,6 +472,10 @@ function SurveyActions({ survey }: { survey: Survey }) {
         fields={[
           { name: "name", label: "Pangalan", value: survey.name, required: true, maxLength: 160 },
           { name: "note", label: "Tala", value: survey.note || "", multiline: true, maxLength: 1000, hint: "Para sa staff lamang; hindi lumalabas sa post." },
+          { name: "irrigation", label: "Patubig", value: survey.irrigation || "unknown",
+            options: Object.entries(IRRIGATION_LABEL).map(([value, label]) => ({ value, label })) },
+          { name: "rice_variety", label: "Barayti ng palay", value: survey.rice_variety || "", maxLength: 120,
+            placeholder: "hal. NSIC Rc 222", list: COMMON_RICE_VARIETIES },
         ]}
         onSave={(values) => void run("update-survey", values, "Na-save ang survey.")} />
       <ConfirmDialog open={mode === "delete"} title="Burahin ang survey?" busy={busy} confirmLabel="Burahin" onClose={() => setMode("")}
@@ -515,7 +521,9 @@ export function SurveysPage() {
                 const severity = fieldSeverityForSurvey(s, data.bulletins);
                 return (
                   <tr key={s.id}>
-                    <td><span className="rg-cell-main"><Link to={`${base}/review?survey=${s.id}`}>{s.name.split(" · ")[0]}</Link><small>{s.place?.label || s.location}</small></span></td>
+                    <td><span className="rg-cell-main"><Link to={`${base}/review?survey=${s.id}`}>{s.name.split(" · ")[0]}</Link><small>{[s.place?.label || s.location,
+                      s.irrigation && s.irrigation !== "unknown" ? (s.irrigation === "irrigated" ? "Irrigated" : "Rainfed") : null,
+                      s.rice_variety].filter(Boolean).join(" · ")}</small></span></td>
                     <td className="num" data-label="Larawan">{s.photos}</td>
                     <td data-label="Yugto"><Status value={s.status} /></td>
                     <td data-label="Severity"><span className={`rg-severity ${severity}`}>{fieldSeverityLabel(severity)}</span></td>

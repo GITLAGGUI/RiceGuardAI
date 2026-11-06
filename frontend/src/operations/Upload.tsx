@@ -25,7 +25,17 @@ import { useOperations, operation } from "./store";
 import { ReviewJourney } from "./ReviewJourney";
 import { currentSeverityBulletin } from "./severityPresentation";
 import { fieldSeverityForSurvey, fieldSeverityLabel } from "./severityPresentation";
-import { validatePrediction, type Prediction } from "./domain";
+import { COMMON_RICE_VARIETIES, IRRIGATION_LABEL, validatePrediction, type Prediction } from "./domain";
+
+/** Selecting the number on focus means typing "1" replaces the 0 instead of making "01". */
+const selectNumber = (event: { currentTarget: HTMLInputElement }) => event.currentTarget.select();
+/** Drops leading zeros ("01" -> "1") while keeping decimals such as "0.5". */
+function cleanNumber(event: { target: HTMLInputElement }) {
+  const raw = event.target.value;
+  const cleaned = raw.replace(/^0+(?=\d)/, "");
+  if (cleaned !== raw) event.target.value = cleaned;
+  return Number(cleaned || 0);
+}
 import { findInterruptedSurveyMatch, findResumableSurvey } from "./uploadRecovery";
 import { photoMetadataTags, validPhotoCoordinates, surveyPhotoLocation } from "./photoLocation";
 import { type PhotoClassification } from "./photoClassifier";
@@ -449,6 +459,8 @@ export function UploadWorkspace() {
           location_status: pin ? "verified" : "missing",
           location_source: pinSource === "manual" ? "manual_pin" : pin ? "exif_median" : "none",
           crop_stage: shownStage,
+          irrigation: String(form.get("irrigation") || "unknown") as "unknown" | "irrigated" | "rainfed",
+          rice_variety: String(form.get("rice_variety") || "").trim() || null,
           field_conditions: form.getAll("field_conditions").map(String) as ("standing_water" | "lodging" | "dry_or_cracked_soil" | "nutrient_stress_suspected" | "pest_damage_suspected")[],
           pre_review: { approved: true, classifier: files.find((f) => f.insight)?.insight?.model || null,
             removed_photos: removedAfterReview },
@@ -695,16 +707,16 @@ export function UploadWorkspace() {
                       <label>
                         Simula ng clip (segundo)
                         <input type="number" min={0} max={Math.max(0, (f.duration || 0) - 1 / 30)} step={1 / 30}
-                          value={f.clipStart} disabled={busy}
-                          onChange={(event) => setFiles((current) => current.map((item) => item.id === f.id
-                            ? { ...item, clipStart: Number(event.target.value) } : item))} />
+                          value={f.clipStart} disabled={busy} onFocus={selectNumber}
+                          onChange={(event) => { const value = cleanNumber(event); setFiles((current) => current.map((item) => item.id === f.id
+                            ? { ...item, clipStart: value } : item)); }} />
                       </label>
                       <label>
                         Haba ng clip (max 30 s)
                         <input type="number" min={1 / 30} max={Math.min(30, Math.max(1 / 30, (f.duration || 0) - f.clipStart))}
-                          step={1 / 30} value={f.clipDuration} disabled={busy}
-                          onChange={(event) => setFiles((current) => current.map((item) => item.id === f.id
-                            ? { ...item, clipDuration: Number(event.target.value) } : item))} />
+                          step={1 / 30} value={f.clipDuration} disabled={busy} onFocus={selectNumber}
+                          onChange={(event) => { const value = cleanNumber(event); setFiles((current) => current.map((item) => item.id === f.id
+                            ? { ...item, clipDuration: value } : item)); }} />
                       </label>
                       <label>
                         Larawang kasama ng video
@@ -767,6 +779,18 @@ export function UploadWorkspace() {
                   <option value="ripening">Nahihinog</option>
                   <option value="post_harvest">Tapos na ang ani</option>
                 </select>
+              </label>
+              {/* Patubig at barayti: nire-record para maikumpara sa mga nakumpirmang sakit (rg_surveys.irrigation, rice_variety). */}
+              <label>
+                Patubig ng bukid
+                <select name="irrigation" defaultValue="unknown">
+                  {Object.entries(IRRIGATION_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </label>
+              <label>
+                Barayti ng palay
+                <input name="rice_variety" maxLength={120} placeholder="hal. NSIC Rc 222" list="rg-rice-varieties" autoComplete="off" />
+                <datalist id="rg-rice-varieties">{COMMON_RICE_VARIETIES.map((v) => <option key={v} value={v} />)}</datalist>
               </label>
             </div>
             <fieldset className="rg-field-conditions">

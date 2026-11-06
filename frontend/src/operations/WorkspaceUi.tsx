@@ -43,7 +43,7 @@ export function ConfirmDialog({ open, title, body, confirmLabel, busy, onConfirm
 }
 
 export type EditField = { name: string; label: string; value: string; required?: boolean; placeholder?: string; multiline?: boolean;
-  inputMode?: "text" | "tel"; maxLength?: number; hint?: string };
+  inputMode?: "text" | "tel"; maxLength?: number; hint?: string; options?: { value: string; label: string }[]; list?: string[] };
 
 export function EditDialog({ open, title, fields, busy, onSave, onClose }: {
   open: boolean; title: string; fields: EditField[]; busy?: boolean; onSave: (values: Record<string, string>) => void; onClose: () => void;
@@ -59,10 +59,14 @@ export function EditDialog({ open, title, fields, busy, onSave, onClose }: {
         {fields.map((field) => (
           <label key={field.name}>
             <span>{field.label}</span>
-            {field.multiline
+            {field.options
+              ? <select name={field.name} defaultValue={field.value}>{field.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
+              : field.multiline
               ? <textarea name={field.name} defaultValue={field.value} required={field.required} maxLength={field.maxLength} rows={3} placeholder={field.placeholder} />
               : <input name={field.name} defaultValue={field.value} required={field.required} maxLength={field.maxLength}
-                placeholder={field.placeholder} inputMode={field.inputMode} autoComplete="off" />}
+                placeholder={field.placeholder} inputMode={field.inputMode} autoComplete="off"
+                list={field.list ? `${field.name}-suggestions` : undefined} />}
+            {field.list ? <datalist id={`${field.name}-suggestions`}>{field.list.map((v) => <option key={v} value={v} />)}</datalist> : null}
             {field.hint ? <small>{field.hint}</small> : null}
           </label>
         ))}
